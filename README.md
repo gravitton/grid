@@ -21,8 +21,28 @@ go get github.com/gravitton/grid
 package main
 
 import (
+	geom "github.com/gravitton/geometry"
 	"github.com/gravitton/grid"
 )
+
+type Tile struct {
+	Revealed       bool
+	MovementCost   int
+}
+
+g := grid.NewHexagonFlatTopGrid[Tile](geom.Sz(100, 100), geom.SzU(32), true)
+
+cell := g.At(geom.Pt(499.0, 123.4))
+cell.Index()
+cell.Valid()
+cell.Set(&Tile{Revealed: true, MovementCost: 1})
+
+path := g.Path(geom.Pt(0, 0), geom.Pt(10, 10), func(current *grid.Cell[resource.Tile]) bool {
+	return current.Get().Revealed
+}, func(current, next *grid.Cell[resource.Tile]) float64 {
+	return next.Get().MovementCost
+})
+
 ```
 
 
