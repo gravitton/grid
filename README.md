@@ -37,9 +37,9 @@ cell.Index()
 cell.Valid()
 cell.Set(&Tile{Revealed: true, MovementCost: 1})
 
-path := g.Path(geom.Pt(0, 0), geom.Pt(10, 10), func(current *grid.Cell[resource.Tile]) bool {
+path := g.Path(geom.Pt(0, 0), geom.Pt(10, 10), func(current *grid.Cell[Tile]) bool {
 	return current.Get().Revealed
-}, func(current, next *grid.Cell[resource.Tile]) float64 {
+}, func(current, next *grid.Cell[Tile]) float64 {
 	return next.Get().MovementCost
 })
 
