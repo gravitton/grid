@@ -67,7 +67,7 @@ func (g *Grid[T]) breadthFirstSearch(start ints.Point, goal *ints.Point, valid V
 		current := frontier.Pop()
 
 		// early exit on reaching goal
-		if current == *goal {
+		if goal != nil && current == *goal {
 			break
 		}
 
@@ -114,7 +114,7 @@ func (g *Grid[T]) uniformCostSearch(start ints.Point, goal *ints.Point, valid Va
 		current := frontier.Pop().next
 
 		// early exit on reaching goal
-		if current == *goal {
+		if goal != nil && current == *goal {
 			break
 		}
 
@@ -156,7 +156,7 @@ func (g *Grid[T]) greedyBestFirstSearch(start ints.Point, goal *ints.Point, vali
 		current := frontier.Pop().next
 
 		// early exit on reaching goal
-		if current == *goal {
+		if goal != nil && current == *goal {
 			break
 		}
 
@@ -198,7 +198,7 @@ func (g *Grid[T]) astar(start ints.Point, goal *ints.Point, valid ValidFunc[T], 
 		current := frontier.Pop().next
 
 		// early exit on reaching goal
-		if current == *goal {
+		if goal != nil && current == *goal {
 			break
 		}
 

@@ -7,6 +7,8 @@
 [![Go Dev Reference][ico-go-dev-reference]][link-go-dev-reference]
 [![Software License][ico-license]][link-licence]
 
+Generic 2D grid library for game development with rectangular and hexagonal layouts, spatial queries, and pathfinding.
+
 
 ## Installation
 
@@ -17,32 +19,168 @@ go get github.com/gravitton/grid
 
 ## Usage
 
-```go
-package main
+Rectangular grid:
 
+```go
 import (
 	geom "github.com/gravitton/geometry"
 	"github.com/gravitton/grid"
 )
 
 type Tile struct {
-	Revealed       bool
-	MovementCost   int
+	Walkable bool
+	Cost     float64
 }
 
-g := grid.NewHexagonFlatTopGrid[Tile](geom.Sz(100, 100), geom.SzU(32), true)
+g := grid.NewGrid[Tile](geom.Sz(100, 100), geom.Sz(32.0, 32.0))
+
+g.Fill(Tile{Walkable: true, Cost: 1.0})
 
 cell := g.At(geom.Pt(499.0, 123.4))
-cell.Index()
-cell.Valid()
-cell.Set(&Tile{Revealed: true, MovementCost: 1})
+cell.Set(Tile{Walkable: false})
+```
 
-path := g.Path(geom.Pt(0, 0), geom.Pt(10, 10), func(current *grid.Cell[Tile]) bool {
-	return current.Get().Revealed
-}, func(current, next *grid.Cell[Tile]) float64 {
-	return next.Get().MovementCost
-})
+Hexagonal grid:
 
+```go
+g := grid.NewHexagonFlatTopGrid[Tile](geom.Sz(20, 20), geom.SzU(32.0), true)
+```
+
+Pathfinding:
+
+```go
+path := g.Path(
+	geom.Pt(0, 0),
+	geom.Pt(10, 10),
+	func(c *grid.Cell[Tile]) bool {
+		return c.Get().Walkable
+	},
+	func(current, next *grid.Cell[Tile]) float64 {
+		return next.Get().Cost
+	},
+)
+```
+
+Iterating a viewport:
+
+```go
+for cell := range g.Iter(&grid.IterConfig{Bounds: viewport}) {
+	draw(cell)
+}
+```
+
+
+## API
+
+Full documentation is available at [pkg.go.dev/github.com/gravitton/grid][link-go-dev-reference].
+
+### Types
+
+| Type | Description |
+|---|---|
+| `Grid[T]` | 2D grid with spatial mapping and graph operations |
+| `Cell[T]` | Single cell — provides value access, spatial info, and pathfinding |
+| `Array[T]` | Low-level flat 2D array |
+
+### Constructors
+
+| Constructor | Description |
+|---|---|
+| `NewGrid[T](grid ints.Size, size floats.Size)` | Rectangular grid |
+| `NewHexagonPointyTopGrid[T](grid ints.Size, hexSize floats.Size, odd bool)` | Hexagonal grid, pointy-top orientation |
+| `NewHexagonFlatTopGrid[T](grid ints.Size, hexSize floats.Size, odd bool)` | Hexagonal grid, flat-top orientation |
+| `Arr[T](size ints.Size)` | Standalone 2D array |
+
+### Grid
+
+```go
+// Size
+g.Size() ints.Size
+g.Width() int
+g.Height() int
+
+// Spatial
+g.Bounds() floats.Rectangle
+g.CellBounds() floats.Size
+g.CellSpacing() floats.Size
+
+// Access
+g.Get(index ints.Point) *Cell[T]
+g.Has(index ints.Point) bool
+g.Set(index ints.Point, value T)
+g.At(point floats.Point) *Cell[T]      // world-space → cell
+g.IndexAt(point floats.Point) ints.Point
+
+// Mutation
+g.Fill(value T)
+g.Clear()
+g.Clone() *Grid[T]
+
+// Iteration
+g.Iter(config *IterConfig) iter.Seq[*Cell[T]]  // config nil = all cells
+```
+
+### Cell
+
+```go
+c.Index() ints.Point
+c.Valid() bool
+c.Get() *T
+c.Set(value T)
+c.Center() floats.Point
+c.Bounds() floats.Rectangle
+c.Polygon() floats.RegularPolygon
+c.Neighbours() []ints.Point
+c.DistanceTo(to ints.Point) int
+c.Range(n int, valid ValidFunc[T]) []ints.Point
+c.PathTo(to ints.Point, valid ValidFunc[T], cost CostFunc[T]) []*Cell[T]
+```
+
+### Pathfinding
+
+All algorithms accept an optional `ValidFunc` to mark cells as passable and an optional `CostFunc` for weighted traversal. `Path` uses A* internally.
+
+| Method | Algorithm | Field variant |
+|---|---|---|
+| `Path(from, to, valid, cost)` | A* | — |
+| `AStar(from, to, valid, cost)` | A* | — |
+| `GreedyBestFirstSearch(from, to, valid)` | Greedy Best-First | — |
+| `UniformCostSearch(from, to, valid, cost)` | Dijkstra | `UniformCostSearchField` |
+| `BreadthFirstSearch(from, to, valid)` | BFS | `BreadthFirstSearchField` |
+
+`*Field` variants return the full `map[ints.Point]ints.Point` came-from map instead of a single path.
+
+### Array
+
+```go
+a.Size() ints.Size
+a.Width() int
+a.Height() int
+a.Len() int
+a.Has(index ints.Point) bool
+a.Get(index ints.Point) *T
+a.Set(index ints.Point, value T)
+a.Fill(value T)
+a.Clear()
+a.Clone() Array[T]
+a.Iter() iter.Seq[ints.Point]
+a.Iter2() iter.Seq2[ints.Point, *T]
+```
+
+### Spatial range
+
+```go
+g.Distance(from, to ints.Point) int
+g.Range(index ints.Point, n int, valid ValidFunc[T]) []ints.Point
+```
+
+Range on hexagonal grids uses a field-of-view algorithm — blocked cells occlude cells behind them.
+
+### Callbacks
+
+```go
+type ValidFunc[T any]  func(current *Cell[T]) bool
+type CostFunc[T any]   func(current, next *Cell[T]) float64
 ```
 
 

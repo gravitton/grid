@@ -95,6 +95,14 @@ func (g *Grid[T]) Clear() {
 	g.cells.Clear()
 }
 
+// Clone returns a deep copy of the grid with the same layout and cell values.
+func (g *Grid[T]) Clone() *Grid[T] {
+	clone := *g
+	clone.cells = g.cells.Clone()
+
+	return &clone
+}
+
 // IndexAt returns the index of the cell at given point.
 func (g *Grid[T]) IndexAt(point floats.Point) ints.Point {
 	return g.fromPoint(point)

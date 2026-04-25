@@ -46,16 +46,13 @@ func newRectGrid[T any](grid ints.Size, layout rectLayout) *Grid[T] {
 		bounds:      geom.RectFromMin(origin, geom.Sz(size.Width*float64(grid.Width), size.Height*float64(grid.Height))),
 		toPoint:     toPoint,
 		fromPoint: func(point floats.Point) ints.Point {
-			// TODO: Floor method on point
-			// return point.DivideXY(size.XY()).Floor().Int()
-			return geom.Pt(int(math.Floor(point.X/size.Width)), int(math.Floor(point.Y/size.Height)))
+			return point.DivideXY(size.XY()).Floor().Int()
 		},
 		polygon: func(index ints.Point) floats.RegularPolygon {
 			return geom.Square(toPoint(index), size.ScaleXY(math.Sqrt2/2.0, math.Sqrt2/2.0), layout.orientation)
 		},
 		distance: func(from, to ints.Point) int {
-			// TODO: use mangattan distance
-			return from.DistanceSquaredTo(to)
+			return from.ManhattanDistanceTo(to)
 		},
 		toRange: func(index ints.Point, n int, valid ValidIndexFunc) []ints.Point {
 			if n < 0 {
@@ -68,7 +65,10 @@ func newRectGrid[T any](grid ints.Size, layout rectLayout) *Grid[T] {
 			for dx := -n; dx <= n; dx++ {
 				for dy := -n; dy <= n; dy++ {
 					if dx*dx+dy*dy <= radiusSquared {
-						results = append(results, geom.Pt(index.X+dx, index.Y+dy))
+						pt := geom.Pt(index.X+dx, index.Y+dy)
+						if valid(pt) {
+							results = append(results, pt)
+						}
 					}
 				}
 			}

@@ -54,15 +54,23 @@ func (a Array[T]) Set(index ints.Point, value T) {
 }
 
 // Fill all values with given value
-func (a *Array[T]) Fill(value T) {
+func (a Array[T]) Fill(value T) {
 	for i := 0; i < len(a.data); i++ {
 		a.data[i] = value
 	}
 }
 
 // Clear all values
-func (a *Array[T]) Clear() {
+func (a Array[T]) Clear() {
 	clear(a.data)
+}
+
+// Clone returns a deep copy of the array.
+func (a Array[T]) Clone() Array[T] {
+	data := make([]T, len(a.data))
+	copy(data, a.data)
+
+	return Array[T]{a.size, data}
 }
 
 // Iter returns iterator over all points.
@@ -73,6 +81,17 @@ func (a Array[T]) Iter() iter.Seq[ints.Point] {
 				if !yield(geom.Pt(x, y)) {
 					return
 				}
+			}
+		}
+	}
+}
+
+// Iter2 returns an iterator over all (point, value) pairs.
+func (a Array[T]) Iter2() iter.Seq2[ints.Point, *T] {
+	return func(yield func(ints.Point, *T) bool) {
+		for pt := range a.Iter() {
+			if !yield(pt, &a.data[a.index(pt)]) {
+				return
 			}
 		}
 	}
