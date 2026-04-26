@@ -2,6 +2,8 @@ github.com/gravitton/assert v1.2.0 h1:j9nvHz03FoaxSebCTd0Jr6RoDirs2lb51Eb2eVbV7a
 github.com/gravitton/assert v1.2.0/go.mod h1:AdPZ1NXH/Gfj2OkQq+2FvffggEk7lq2PzGPCe30qBe4=
 github.com/gravitton/geometry v1.4.0 h1:xZSjbB0EczDB7aSqR6pF1DJINDJ3rnOiodywTKm2IVE=
 github.com/gravitton/geometry v1.4.0/go.mod h1:pLJNWxElEmWAyk3dWwgOghvU+fOB2vfx2QuuJa8PfRs=
+github.com/gravitton/geometry v1.5.0 h1:IVEVCBQwZVyAomU2qHIIklfRCZnm3bzmsALMP0RQJV0=
+github.com/gravitton/geometry v1.5.0/go.mod h1:pLJNWxElEmWAyk3dWwgOghvU+fOB2vfx2QuuJa8PfRs=
 github.com/gravitton/hexagon v1.1.0 h1:MaQt5wm3Q16ADV/cdiT6yGPO4aJlpX8B9+mxjVzWT4M=
 github.com/gravitton/hexagon v1.1.0/go.mod h1:cNN91H8DuTQtAo9P4fYAWIs/Bl48bNqB0XAfyhMgrI8=
 github.com/gravitton/x v1.0.0 h1:v3tlD/HrojLhNFz9QTSc4gOaDDu4Zj+/AiVCRBST59c=
