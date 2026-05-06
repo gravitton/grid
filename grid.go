@@ -21,7 +21,7 @@ type Grid[T any] struct {
 	neighbors func(index ints.Point) []ints.Vector
 }
 
-// ValidIndexFunc is a function that returns true if a index is valid.
+// ValidIndexFunc is a function that returns true if an index is valid.
 type ValidIndexFunc func(index ints.Point) bool
 
 // ValidFunc is a function that returns true if a cell is valid.
@@ -29,6 +29,27 @@ type ValidFunc[T any] func(current *Cell[T]) bool
 
 // CostFunc is a function that returns the cost of moving from one cell to another.
 type CostFunc[T any] func(current, next *Cell[T]) float64
+
+// NewGrid creates a new grid.
+func NewGrid[T any](
+	layout Layout,
+	distance func(from, to ints.Point) int,
+	toRange func(index ints.Point, n int, valid ValidIndexFunc) []ints.Point,
+	neighbors func(index ints.Point) []ints.Vector,
+) *Grid[T] {
+	return &Grid[T]{
+		cells:       Arr[T](layout.Size()),
+		cellSize:    layout.CellBounds(),
+		cellSpacing: layout.CellSpacing(),
+		bounds:      layout.Bounds(),
+		toPoint:     layout.ToPoint,
+		fromPoint:   layout.FromPoint,
+		polygon:     layout.CellPolygon,
+		distance:    distance,
+		toRange:     toRange,
+		neighbors:   neighbors,
+	}
+}
 
 // Size returns the size of the grid.
 func (g *Grid[T]) Size() ints.Size {
@@ -55,7 +76,7 @@ func (g *Grid[T]) CellBounds() floats.Size {
 	return g.cellSize
 }
 
-// CellSpacing returns the spacing between cells centers.
+// CellSpacing returns the spacing between cell centers.
 func (g *Grid[T]) CellSpacing() floats.Size {
 	return g.cellSpacing
 }
@@ -75,22 +96,22 @@ func (g *Grid[T]) Get(index ints.Point) *Cell[T] {
 	return g.cell(index)
 }
 
-// Has returns if index is valid.
+// Has reports whether the index is within the grid bounds.
 func (g *Grid[T]) Has(index ints.Point) bool {
 	return g.valid(index)
 }
 
-// Set value to given index
+// Set stores value at the given index. Out-of-bounds writes are no-ops.
 func (g *Grid[T]) Set(index ints.Point, value T) {
 	g.setData(index, value)
 }
 
-// Fill all values with given value
+// Fill sets every cell to value.
 func (g *Grid[T]) Fill(value T) {
 	g.cells.Fill(value)
 }
 
-// Clear all values
+// Clear resets every cell to the zero value.
 func (g *Grid[T]) Clear() {
 	g.cells.Clear()
 }
@@ -103,12 +124,12 @@ func (g *Grid[T]) Clone() *Grid[T] {
 	return &clone
 }
 
-// IndexAt returns the index of the cell at given point.
+// IndexAt returns the index of the cell at a given point.
 func (g *Grid[T]) IndexAt(point floats.Point) ints.Point {
 	return g.fromPoint(point)
 }
 
-// At returns the cell at given point.
+// At returns the cell at a given point.
 func (g *Grid[T]) At(point floats.Point) *Cell[T] {
 	return g.cell(g.fromPoint(point))
 }
@@ -147,13 +168,13 @@ func (g *Grid[T]) cellPolygon(index ints.Point) floats.RegularPolygon {
 	return g.polygon(index)
 }
 
-func (g *Grid[T]) cellNeighbours(index ints.Point) []ints.Point {
-	var neighbours []ints.Point
+func (g *Grid[T]) cellNeighbors(index ints.Point) []ints.Point {
+	var neighbors []ints.Point
 	for _, dir := range g.neighbors(index) {
 		next := index.Add(dir)
 		if g.valid(next) {
-			neighbours = append(neighbours, next)
+			neighbors = append(neighbors, next)
 		}
 	}
-	return neighbours
+	return neighbors
 }

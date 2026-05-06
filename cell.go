@@ -53,9 +53,9 @@ func (c Cell[T]) Polygon() floats.RegularPolygon {
 	return c.grid.cellPolygon(c.index)
 }
 
-// Neighbours returns the grid indices of all valid neighbours of the cell.
-func (c Cell[T]) Neighbours() []ints.Point {
-	return c.grid.cellNeighbours(c.index)
+// Neighbors returns the grid indices of all valid neighbors of the cell.
+func (c Cell[T]) Neighbors() []ints.Point {
+	return c.grid.cellNeighbors(c.index)
 }
 
 // DistanceTo returns the grid distance from the cell to the given index.

@@ -38,29 +38,29 @@ func (a Array[T]) Len() int {
 	return len(a.data)
 }
 
-// Has returns if index is valid.
+// Has reports whether the index is within bounds.
 func (a Array[T]) Has(index ints.Point) bool {
 	return a.valid(index)
 }
 
-// Get value from given index
+// Get returns a pointer to the value at index. Panics if index is out of bounds.
 func (a Array[T]) Get(index ints.Point) *T {
 	return &a.data[a.index(index)]
 }
 
-// Set value to given index
+// Set stores value at index. Panics if index is out of bounds.
 func (a Array[T]) Set(index ints.Point, value T) {
 	a.data[a.index(index)] = value
 }
 
-// Fill all values with given value
+// Fill sets every element to value.
 func (a Array[T]) Fill(value T) {
 	for i := 0; i < len(a.data); i++ {
 		a.data[i] = value
 	}
 }
 
-// Clear all values
+// Clear resets every element to the zero value.
 func (a Array[T]) Clear() {
 	clear(a.data)
 }

@@ -1,48 +1,45 @@
 package grid
 
 import (
-	geom "github.com/gravitton/geometry"
 	"github.com/gravitton/geometry/types/floats"
 	"github.com/gravitton/geometry/types/ints"
-	sq "github.com/gravitton/grid/square"
 )
 
-// NewGrid constructs a new rectangular grid with 4-directional (cardinal) movement.
-func NewGrid[T any](grid ints.Size, size floats.Size) *Grid[T] {
-	layout := sq.LayoutFlat(size, geom.Pt(0.0, 0.0))
-	layout.Origin = layout.Origin.Add(layout.Bounds().Scale(0.5).Vector())
-	return newRectGrid[T](grid, layout, sq.Cardinal)
+// NewRectGrid constructs a new rectangular grid with 4-directional (cardinal) movement.
+// Pass RectGridOpts.DiagonalMovement() to enable 8-directional movement.
+func NewRectGrid[T any](grid ints.Size, size floats.Size, opts ...RectGridOption) *Grid[T] {
+	return newRectGrid[T](grid, size, SquareFlat, opts)
 }
 
-// NewIsometricGrid constructs a new isometric grid with 4-directional movement.
-// The origin is positioned so that the left edge of the grid starts at x=0
-// and the top edge starts at y=0.
-func NewIsometricGrid[T any](grid ints.Size, size floats.Size) *Grid[T] {
-	layout := sq.LayoutIsometric(size, geom.Pt(0.0, 0.0))
-	layout.Origin = layout.Origin.Add(layout.Bounds().Scale(0.5).Vector())
-	return newRectGrid[T](grid, layout, sq.Cardinal)
+// NewIsometricRectGrid constructs a new isometric (diamond-projection) grid with 4-directional movement.
+// Pass RectGridOpts.DiagonalMovement() to enable 8-directional movement.
+func NewIsometricRectGrid[T any](grid ints.Size, size floats.Size, opts ...RectGridOption) *Grid[T] {
+	return newRectGrid[T](grid, size, SquareIsometric, opts)
 }
 
-func newRectGrid[T any](grid ints.Size, layout sq.Layout, system sq.System) *Grid[T] {
+func newRectGrid[T any](grid ints.Size, size floats.Size, transform *Transform, opts []RectGridOption) *Grid[T] {
+	o := applyRectGridOptions(opts)
+
+	system := o.movement
+	layout := NewLayout(transform,
+		LayoutOpts.Size(grid),
+		LayoutOpts.CellSize(size),
+	).AlignTopLeft()
+
 	return &Grid[T]{
 		cells:       Arr[T](grid),
-		cellSize:    layout.Bounds(),
-		cellSpacing: layout.Spacing(),
-		bounds:      geom.RectFromMin(layout.Origin, layout.Spacing().ScaleXY(grid.Float().XY())),
-		toPoint: func(index ints.Point) floats.Point {
-			return layout.ToPoint(index)
-		},
-		fromPoint: func(point floats.Point) ints.Point {
-			return layout.FromPoint(point).Round().Int()
-		},
-		polygon: func(index ints.Point) floats.RegularPolygon {
-			return layout.CellPolygon(index)
-		},
+		cellSize:    layout.CellBounds(),
+		cellSpacing: layout.CellSpacing(),
+		bounds:      layout.Bounds(),
+		toPoint:     layout.ToPoint,
+		fromPoint:   layout.FromPoint,
+		polygon:     layout.CellPolygon,
 		distance: func(from, to ints.Point) int {
-			return sq.DistanceTo(from, to, system)
+			return DistanceTo(from, to, system)
 		},
 		toRange: func(index ints.Point, n int, valid ValidIndexFunc) []ints.Point {
-			candidates := sq.Range(index, n)
+			p := Pt(index.XY())
+			candidates := p.Range(n)
 
 			var blocking []ints.Point
 			for _, i := range candidates {
@@ -51,10 +48,36 @@ func newRectGrid[T any](grid ints.Size, layout sq.Layout, system sq.System) *Gri
 				}
 			}
 
-			return sq.FieldOfView(index, candidates, blocking)
+			return p.FieldOfView(candidates, blocking)
 		},
 		neighbors: func(index ints.Point) []ints.Vector {
-			return sq.NeighborOffsets(system)
+			return NeighborOffsets(system)
 		},
 	}
+}
+
+// RectGridOption configures a rectangular grid constructor.
+type RectGridOption func(*rectGridOptions)
+
+type rectGridOptions struct {
+	movement System
+}
+
+// RectGridOpts is the namespace for rectangular grid options.
+var RectGridOpts rectGridOptions
+
+// DiagonalMovement returns an option that enables 8-directional (Chebyshev) movement.
+func (o rectGridOptions) DiagonalMovement() RectGridOption {
+	return func(o *rectGridOptions) {
+		o.movement = Diagonal
+	}
+}
+
+func applyRectGridOptions(opts []RectGridOption) *rectGridOptions {
+	o := &rectGridOptions{}
+	for _, opt := range opts {
+		opt(o)
+	}
+
+	return o
 }

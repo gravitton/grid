@@ -71,7 +71,7 @@ func (g *Grid[T]) breadthFirstSearch(start ints.Point, goal *ints.Point, valid V
 			break
 		}
 
-		for _, next := range g.cellNeighbours(current) {
+		for _, next := range g.cellNeighbors(current) {
 			if _, visited := cameFrom[next]; !visited {
 				cameFrom[next] = current
 
@@ -118,7 +118,7 @@ func (g *Grid[T]) uniformCostSearch(start ints.Point, goal *ints.Point, valid Va
 			break
 		}
 
-		for _, next := range g.cellNeighbours(current) {
+		for _, next := range g.cellNeighbors(current) {
 			newCost := costSoFar[current] + cost(g.cell(current), g.cell(next))
 
 			if currentCost, visited := costSoFar[next]; !visited || newCost < currentCost {
@@ -160,7 +160,7 @@ func (g *Grid[T]) greedyBestFirstSearch(start ints.Point, goal *ints.Point, vali
 			break
 		}
 
-		for _, next := range g.cellNeighbours(current) {
+		for _, next := range g.cellNeighbors(current) {
 			if _, visited := cameFrom[next]; !visited {
 				cameFrom[next] = current
 
@@ -202,7 +202,7 @@ func (g *Grid[T]) astar(start ints.Point, goal *ints.Point, valid ValidFunc[T], 
 			break
 		}
 
-		for _, next := range g.cellNeighbours(current) {
+		for _, next := range g.cellNeighbors(current) {
 			newCost := costSoFar[current] + cost(g.cell(current), g.cell(next))
 
 			if currentCost, visited := costSoFar[next]; !visited || newCost < currentCost {

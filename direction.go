@@ -1,8 +1,7 @@
-package square
+package grid
 
 import (
 	"fmt"
-	"slices"
 
 	geom "github.com/gravitton/geometry"
 	"github.com/gravitton/geometry/types/ints"
@@ -105,6 +104,16 @@ func NeighborOffsets(system System) []ints.Vector {
 	}
 }
 
+// NeighborOffset returns the unit vector for direction in the given system.
+// For Cardinal, only even Direction values (E, N, W, S) are valid — passing a
+// diagonal direction returns a wrong vector or panics with index out of range.
+func NeighborOffset(system System, direction Direction) ints.Vector {
+	if system == Cardinal && direction%2 != 0 {
+		panic("diagonal direction not available in Cardinal movement system")
+	}
+	return Directions[direction]
+}
+
 // DistanceTo returns the grid distance between two points for the given System.
 // Cardinal uses Manhattan distance; Diagonal uses Chebyshev distance.
 func DistanceTo(from, to ints.Point, system System) int {
@@ -116,89 +125,4 @@ func DistanceTo(from, to ints.Point, system System) int {
 	default:
 		panic("unsupported system")
 	}
-}
-
-// Range returns all points within Euclidean distance n from center, inclusive.
-// Returns nil when n < 0.
-func Range(center ints.Point, n int) []ints.Point {
-	if n < 0 {
-		return nil
-	}
-
-	results := make([]ints.Point, 0, (2*n+1)*(2*n+1))
-	r2 := n * n
-
-	for dx := -n; dx <= n; dx++ {
-		for dy := -n; dy <= n; dy++ {
-			if dx*dx+dy*dy <= r2 {
-				results = append(results, geom.Pt(center.X+dx, center.Y+dy))
-			}
-		}
-	}
-
-	return results
-}
-
-// HasLineOfSight reports whether there is a clear line of sight from src to dst,
-// given a set of blocking points. All intermediate cells (excluding src and dst)
-// must not be in blocking. The destination itself may be a blocker — it is
-// visible but does not allow sight through it.
-func HasLineOfSight(src, dst ints.Point, blocking []ints.Point) bool {
-	x0, y0 := src.X, src.Y
-	x1, y1 := dst.X, dst.Y
-
-	dx := x1 - x0
-	if dx < 0 {
-		dx = -dx
-	}
-	dy := y1 - y0
-	if dy < 0 {
-		dy = -dy
-	}
-
-	sx, sy := 1, 1
-	if x0 > x1 {
-		sx = -1
-	}
-	if y0 > y1 {
-		sy = -1
-	}
-
-	x, y, err := x0, y0, dx-dy
-
-	for {
-		if x == x1 && y == y1 {
-			return true
-		}
-
-		e2 := 2 * err
-		if e2 > -dy {
-			err -= dy
-			x += sx
-		}
-		if e2 < dx {
-			err += dx
-			y += sy
-		}
-
-		if x == x1 && y == y1 {
-			return true
-		}
-		if slices.Contains(blocking, geom.Pt(x, y)) {
-			return false
-		}
-	}
-}
-
-// FieldOfView returns the subset of candidates visible from center,
-// given a set of blocking points. Adjacent cells (Chebyshev distance ≤ 1)
-// are always visible.
-func FieldOfView(center ints.Point, candidates []ints.Point, blocking []ints.Point) []ints.Point {
-	results := make([]ints.Point, 0, len(candidates))
-	for _, candidate := range candidates {
-		if len(blocking) == 0 || center.ChebyshevDistanceTo(candidate) <= 1 || HasLineOfSight(center, candidate, blocking) {
-			results = append(results, candidate)
-		}
-	}
-	return results
 }

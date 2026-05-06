@@ -32,7 +32,7 @@ type Tile struct {
 	Cost     float64
 }
 
-g := grid.NewGrid[Tile](geom.Sz(100, 100), geom.Sz(32.0, 32.0))
+g := grid.NewRectGrid[Tile](geom.Sz(100, 100), geom.Sz(32.0, 32.0))
 
 g.Fill(Tile{Walkable: true, Cost: 1.0})
 
@@ -43,7 +43,7 @@ cell.Set(Tile{Walkable: false})
 Hexagonal grid:
 
 ```go
-g := grid.NewHexagonFlatTopGrid[Tile](geom.Sz(20, 20), geom.SzU(32.0), true)
+g := grid.NewHexagonFlatTopGrid[Tile](geom.Sz(20, 20), geom.SzU(32.0))
 ```
 
 Pathfinding:
@@ -81,14 +81,19 @@ Full documentation is available at [pkg.go.dev/github.com/gravitton/grid][link-g
 | `Grid[T]` | 2D grid with spatial mapping and graph operations |
 | `Cell[T]` | Single cell — provides value access, spatial info, and pathfinding |
 | `Array[T]` | Low-level flat 2D array |
+| `Point` | Grid coordinate with spatial query methods (`Range`, `FieldOfView`, `HasLineOfSight`) |
+| `Direction` | One of eight neighbor directions: `E`, `NE`, `N`, `NW`, `W`, `SW`, `S`, `SE` |
+| `System` | Movement connectivity: `Cardinal` (4-dir) or `Diagonal` (8-dir) |
 
 ### Constructors
 
 | Constructor | Description |
 |---|---|
-| `NewGrid[T](grid ints.Size, size floats.Size)` | Rectangular grid |
-| `NewHexagonPointyTopGrid[T](grid ints.Size, hexSize floats.Size, odd bool)` | Hexagonal grid, pointy-top orientation |
-| `NewHexagonFlatTopGrid[T](grid ints.Size, hexSize floats.Size, odd bool)` | Hexagonal grid, flat-top orientation |
+| `NewRectGrid[T](size, cellSize, opts...)` | Rectangular grid, 4-directional movement |
+| `NewRectGrid[T](..., RectGridOpts.DiagonalMovement())` | Rectangular grid, 8-directional movement |
+| `NewIsometricRectGrid[T](size, cellSize, opts...)` | Isometric (diamond) grid |
+| `NewHexagonPointyTopGrid[T](size, hexSize, opts...)` | Hexagonal grid, pointy-top orientation |
+| `NewHexagonFlatTopGrid[T](size, hexSize, opts...)` | Hexagonal grid, flat-top orientation |
 | `Arr[T](size ints.Size)` | Standalone 2D array |
 
 ### Grid
@@ -108,7 +113,7 @@ g.CellSpacing() floats.Size
 g.Get(index ints.Point) *Cell[T]
 g.Has(index ints.Point) bool
 g.Set(index ints.Point, value T)
-g.At(point floats.Point) *Cell[T]      // world-space → cell
+g.At(point floats.Point) *Cell[T] // world-space → cell
 g.IndexAt(point floats.Point) ints.Point
 
 // Mutation
@@ -117,7 +122,7 @@ g.Clear()
 g.Clone() *Grid[T]
 
 // Iteration
-g.Iter(config *IterConfig) iter.Seq[*Cell[T]]  // config nil = all cells
+g.Iter(config *IterConfig) iter.Seq[*Cell[T]] // config nil = all cells
 ```
 
 ### Cell
@@ -130,7 +135,7 @@ c.Set(value T)
 c.Center() floats.Point
 c.Bounds() floats.Rectangle
 c.Polygon() floats.RegularPolygon
-c.Neighbours() []ints.Point
+c.Neighbors() []ints.Point
 c.DistanceTo(to ints.Point) int
 c.Range(n int, valid ValidFunc[T]) []ints.Point
 c.PathTo(to ints.Point, valid ValidFunc[T], cost CostFunc[T]) []*Cell[T]
@@ -174,7 +179,40 @@ g.Distance(from, to ints.Point) int
 g.Range(index ints.Point, n int, valid ValidFunc[T]) []ints.Point
 ```
 
-Range on hexagonal grids uses a field-of-view algorithm — blocked cells occlude cells behind them.
+Both rectangular and hexagonal grids apply a field-of-view algorithm to `Range` — blocked cells occlude cells behind them. On rectangular grids this uses Bresenham line-of-sight; on hexagonal grids it uses the hex FoV algorithm.
+
+### Directions
+
+```go
+// Direction constants (ordered counterclockwise from East)
+E, NE, N, NW, W, SW, S, SE Direction
+
+// Direction vectors
+CardinalDirections [4]ints.Vector  // E, N, W, S
+DiagonalDirections [4]ints.Vector  // NE, NW, SW, SE
+Directions         [8]ints.Vector  // all 8, indexed by Direction constant
+
+d.Opposite() Direction
+d.String() string
+
+NeighborOffsets(system System) []ints.Vector
+NeighborOffset(system System, direction Direction) ints.Vector
+DistanceTo(from, to ints.Point, system System) int
+```
+
+### Point
+
+`Point` is a grid coordinate with spatial query methods, mirroring the hex grid API:
+
+```go
+p := grid.Pt(x, y)
+p.Range(n int) []ints.Point
+p.FieldOfView(candidates, blocking []ints.Point) []ints.Point
+p.HasLineOfSight(target ints.Point, blocking []ints.Point) bool
+p.Neighbors(system System) []ints.Point
+p.DistanceTo(to ints.Point, system System) int
+p.Point() ints.Point
+```
 
 ### Callbacks
 
