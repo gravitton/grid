@@ -6,7 +6,10 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 
-## [Unreleased](https://github.com/gravitton/grid/releases)
+## [Unreleased](https://github.com/gravitton/grid/compare/v1.0.0...master)
+
+
+## v1.0.0 (2026-05-06)
 ### Added
 - `Grid[T]` — generic 2D grid with configurable layout, spatial mapping, and graph operations
 - `Cell[T]` — single grid cell with value access, spatial info (`Center`, `Bounds`, `Polygon`), and graph methods (`Neighbors`, `DistanceTo`, `Range`, `PathTo`)
