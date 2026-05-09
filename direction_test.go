@@ -8,41 +8,60 @@ import (
 )
 
 func TestDirection_String(t *testing.T) {
-	assert.Equal(t, E.String(), "E")
-	assert.Equal(t, NE.String(), "NE")
-	assert.Equal(t, N.String(), "N")
-	assert.Equal(t, NW.String(), "NW")
-	assert.Equal(t, W.String(), "W")
-	assert.Equal(t, SW.String(), "SW")
-	assert.Equal(t, S.String(), "S")
-	assert.Equal(t, SE.String(), "SE")
-	// values beyond 7 wrap via %8
-	assert.Equal(t, Direction(8).String(), "E")
-	assert.Equal(t, Direction(10).String(), "N")
+	cases := []struct {
+		name string
+		dir  Direction
+		want string
+	}{
+		{"E", E, "E"},
+		{"NE", NE, "NE"},
+		{"N", N, "N"},
+		{"NW", NW, "NW"},
+		{"W", W, "W"},
+		{"SW", SW, "SW"},
+		{"S", S, "S"},
+		{"SE", SE, "SE"},
+		{"wrap_8_to_E", Direction(8), "E"},
+		{"wrap_10_to_N", Direction(10), "N"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.dir.String(), tc.want)
+		})
+	}
 }
 
 func TestDirection_Opposite(t *testing.T) {
-	assert.Equal(t, E.Opposite(), W)
-	assert.Equal(t, NE.Opposite(), SW)
-	assert.Equal(t, N.Opposite(), S)
-	assert.Equal(t, NW.Opposite(), SE)
-	assert.Equal(t, W.Opposite(), E)
-	assert.Equal(t, SW.Opposite(), NE)
-	assert.Equal(t, S.Opposite(), N)
-	assert.Equal(t, SE.Opposite(), NW)
-
-	// double opposite returns the original direction
-	for _, d := range []Direction{E, NE, N, NW, W, SW, S, SE} {
-		assert.Equal(t, d.Opposite().Opposite(), d)
-	}
-
-	// neighbor vectors of opposite directions sum to zero
-	for _, d := range []Direction{E, NE, N, NW} {
-		v := Directions[d]
-		opp := Directions[d.Opposite()]
-		assert.Equal(t, v.X+opp.X, 0)
-		assert.Equal(t, v.Y+opp.Y, 0)
-	}
+	t.Run("pairs", func(t *testing.T) {
+		cases := []struct{ dir, want Direction }{
+			{E, W},
+			{NE, SW},
+			{N, S},
+			{NW, SE},
+			{W, E},
+			{SW, NE},
+			{S, N},
+			{SE, NW},
+		}
+		for _, tc := range cases {
+			t.Run(tc.dir.String(), func(t *testing.T) {
+				assert.Equal(t, tc.dir.Opposite(), tc.want)
+			})
+		}
+	})
+	t.Run("double opposite", func(t *testing.T) {
+		for _, d := range []Direction{E, NE, N, NW, W, SW, S, SE} {
+			assert.Equal(t, d.Opposite().Opposite(), d)
+		}
+	})
+	t.Run("vectors sum to zero", func(t *testing.T) {
+		for _, d := range []Direction{E, NE, N, NW} {
+			v := Directions[d]
+			opp := Directions[d.Opposite()]
+			assert.Equal(t, v.X+opp.X, 0)
+			assert.Equal(t, v.Y+opp.Y, 0)
+		}
+	})
 }
 
 func TestAllDirections_Order(t *testing.T) {
@@ -75,16 +94,19 @@ func TestNeighborOffsets_Panic(t *testing.T) {
 }
 
 func TestNeighborOffset(t *testing.T) {
-	// Cardinal: all four cardinal directions return the correct vector.
-	assert.Equal(t, NeighborOffset(Cardinal, E), geom.Vec(1, 0))
-	assert.Equal(t, NeighborOffset(Cardinal, N), geom.Vec(0, -1))
-	assert.Equal(t, NeighborOffset(Cardinal, W), geom.Vec(-1, 0))
-	assert.Equal(t, NeighborOffset(Cardinal, S), geom.Vec(0, 1))
-
-	// Diagonal: all eight directions return the correct vector.
-	for _, d := range []Direction{E, NE, N, NW, W, SW, S, SE} {
-		assert.Equal(t, NeighborOffset(Diagonal, d), Directions[d])
-	}
+	t.Run("cardinal", func(t *testing.T) {
+		assert.Equal(t, NeighborOffset(Cardinal, E), geom.Vec(1, 0))
+		assert.Equal(t, NeighborOffset(Cardinal, N), geom.Vec(0, -1))
+		assert.Equal(t, NeighborOffset(Cardinal, W), geom.Vec(-1, 0))
+		assert.Equal(t, NeighborOffset(Cardinal, S), geom.Vec(0, 1))
+	})
+	t.Run("diagonal", func(t *testing.T) {
+		for _, d := range []Direction{E, NE, N, NW, W, SW, S, SE} {
+			t.Run(d.String(), func(t *testing.T) {
+				assert.Equal(t, NeighborOffset(Diagonal, d), Directions[d])
+			})
+		}
+	})
 }
 
 func TestNeighborOffset_Panic(t *testing.T) {
@@ -99,17 +121,18 @@ func TestDistanceTo(t *testing.T) {
 	origin := geom.Pt(0, 0)
 	target := geom.Pt(3, 4)
 
-	// Cardinal: Manhattan distance
-	assert.Equal(t, DistanceTo(origin, target, Cardinal), 7)
-	assert.Equal(t, DistanceTo(origin, geom.Pt(-2, 3), Cardinal), 5)
-
-	// Diagonal: Chebyshev distance
-	assert.Equal(t, DistanceTo(origin, target, Diagonal), 4)
-	assert.Equal(t, DistanceTo(origin, geom.Pt(2, 2), Diagonal), 2)
-
-	// symmetric
-	assert.Equal(t, DistanceTo(origin, target, Cardinal), DistanceTo(target, origin, Cardinal))
-	assert.Equal(t, DistanceTo(origin, target, Diagonal), DistanceTo(target, origin, Diagonal))
+	t.Run("cardinal", func(t *testing.T) {
+		assert.Equal(t, DistanceTo(origin, target, Cardinal), 7)
+		assert.Equal(t, DistanceTo(origin, geom.Pt(-2, 3), Cardinal), 5)
+	})
+	t.Run("diagonal", func(t *testing.T) {
+		assert.Equal(t, DistanceTo(origin, target, Diagonal), 4)
+		assert.Equal(t, DistanceTo(origin, geom.Pt(2, 2), Diagonal), 2)
+	})
+	t.Run("symmetric", func(t *testing.T) {
+		assert.Equal(t, DistanceTo(origin, target, Cardinal), DistanceTo(target, origin, Cardinal))
+		assert.Equal(t, DistanceTo(origin, target, Diagonal), DistanceTo(target, origin, Diagonal))
+	})
 }
 
 func TestDistanceTo_Panic(t *testing.T) {

@@ -48,56 +48,57 @@ func TestPoint_Range(t *testing.T) {
 func TestPoint_HasLineOfSight(t *testing.T) {
 	origin := Pt(0, 0)
 
-	// clear line with no blockers
-	assert.True(t, origin.HasLineOfSight(geom.Pt(3, 0), nil))
-	assert.True(t, origin.HasLineOfSight(geom.Pt(3, 0), []ints.Point{}))
-
-	// same point always has line of sight to itself
-	assert.True(t, origin.HasLineOfSight(origin.Point(), nil))
-
-	// blocked in the middle
-	assert.False(t, origin.HasLineOfSight(geom.Pt(3, 0), []ints.Point{geom.Pt(1, 0)}))
-	assert.False(t, origin.HasLineOfSight(geom.Pt(3, 0), []ints.Point{geom.Pt(2, 0)}))
-
-	// blocker beyond the target does not affect visibility
-	assert.True(t, origin.HasLineOfSight(geom.Pt(2, 0), []ints.Point{geom.Pt(3, 0)}))
-
-	// target in the blocking list is still visible (can see into, not through)
-	assert.True(t, origin.HasLineOfSight(geom.Pt(3, 0), []ints.Point{geom.Pt(3, 0)}))
-
-	// diagonal line of sight
-	assert.True(t, origin.HasLineOfSight(geom.Pt(3, 3), nil))
-	assert.False(t, origin.HasLineOfSight(geom.Pt(3, 3), []ints.Point{geom.Pt(1, 1)}))
+	t.Run("clear", func(t *testing.T) {
+		assert.True(t, origin.HasLineOfSight(geom.Pt(3, 0), nil))
+		assert.True(t, origin.HasLineOfSight(geom.Pt(3, 0), []ints.Point{}))
+		assert.True(t, origin.HasLineOfSight(origin.Point(), nil))
+	})
+	t.Run("blocked mid", func(t *testing.T) {
+		assert.False(t, origin.HasLineOfSight(geom.Pt(3, 0), []ints.Point{geom.Pt(1, 0)}))
+		assert.False(t, origin.HasLineOfSight(geom.Pt(3, 0), []ints.Point{geom.Pt(2, 0)}))
+	})
+	t.Run("blocker beyond target", func(t *testing.T) {
+		assert.True(t, origin.HasLineOfSight(geom.Pt(2, 0), []ints.Point{geom.Pt(3, 0)}))
+	})
+	t.Run("target in blocking list", func(t *testing.T) {
+		// can see into, not through
+		assert.True(t, origin.HasLineOfSight(geom.Pt(3, 0), []ints.Point{geom.Pt(3, 0)}))
+	})
+	t.Run("diagonal", func(t *testing.T) {
+		assert.True(t, origin.HasLineOfSight(geom.Pt(3, 3), nil))
+		assert.False(t, origin.HasLineOfSight(geom.Pt(3, 3), []ints.Point{geom.Pt(1, 1)}))
+	})
 }
 
 func TestPoint_FieldOfView(t *testing.T) {
 	center := Pt(0, 0)
 	candidates := center.Range(3)
 
-	// no blocking: all candidates are visible
-	assert.Equal(t, len(center.FieldOfView(candidates, nil)), len(candidates))
-	assert.Equal(t, len(center.FieldOfView(candidates, []ints.Point{})), len(candidates))
-
-	// empty candidates
-	assert.Equal(t, len(center.FieldOfView(nil, nil)), 0)
-	assert.Equal(t, len(center.FieldOfView([]ints.Point{}, nil)), 0)
-
-	// adjacent cells (Chebyshev distance ≤ 1) are always visible even when blocking
-	allNeighbors := []ints.Point{
-		geom.Pt(1, 0), geom.Pt(0, -1), geom.Pt(-1, 0), geom.Pt(0, 1),
-		geom.Pt(1, -1), geom.Pt(-1, -1), geom.Pt(-1, 1), geom.Pt(1, 1),
-	}
-	visible := center.FieldOfView(allNeighbors, allNeighbors)
-	assert.Equal(t, len(visible), len(allNeighbors))
-
-	// a gap in the blocking ring allows sight through it
-	// only (1,0) is unblocked, so (2,0) and (3,0) should be visible
-	blocking := []ints.Point{
-		geom.Pt(0, -1), geom.Pt(-1, -1), geom.Pt(-1, 0), geom.Pt(-1, 1),
-		geom.Pt(0, 1), geom.Pt(1, -1), geom.Pt(1, 1),
-	}
-	visible = center.FieldOfView([]ints.Point{geom.Pt(2, 0), geom.Pt(3, 0), geom.Pt(0, 2)}, blocking)
-	assert.Equal(t, len(visible), 2)
-	assert.Equal(t, visible[0], geom.Pt(2, 0))
-	assert.Equal(t, visible[1], geom.Pt(3, 0))
+	t.Run("no blocking", func(t *testing.T) {
+		assert.Equal(t, len(center.FieldOfView(candidates, nil)), len(candidates))
+		assert.Equal(t, len(center.FieldOfView(candidates, []ints.Point{})), len(candidates))
+	})
+	t.Run("empty candidates", func(t *testing.T) {
+		assert.Equal(t, len(center.FieldOfView(nil, nil)), 0)
+		assert.Equal(t, len(center.FieldOfView([]ints.Point{}, nil)), 0)
+	})
+	t.Run("adjacent always visible", func(t *testing.T) {
+		allNeighbors := []ints.Point{
+			geom.Pt(1, 0), geom.Pt(0, -1), geom.Pt(-1, 0), geom.Pt(0, 1),
+			geom.Pt(1, -1), geom.Pt(-1, -1), geom.Pt(-1, 1), geom.Pt(1, 1),
+		}
+		visible := center.FieldOfView(allNeighbors, allNeighbors)
+		assert.Equal(t, len(visible), len(allNeighbors))
+	})
+	t.Run("gap in blocking ring", func(t *testing.T) {
+		// only (1,0) is unblocked, so (2,0) and (3,0) should be visible; (0,2) is not
+		blocking := []ints.Point{
+			geom.Pt(0, -1), geom.Pt(-1, -1), geom.Pt(-1, 0), geom.Pt(-1, 1),
+			geom.Pt(0, 1), geom.Pt(1, -1), geom.Pt(1, 1),
+		}
+		visible := center.FieldOfView([]ints.Point{geom.Pt(2, 0), geom.Pt(3, 0), geom.Pt(0, 2)}, blocking)
+		assert.Equal(t, len(visible), 2)
+		assert.Equal(t, visible[0], geom.Pt(2, 0))
+		assert.Equal(t, visible[1], geom.Pt(3, 0))
+	})
 }

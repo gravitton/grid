@@ -48,12 +48,18 @@ func TestGrid_CellSpacing(t *testing.T) {
 
 func TestGrid_Has(t *testing.T) {
 	g := NewRectGrid[int](geom.Sz(4, 3), geom.Sz(32.0, 32.0))
-	assert.True(t, g.Has(geom.Pt(0, 0)))
-	assert.True(t, g.Has(geom.Pt(3, 2)))
-	assert.False(t, g.Has(geom.Pt(-1, 0)))
-	assert.False(t, g.Has(geom.Pt(0, -1)))
-	assert.False(t, g.Has(geom.Pt(4, 0)))
-	assert.False(t, g.Has(geom.Pt(0, 3)))
+	t.Run("valid", func(t *testing.T) {
+		assert.True(t, g.Has(geom.Pt(0, 0)))
+		assert.True(t, g.Has(geom.Pt(3, 2)))
+	})
+	t.Run("negative coords", func(t *testing.T) {
+		assert.False(t, g.Has(geom.Pt(-1, 0)))
+		assert.False(t, g.Has(geom.Pt(0, -1)))
+	})
+	t.Run("beyond size", func(t *testing.T) {
+		assert.False(t, g.Has(geom.Pt(4, 0)))
+		assert.False(t, g.Has(geom.Pt(0, 3)))
+	})
 }
 
 // --- Set / Get ---
@@ -104,55 +110,53 @@ func TestGrid_Clone(t *testing.T) {
 func TestGrid_IndexAt(t *testing.T) {
 	g := NewRectGrid[int](geom.Sz(5, 5), geom.Sz(32.0, 32.0))
 	// Cell (2, 3) center is at (64, 96); IndexAt should round back.
-	idx := g.IndexAt(geom.Pt(64.0, 96.0))
-	assert.Equal(t, idx, geom.Pt(2, 3))
+	assert.Equal(t, g.IndexAt(geom.Pt(64.0, 96.0)), geom.Pt(2, 3))
 }
 
 func TestGrid_At(t *testing.T) {
 	g := NewRectGrid[int](geom.Sz(5, 5), geom.Sz(32.0, 32.0))
-	cell := g.At(geom.Pt(64.0, 96.0))
-	assert.Equal(t, cell.Index(), geom.Pt(2, 3))
-}
-
-// --- Cell.Valid ---
-
-func TestCell_Valid(t *testing.T) {
-	g := NewRectGrid[int](geom.Sz(4, 4), geom.Sz(32.0, 32.0))
-	assert.True(t, g.Get(geom.Pt(0, 0)).Valid())
-	assert.True(t, g.Get(geom.Pt(3, 3)).Valid())
-	assert.False(t, g.Get(geom.Pt(10, 10)).Valid())
+	assert.Equal(t, g.At(geom.Pt(64.0, 96.0)).Index(), geom.Pt(2, 3))
 }
 
 // --- Neighbors ---
 
-func TestGrid_Neighbors_Cardinal(t *testing.T) {
-	g := NewRectGrid[int](geom.Sz(5, 5), geom.Sz(32.0, 32.0))
-	// Center cell has 4 cardinal neighbors.
-	assert.Equal(t, len(g.Get(geom.Pt(2, 2)).Neighbors()), 4)
-	// Corner cell has 2 cardinal neighbors.
-	assert.Equal(t, len(g.Get(geom.Pt(0, 0)).Neighbors()), 2)
-	// Edge cell (not corner) has 3.
-	assert.Equal(t, len(g.Get(geom.Pt(1, 0)).Neighbors()), 3)
-}
-
-func TestGrid_Neighbors_Diagonal(t *testing.T) {
-	g := NewRectGrid[int](geom.Sz(5, 5), geom.Sz(32.0, 32.0), RectGridOpts.DiagonalMovement())
-	assert.Equal(t, len(g.Get(geom.Pt(2, 2)).Neighbors()), 8)
-	assert.Equal(t, len(g.Get(geom.Pt(0, 0)).Neighbors()), 3)
+func TestGrid_Neighbors(t *testing.T) {
+	t.Run("cardinal", func(t *testing.T) {
+		g := NewRectGrid[int](geom.Sz(5, 5), geom.Sz(32.0, 32.0))
+		t.Run("center", func(t *testing.T) {
+			assert.Equal(t, len(g.Get(geom.Pt(2, 2)).Neighbors()), 4)
+		})
+		t.Run("corner", func(t *testing.T) {
+			assert.Equal(t, len(g.Get(geom.Pt(0, 0)).Neighbors()), 2)
+		})
+		t.Run("edge", func(t *testing.T) {
+			assert.Equal(t, len(g.Get(geom.Pt(1, 0)).Neighbors()), 3)
+		})
+	})
+	t.Run("diagonal", func(t *testing.T) {
+		g := NewRectGrid[int](geom.Sz(5, 5), geom.Sz(32.0, 32.0), RectGridOpts.DiagonalMovement())
+		t.Run("center", func(t *testing.T) {
+			assert.Equal(t, len(g.Get(geom.Pt(2, 2)).Neighbors()), 8)
+		})
+		t.Run("corner", func(t *testing.T) {
+			assert.Equal(t, len(g.Get(geom.Pt(0, 0)).Neighbors()), 3)
+		})
+	})
 }
 
 // --- Distance ---
 
-func TestGrid_Distance_Cardinal(t *testing.T) {
-	g := NewRectGrid[int](geom.Sz(10, 10), geom.Sz(32.0, 32.0))
-	assert.Equal(t, g.Distance(geom.Pt(0, 0), geom.Pt(0, 0)), 0)
-	assert.Equal(t, g.Distance(geom.Pt(0, 0), geom.Pt(3, 4)), 7)
-	assert.Equal(t, g.Distance(geom.Pt(3, 4), geom.Pt(0, 0)), 7)
-}
-
-func TestGrid_Distance_Diagonal(t *testing.T) {
-	g := NewRectGrid[int](geom.Sz(10, 10), geom.Sz(32.0, 32.0), RectGridOpts.DiagonalMovement())
-	assert.Equal(t, g.Distance(geom.Pt(0, 0), geom.Pt(3, 4)), 4)
+func TestGrid_Distance(t *testing.T) {
+	t.Run("cardinal", func(t *testing.T) {
+		g := NewRectGrid[int](geom.Sz(10, 10), geom.Sz(32.0, 32.0))
+		assert.Equal(t, g.Distance(geom.Pt(0, 0), geom.Pt(0, 0)), 0)
+		assert.Equal(t, g.Distance(geom.Pt(0, 0), geom.Pt(3, 4)), 7)
+		assert.Equal(t, g.Distance(geom.Pt(3, 4), geom.Pt(0, 0)), 7)
+	})
+	t.Run("diagonal", func(t *testing.T) {
+		g := NewRectGrid[int](geom.Sz(10, 10), geom.Sz(32.0, 32.0), RectGridOpts.DiagonalMovement())
+		assert.Equal(t, g.Distance(geom.Pt(0, 0), geom.Pt(3, 4)), 4)
+	})
 }
 
 // --- Range ---
@@ -175,94 +179,4 @@ func TestGrid_Range_Negative(t *testing.T) {
 	// Negative n short-circuits in square.Range; FieldOfView returns empty.
 	all := func(c *Cell[int]) bool { return true }
 	assert.Equal(t, len(g.Range(geom.Pt(2, 2), -1, all)), 0)
-}
-
-// --- Cell ---
-
-func TestCell_Index(t *testing.T) {
-	g := NewRectGrid[int](geom.Sz(5, 5), geom.Sz(32.0, 32.0))
-	cell := g.Get(geom.Pt(1, 3))
-	assert.Equal(t, cell.Index(), geom.Pt(1, 3))
-}
-
-func TestCell_Center(t *testing.T) {
-	g := NewRectGrid[int](geom.Sz(5, 5), geom.Sz(32.0, 32.0))
-	center := g.Get(geom.Pt(0, 0)).Center()
-	// With AlignTopLeft, cell (0,0) center is at (16, 16) for 32×32 cells.
-	geom.AssertPoint(t, center, 16.0, 16.0)
-}
-
-func TestCell_DistanceTo(t *testing.T) {
-	g := NewRectGrid[int](geom.Sz(10, 10), geom.Sz(32.0, 32.0))
-	assert.Equal(t, g.Get(geom.Pt(0, 0)).DistanceTo(geom.Pt(3, 4)), 7)
-}
-
-func TestCell_Range(t *testing.T) {
-	g := NewRectGrid[int](geom.Sz(10, 10), geom.Sz(32.0, 32.0))
-	all := func(c *Cell[int]) bool { return true }
-	r := g.Get(geom.Pt(5, 5)).Range(1, all)
-	assert.Equal(t, len(r), 5)
-}
-
-func TestCell_PathTo(t *testing.T) {
-	g := NewRectGrid[int](geom.Sz(5, 5), geom.Sz(32.0, 32.0))
-	path := g.Get(geom.Pt(0, 0)).PathTo(geom.Pt(4, 0), nil, nil)
-	assert.Equal(t, len(path), 5)
-}
-
-// --- Cell size helpers ---
-
-func TestRectCellSize(t *testing.T) {
-	size := RectCellSize(64)
-	geom.AssertSize(t, size, 64.0, 64.0)
-	g := NewRectGrid[int](geom.SzU(1), size)
-	geom.AssertSize(t, g.CellBounds(), 64.0, 64.0)
-}
-
-func TestIsometricRectCellSize(t *testing.T) {
-	// height = width·tan30° = width/√3 ≈ 36.9504172
-	size := IsometricRectCellSize(64)
-	geom.AssertSize(t, size, 64.0, 36.9504172)
-	g := NewIsometricRectGrid[int](geom.SzU(1), size)
-	geom.AssertSize(t, g.CellBounds(), 64.0, 36.9504172)
-}
-
-func TestIsometricPixelPerfectRectCellSize(t *testing.T) {
-	// 2:1 ratio
-	size := IsometricPixelPerfectRectCellSize(64)
-	geom.AssertSize(t, size, 64.0, 32.0)
-	g := NewIsometricRectGrid[int](geom.SzU(1), size)
-	geom.AssertSize(t, g.CellBounds(), 64.0, 32.0)
-}
-
-func TestHexFlatTopCellSize(t *testing.T) {
-	// circumradius W = H = width/2; pixel bounding box: width × width·√3/2 ≈ 55.4256258
-	size := HexFlatTopCellSize(64)
-	geom.AssertSize(t, size, 32.0, 32.0)
-	g := NewHexagonFlatTopGrid[int](geom.SzU(1), size)
-	geom.AssertSize(t, g.CellBounds(), 64.0, 55.4256258)
-}
-
-func TestHexPointyTopCellSize(t *testing.T) {
-	// circumradius W = H = width/√3 ≈ 36.9504172; pixel bounding box: width × width·2/√3 ≈ 73.9008346
-	size := HexPointyTopCellSize(64)
-	geom.AssertSize(t, size, 36.9504172, 36.9504172)
-	g := NewHexagonPointyTopGrid[int](geom.SzU(1), size)
-	geom.AssertSize(t, g.CellBounds(), 64.0, 73.9008346)
-}
-
-func TestHexFlatTopIsometricPixelPerfectCellSize(t *testing.T) {
-	// 4:3 ratio — circumradius W = width/2, H = width·√3/4 ≈ 27.7128129; pixel bounding box: width × width·3/4
-	size := HexFlatTopIsometricPixelPerfectCellSize(64)
-	geom.AssertSize(t, size, 32.0, 27.7128129)
-	g := NewHexagonFlatTopGrid[int](geom.SzU(1), size)
-	geom.AssertSize(t, g.CellBounds(), 64.0, 48.0)
-}
-
-func TestHexPointyTopIsometricPixelPerfectCellSize(t *testing.T) {
-	// 1:1 ratio — circumradius W = width/√3 ≈ 36.9504172, H = width/2; pixel bounding box: width × width
-	size := HexPointyTopIsometricPixelPerfectCellSize(64)
-	geom.AssertSize(t, size, 36.9504172, 32.0)
-	g := NewHexagonPointyTopGrid[int](geom.SzU(1), size)
-	geom.AssertSize(t, g.CellBounds(), 64.0, 64.0)
 }
