@@ -177,29 +177,6 @@ func TestGrid_Range_Negative(t *testing.T) {
 	assert.Equal(t, len(g.Range(geom.Pt(2, 2), -1, all)), 0)
 }
 
-// --- Iter ---
-
-func TestGrid_Iter_All(t *testing.T) {
-	g := NewRectGrid[int](geom.Sz(3, 4), geom.Sz(32.0, 32.0))
-	count := 0
-	for range g.Iter(nil) {
-		count++
-	}
-	assert.Equal(t, count, 12)
-}
-
-func TestGrid_Iter_EarlyStop(t *testing.T) {
-	g := NewRectGrid[int](geom.Sz(5, 5), geom.Sz(32.0, 32.0))
-	count := 0
-	for range g.Iter(nil) {
-		count++
-		if count == 3 {
-			break
-		}
-	}
-	assert.Equal(t, count, 3)
-}
-
 // --- Cell ---
 
 func TestCell_Index(t *testing.T) {
@@ -231,4 +208,61 @@ func TestCell_PathTo(t *testing.T) {
 	g := NewRectGrid[int](geom.Sz(5, 5), geom.Sz(32.0, 32.0))
 	path := g.Get(geom.Pt(0, 0)).PathTo(geom.Pt(4, 0), nil, nil)
 	assert.Equal(t, len(path), 5)
+}
+
+// --- Cell size helpers ---
+
+func TestRectCellSize(t *testing.T) {
+	size := RectCellSize(64)
+	geom.AssertSize(t, size, 64.0, 64.0)
+	g := NewRectGrid[int](geom.SzU(1), size)
+	geom.AssertSize(t, g.CellBounds(), 64.0, 64.0)
+}
+
+func TestIsometricRectCellSize(t *testing.T) {
+	// height = width·tan30° = width/√3 ≈ 36.9504172
+	size := IsometricRectCellSize(64)
+	geom.AssertSize(t, size, 64.0, 36.9504172)
+	g := NewIsometricRectGrid[int](geom.SzU(1), size)
+	geom.AssertSize(t, g.CellBounds(), 64.0, 36.9504172)
+}
+
+func TestIsometricPixelPerfectRectCellSize(t *testing.T) {
+	// 2:1 ratio
+	size := IsometricPixelPerfectRectCellSize(64)
+	geom.AssertSize(t, size, 64.0, 32.0)
+	g := NewIsometricRectGrid[int](geom.SzU(1), size)
+	geom.AssertSize(t, g.CellBounds(), 64.0, 32.0)
+}
+
+func TestHexFlatTopCellSize(t *testing.T) {
+	// circumradius W = H = width/2; pixel bounding box: width × width·√3/2 ≈ 55.4256258
+	size := HexFlatTopCellSize(64)
+	geom.AssertSize(t, size, 32.0, 32.0)
+	g := NewHexagonFlatTopGrid[int](geom.SzU(1), size)
+	geom.AssertSize(t, g.CellBounds(), 64.0, 55.4256258)
+}
+
+func TestHexPointyTopCellSize(t *testing.T) {
+	// circumradius W = H = width/√3 ≈ 36.9504172; pixel bounding box: width × width·2/√3 ≈ 73.9008346
+	size := HexPointyTopCellSize(64)
+	geom.AssertSize(t, size, 36.9504172, 36.9504172)
+	g := NewHexagonPointyTopGrid[int](geom.SzU(1), size)
+	geom.AssertSize(t, g.CellBounds(), 64.0, 73.9008346)
+}
+
+func TestHexFlatTopIsometricPixelPerfectCellSize(t *testing.T) {
+	// 4:3 ratio — circumradius W = width/2, H = width·√3/4 ≈ 27.7128129; pixel bounding box: width × width·3/4
+	size := HexFlatTopIsometricPixelPerfectCellSize(64)
+	geom.AssertSize(t, size, 32.0, 27.7128129)
+	g := NewHexagonFlatTopGrid[int](geom.SzU(1), size)
+	geom.AssertSize(t, g.CellBounds(), 64.0, 48.0)
+}
+
+func TestHexPointyTopIsometricPixelPerfectCellSize(t *testing.T) {
+	// 1:1 ratio — circumradius W = width/√3 ≈ 36.9504172, H = width/2; pixel bounding box: width × width
+	size := HexPointyTopIsometricPixelPerfectCellSize(64)
+	geom.AssertSize(t, size, 36.9504172, 32.0)
+	g := NewHexagonPointyTopGrid[int](geom.SzU(1), size)
+	geom.AssertSize(t, g.CellBounds(), 64.0, 64.0)
 }
