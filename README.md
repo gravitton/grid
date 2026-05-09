@@ -69,6 +69,17 @@ for cell := range g.Iter(&grid.IterConfig{Bounds: viewport}) {
 }
 ```
 
+`Iter` resolves the draw order automatically from the grid type so tiles are always yielded back-to-front (painter's algorithm):
+
+| Grid type | Iteration order |
+|---|---|
+| Rectangular (`SquareFlat`) | Row-major, top-to-bottom |
+| Isometric (`SquareIsometric`) | Diagonal depth (`col+row`) ascending |
+| Hex flat-top (`HexFlatTop`) | Two-pass columns — even then odd |
+| Hex pointy-top (`HexPointyTop`) | Row-major (row offset is X-only) |
+
+One extra row and column are included at every edge of the bounds so partially visible tiles are never culled. Border cells may lie outside the grid — check `cell.Valid()` before reading data.
+
 
 ## API
 
@@ -96,6 +107,20 @@ Full documentation is available at [pkg.go.dev/github.com/gravitton/grid][link-g
 | `NewHexagonFlatTopGrid[T](size, hexSize, opts...)` | Hexagonal grid, flat-top orientation |
 | `Arr[T](size ints.Size)` | Standalone 2D array |
 
+### Cell size helpers
+
+These functions compute the `cellSize` / `hexSize` argument for the grid constructors.
+
+| Function | Use with | Description |
+|---|---|---|
+| `RectCellSize(width)` | `NewRectGrid` | Square tile, `width` px wide and tall (1:1) |
+| `IsometricRectCellSize(width)` | `NewIsometricRectGrid` | Diamond tile, `width` px wide at true 30° angle (height ≈ width·0.577) |
+| `IsometricPixelPerfectRectCellSize(width)` | `NewIsometricRectGrid` | Diamond tile, `width` px wide, `width/2` px tall (2:1) |
+| `HexFlatTopCellSize(width)` | `NewHexagonFlatTopGrid` | Flat-top hex, `width` px wide, `width·√3/2` px tall |
+| `HexPointyTopCellSize(width)` | `NewHexagonPointyTopGrid` | Pointy-top hex, `width` px wide, `width·2/√3` px tall |
+| `HexFlatTopIsometricPixelPerfectCellSize(width)` | `NewHexagonFlatTopGrid` | Flat-top hex, `width` px wide, `width·3/4` px tall (4:3) |
+| `HexPointyTopIsometricPixelPerfectCellSize(width)` | `NewHexagonPointyTopGrid` | Pointy-top hex, `width` px wide, `width` px tall (1:1) |
+
 ### Grid
 
 ```go
@@ -121,8 +146,8 @@ g.Fill(value T)
 g.Clear()
 g.Clone() *Grid[T]
 
-// Iteration
-g.Iter(config *IterConfig) iter.Seq[*Cell[T]] // config nil = all cells
+// Iteration (draw order resolved automatically from grid type)
+g.Iter(config *IterConfig) iter.Seq[*Cell[T]] // config nil = full grid bounds
 ```
 
 ### Cell
