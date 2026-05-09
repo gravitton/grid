@@ -12,6 +12,7 @@ type Grid[T any] struct {
 	cellSize    floats.Size
 	cellSpacing floats.Size
 	bounds      floats.Rectangle
+	kind        kind
 
 	toPoint   func(index ints.Point) floats.Point
 	fromPoint func(point floats.Point) ints.Point
@@ -30,6 +31,15 @@ type ValidFunc[T any] func(current *Cell[T]) bool
 // CostFunc is a function that returns the cost of moving from one cell to another.
 type CostFunc[T any] func(current, next *Cell[T]) float64
 
+type kind int
+
+const (
+	kindDefault kind = iota
+	kindIsometric
+	kindHexagonalFlatTop
+	kindHexagonalPointyTop
+)
+
 // NewGrid creates a new grid.
 func NewGrid[T any](
 	layout Layout,
@@ -42,6 +52,7 @@ func NewGrid[T any](
 		cellSize:    layout.CellBounds(),
 		cellSpacing: layout.CellSpacing(),
 		bounds:      layout.Bounds(),
+		kind:        layout.kind(),
 		toPoint:     layout.ToPoint,
 		fromPoint:   layout.FromPoint,
 		polygon:     layout.CellPolygon,

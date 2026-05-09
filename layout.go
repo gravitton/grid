@@ -169,6 +169,21 @@ func (l Layout) CellPolygon(index ints.Point) floats.RegularPolygon {
 	return geom.RegularPolygonWithOrientation(l.ToPoint(index), l.computed.polygon, l.transform.sides, l.transform.orientation)
 }
 
+func (l Layout) kind() kind {
+	switch {
+	case l.transform.sides == 4 && l.transform.orientation == geom.FlatTop:
+		return kindDefault
+	case l.transform.sides == 4 && l.transform.orientation == geom.PointyTop:
+		return kindIsometric
+	case l.transform.sides == 6 && l.transform.orientation == geom.FlatTop:
+		return kindHexagonalFlatTop
+	case l.transform.sides == 6 && l.transform.orientation == geom.PointyTop:
+		return kindHexagonalPointyTop
+	default:
+		return kindDefault
+	}
+}
+
 // Bounds returns the pixel bounding box for the whole grid of cells.
 // Grid size must be set via WithGridSize. If an index mapper was set via
 // WithIndexMapper it is applied via ToPoint automatically.
@@ -271,17 +286,6 @@ var (
 		polygon:     floats.Vec(0.5, 0.5),
 	}
 
-	// HexPointyTop maps axial hex (q, r) to pixel for pointy-top hexagons.
-	HexPointyTop = &Transform{
-		sides:       6,
-		orientation: geom.PointyTop,
-		toPoint:     floats.Mat(geom.Sqrt3, geom.Sqrt3/2, 0, 0, 3.0/2, 0),
-		fromPoint:   floats.Mat(geom.Sqrt3/3, -1.0/3, 0, 0, 2.0/3, 0),
-		bounds:      floats.Vec(geom.Sqrt3, 2.0),
-		spacing:     floats.Vec(geom.Sqrt3, 3.0/2),
-		polygon:     floats.Vec(1.0, 1.0),
-	}
-
 	// HexFlatTop maps axial hex (q, r) to pixel for flat-top hexagons.
 	HexFlatTop = &Transform{
 		sides:       6,
@@ -290,6 +294,17 @@ var (
 		fromPoint:   floats.Mat(2.0/3, 0, 0, -1.0/3, geom.Sqrt3/3, 0),
 		bounds:      floats.Vec(2.0, geom.Sqrt3),
 		spacing:     floats.Vec(3.0/2, geom.Sqrt3),
+		polygon:     floats.Vec(1.0, 1.0),
+	}
+
+	// HexPointyTop maps axial hex (q, r) to pixel for pointy-top hexagons.
+	HexPointyTop = &Transform{
+		sides:       6,
+		orientation: geom.PointyTop,
+		toPoint:     floats.Mat(geom.Sqrt3, geom.Sqrt3/2, 0, 0, 3.0/2, 0),
+		fromPoint:   floats.Mat(geom.Sqrt3/3, -1.0/3, 0, 0, 2.0/3, 0),
+		bounds:      floats.Vec(geom.Sqrt3, 2.0),
+		spacing:     floats.Vec(geom.Sqrt3, 3.0/2),
 		polygon:     floats.Vec(1.0, 1.0),
 	}
 )
