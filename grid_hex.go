@@ -1,6 +1,7 @@
 package grid
 
 import (
+	geom "github.com/gravitton/geometry"
 	"github.com/gravitton/geometry/types/floats"
 	"github.com/gravitton/geometry/types/ints"
 	hex "github.com/gravitton/hexagon"
@@ -37,6 +38,32 @@ func NewHexagonPointyTopGrid[T any](size ints.Size, hexSize floats.Size, opts ..
 // negative y coordinate.
 func NewHexagonFlatTopGrid[T any](size ints.Size, hexSize floats.Size, opts ...HexGridOption) *Grid[T] {
 	return newHexagonGrid[T](size, hexSize, HexFlatTop, hex.OffsetOddQ, opts)
+}
+
+// HexFlatTopCellSize returns the circumradius for NewHexagonFlatTopGrid where
+// each tile is exactly width pixels wide and width·√3/2 pixels tall (2:√3 ratio).
+func HexFlatTopCellSize(width float64) floats.Size {
+	return geom.SzU(width).Scale(0.5)
+}
+
+// HexPointyTopCellSize returns the circumradius for NewHexagonPointyTopGrid where
+// each tile is exactly width pixels wide and width·2/√3 pixels tall (√3:2 ratio).
+func HexPointyTopCellSize(width float64) floats.Size {
+	return geom.SzU(width * 2 / geom.Sqrt3).Scale(0.5)
+}
+
+// HexFlatTopIsometricPixelPerfectCellSize returns the circumradius for
+// NewHexagonFlatTopGrid where each tile is exactly width pixels wide and
+// width·3/4 pixels tall (4:3 ratio), suitable for pixel-perfect isometric rendering.
+func HexFlatTopIsometricPixelPerfectCellSize(width float64) floats.Size {
+	return geom.Sz(width, width*geom.Sqrt3/2).Scale(0.5)
+}
+
+// HexPointyTopIsometricPixelPerfectCellSize returns the circumradius for
+// NewHexagonPointyTopGrid where each tile is exactly width pixels wide and
+// width pixels tall (1:1 ratio), suitable for pixel-perfect isometric rendering.
+func HexPointyTopIsometricPixelPerfectCellSize(width float64) floats.Size {
+	return geom.Sz(width*2/geom.Sqrt3, width).Scale(0.5)
 }
 
 func newHexagonGrid[T any](size ints.Size, hexSize floats.Size, transform *Transform, system hex.CoordinateSystem, opts []HexGridOption) *Grid[T] {
