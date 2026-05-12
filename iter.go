@@ -9,7 +9,7 @@ import (
 	"github.com/gravitton/geometry/types/ints"
 )
 
-// IterConfig configures bounds-based grid iteration.
+// IterOptions configures bounds-based grid iteration.
 // Pass a Bounds to restrict iteration to cells near the visible rectangle; one
 // extra row and column are included on every edge so partially visible tiles
 // are not culled. Border cells may lie outside the grid (cell.Valid() == false).
@@ -22,37 +22,37 @@ import (
 //     odd — so tiles in the same visual row are drawn back-to-front.
 //   - Hex pointy-top (HexPointyTop): row-major; the row offset is along X only,
 //     so a single pass is sufficient for correct draw order.
-type IterConfig struct {
+type IterOptions struct {
 	Bounds floats.Rectangle
 }
 
 // Iter returns an iterator over grid cells in draw order (painter's algorithm).
 // Pass nil to iterate every cell using the full grid bounds.
-// Pass an IterConfig to restrict iteration to a viewport subset.
+// Pass an IterOptions to restrict iteration to a viewport subset.
 // The iteration strategy is resolved automatically from the grid layout, so
 // tiles are always yielded back-to-front regardless of grid type.
 // Cells at the boundary of the bounds may lie outside the grid (cell.Valid() == false).
-func (g *Grid[T]) Iter(config *IterConfig) iter.Seq[*Cell[T]] {
-	if config == nil {
-		config = &IterConfig{}
+func (g *Grid[T]) Iter(options *IterOptions) iter.Seq[*Cell[T]] {
+	if options == nil {
+		options = &IterOptions{}
 	}
 
-	if config.Bounds.IsZero() {
-		config.Bounds = g.Bounds()
+	if options.Bounds.IsZero() {
+		options.Bounds = g.Bounds()
 	}
 
 	return func(yield func(*Cell[T]) bool) {
 		switch g.kind {
 		case kindDefault:
-			g.iterDefault(config.Bounds, yield)
+			g.iterDefault(options.Bounds, yield)
 		case kindIsometric:
-			g.iterIsometric(config.Bounds, yield)
+			g.iterIsometric(options.Bounds, yield)
 		case kindHexagonalFlatTop:
-			g.iterHexagonal(config.Bounds, yield, false, true)
+			g.iterHexagonal(options.Bounds, yield, false, true)
 		case kindHexagonalPointyTop:
-			g.iterHexagonal(config.Bounds, yield, false, false)
+			g.iterHexagonal(options.Bounds, yield, false, false)
 		default:
-			g.iterDefault(config.Bounds, yield)
+			g.iterDefault(options.Bounds, yield)
 		}
 	}
 

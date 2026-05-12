@@ -64,7 +64,7 @@ path := g.Path(
 Iterating a viewport:
 
 ```go
-for cell := range g.Iter(&grid.IterConfig{Bounds: viewport}) {
+for cell := range g.Iter(&grid.IterOptions{Bounds: viewport}) {
 	draw(cell)
 }
 ```
@@ -147,7 +147,7 @@ g.Clear()
 g.Clone() *Grid[T]
 
 // Iteration (draw order resolved automatically from grid type)
-g.Iter(config *IterConfig) iter.Seq[*Cell[T]] // config nil = full grid bounds
+g.Iter(config *IterOptions) iter.Seq[*Cell[T]] // config nil = full grid bounds
 ```
 
 ### Cell
@@ -193,8 +193,9 @@ a.Set(index ints.Point, value T)
 a.Fill(value T)
 a.Clear()
 a.Clone() Array[T]
-a.Iter() iter.Seq[ints.Point]
-a.Iter2() iter.Seq2[ints.Point, *T]
+a.Keys() iter.Seq[ints.Point]
+a.Values() iter.Seq[*T]
+a.All() iter.Seq2[ints.Point, *T]
 ```
 
 ### Spatial range

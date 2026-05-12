@@ -6,7 +6,17 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 
-## [Unreleased](https://github.com/gravitton/grid/compare/v1.1.0...master)
+## [Unreleased](https://github.com/gravitton/grid/compare/v1.2.0...master)
+
+
+## [v1.2.0 (2026-05-12)](https://github.com/gravitton/grid/compare/v1.1.0...v1.2.0)
+### Added
+- `Array.Values` — iterator over all values (`iter.Seq[*T]`), completing the `Keys` / `Values` / `All` trio
+
+### Changed
+- `Array.Iter` renamed to `Array.Keys` — aligns with Go 1.23 iterator conventions (`iter.Seq[K]` iterators are named `Keys`)
+- `Array.Iter2` renamed to `Array.All` — aligns with Go 1.23 iterator conventions (`iter.Seq2[K, V]` iterators are named `All`)
+- `IterConfig` renamed to `IterOptions`
 
 
 ## [v1.1.0 (2026-05-09)](https://github.com/gravitton/grid/compare/v1.0.0...v1.1.0)
@@ -29,7 +39,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Added
 - `Grid[T]` — generic 2D grid with configurable layout, spatial mapping, and graph operations
 - `Cell[T]` — single grid cell with value access, spatial info (`Center`, `Bounds`, `Polygon`), and graph methods (`Neighbors`, `DistanceTo`, `Range`, `PathTo`)
-- `Array[T]` — low-level flat 2D array with `Get`, `Set`, `Fill`, `Clear`, `Clone`, `Iter`, `Iter2`
+- `Array[T]` — low-level flat 2D array with `Get`, `Set`, `Fill`, `Clear`, `Clone`, `Iter`, `All`
 - `NewRectGrid[T]` — rectangular grid with 4-directional (cardinal) movement
 - `NewIsometricRectGrid[T]` — isometric (diamond-projection) rectangular grid
 - `RectGridOpts.DiagonalMovement()` — option to enable 8-directional movement on rectangular grids

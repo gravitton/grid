@@ -50,7 +50,7 @@ func TestGrid_Iter_Bounds(t *testing.T) {
 	// Viewport covering only cells (0,0)–(1,1) centers plus half-cell padding.
 	viewport := geom.RectFromMinMax(geom.Pt(0.0, 0.0), geom.Pt(64.0, 64.0))
 	valid := 0
-	for cell := range g.Iter(&IterConfig{Bounds: viewport}) {
+	for cell := range g.Iter(&IterOptions{Bounds: viewport}) {
 		if cell.Valid() {
 			valid++
 		}

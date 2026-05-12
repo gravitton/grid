@@ -68,7 +68,7 @@ func TestArray_Clone_Independence(t *testing.T) {
 func TestArray_Iter_Order(t *testing.T) {
 	a := Arr[int](geom.Sz(3, 2))
 	var points []ints.Point
-	for p := range a.Iter() {
+	for p := range a.Keys() {
 		points = append(points, p)
 	}
 	assert.Equal(t, len(points), 6)
@@ -84,7 +84,7 @@ func TestArray_Iter2(t *testing.T) {
 	a.Set(geom.Pt(1, 0), 42)
 	count := 0
 	found := false
-	for p, v := range a.Iter2() {
+	for p, v := range a.All() {
 		count++
 		if p == geom.Pt(1, 0) {
 			assert.Equal(t, *v, 42)
@@ -98,7 +98,7 @@ func TestArray_Iter2(t *testing.T) {
 func TestArray_Iter_EarlyStop(t *testing.T) {
 	a := Arr[int](geom.Sz(5, 5))
 	count := 0
-	for range a.Iter() {
+	for range a.Keys() {
 		count++
 		if count == 3 {
 			break

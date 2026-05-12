@@ -73,8 +73,8 @@ func (a Array[T]) Clone() Array[T] {
 	return Array[T]{a.size, data}
 }
 
-// Iter returns iterator over all points.
-func (a Array[T]) Iter() iter.Seq[ints.Point] {
+// Keys returns iterator over all points.
+func (a Array[T]) Keys() iter.Seq[ints.Point] {
 	return func(yield func(ints.Point) bool) {
 		for y := range a.Height() {
 			for x := range a.Width() {
@@ -86,10 +86,21 @@ func (a Array[T]) Iter() iter.Seq[ints.Point] {
 	}
 }
 
-// Iter2 returns an iterator over all (point, value) pairs.
-func (a Array[T]) Iter2() iter.Seq2[ints.Point, *T] {
+// Values returns an iterator over all values.
+func (a Array[T]) Values() iter.Seq[*T] {
+	return func(yield func(*T) bool) {
+		for i := range a.data {
+			if !yield(&a.data[i]) {
+				return
+			}
+		}
+	}
+}
+
+// All returns an iterator over all (point, value) pairs.
+func (a Array[T]) All() iter.Seq2[ints.Point, *T] {
 	return func(yield func(ints.Point, *T) bool) {
-		for pt := range a.Iter() {
+		for pt := range a.Keys() {
 			if !yield(pt, &a.data[a.index(pt)]) {
 				return
 			}
