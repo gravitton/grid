@@ -55,7 +55,7 @@ func (a Array[T]) Set(index ints.Point, value T) {
 
 // Fill sets every element to value.
 func (a Array[T]) Fill(value T) {
-	for i := 0; i < len(a.data); i++ {
+	for i := range a.data {
 		a.data[i] = value
 	}
 }

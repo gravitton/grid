@@ -188,15 +188,15 @@ func (l Layout) kind() kind {
 // Grid size must be set via WithGridSize. If an index mapper was set via
 // WithIndexMapper it is applied via ToPoint automatically.
 func (l Layout) Bounds() floats.Rectangle {
-	return l.cellsBounds(l.borderCells(l.size))
+	return l.cellsBounds(l.borderCells())
 }
 
 // borderCells returns the grid indices of cells that may define the pixel
 // extent of the grid. For hex grids the extremes can fall in the second or
 // second-to-last row/column (due to the alternating half-step shift), so
 // those are included in addition to the four corners.
-func (l Layout) borderCells(grid ints.Size) []ints.Point {
-	w, h := grid.XY()
+func (l Layout) borderCells() []ints.Point {
+	w, h := l.size.XY()
 	cells := []ints.Point{
 		ints.Pt(0, 0), ints.Pt(w-1, 0),
 		ints.Pt(0, h-1), ints.Pt(w-1, h-1),
@@ -232,7 +232,7 @@ func (l Layout) cellsBounds(cells []ints.Point) floats.Rectangle {
 	}
 	hw, hh := l.computed.bounds.Scale(0.5).XY()
 
-	return geom.RectFromMinMax(
+	return geom.RectangleFromMinMax(
 		geom.Pt(minX-hw, minY-hh),
 		geom.Pt(maxX+hw, maxY+hh),
 	)

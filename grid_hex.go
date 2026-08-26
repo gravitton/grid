@@ -84,35 +84,37 @@ func newHexagonGrid[T any](size ints.Size, hexSize floats.Size, transform *Trans
 		LayoutOpts.Size(size),
 		LayoutOpts.CellSize(hexSize),
 		LayoutOpts.ToPointMapper(func(index ints.Point) floats.Point {
-			return hex.From(index, system).Point().Float()
+			return system.From(index).Point().Float()
 		}),
 		LayoutOpts.FromPointMapper(func(pixel floats.Point) ints.Point {
-			return hex.To(hex.FracPt(pixel.XY()).Round(), system)
+			return system.To(hex.FracPt(pixel.XY()).Round())
 		}),
 	).AlignTopLeft()
 
 	return NewGrid[T](
 		layout,
 		func(from, to ints.Point) int {
-			return hex.From(from, system).DistanceTo(hex.From(to, system))
+			return system.From(from).DistanceTo(system.From(to))
 		},
 		func(index ints.Point, n int, valid ValidIndexFunc) []ints.Point {
-			h := hex.From(index, system)
+			h := system.From(index)
 			candidates := h.Range(n)
 
 			var blocking []hex.Hex
 			for _, i := range candidates {
-				if !valid(hex.To(i, system)) {
+				if !valid(system.To(i)) {
 					blocking = append(blocking, i)
 				}
 			}
 
 			return slices.Map(h.FieldOfView(candidates, blocking), func(h hex.Hex) ints.Point {
-				return hex.To(h, system)
+				return system.To(h)
 			})
 		},
 		func(index ints.Point) []ints.Vector {
-			return hex.NeighborOffsets(index, system)
+			offsets := system.Offsets(index)
+
+			return offsets[:]
 		},
 	)
 }

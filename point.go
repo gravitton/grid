@@ -18,7 +18,7 @@ func Pt(x, y int) Point {
 // DistanceTo returns the grid distance between two points for the given System.
 // Cardinal uses Manhattan distance; Diagonal uses Chebyshev distance.
 func (p Point) DistanceTo(to ints.Point, system System) int {
-	return DistanceTo(ints.Point(p), to, system)
+	return system.DistanceTo(p.Point(), to)
 }
 
 // Point returns the underlying coordinate as an ints.Point.
@@ -26,16 +26,17 @@ func (p Point) Point() ints.Point { return ints.Point(p) }
 
 // Neighbors returns the neighbor coordinates for every direction in system.
 func (p Point) Neighbors(system System) []ints.Point {
-	directions := NeighborOffsets(system)
-	neighbors := make([]ints.Point, len(directions))
-	for i, v := range directions {
-		neighbors[i] = ints.Pt(p.X+v.X, p.Y+v.Y)
+	offsets := system.Offsets()
+
+	neighbors := make([]ints.Point, len(offsets))
+	for i, offset := range offsets {
+		neighbors[i] = p.Point().Add(offset)
 	}
 
 	return neighbors
 }
 
-// Range returns all cells within Euclidean distance n from s, inclusive.
+// Range returns all cells within Euclidean distance n from p, inclusive.
 func (p Point) Range(n int) []ints.Point {
 	if n < 0 {
 		return nil
@@ -106,7 +107,7 @@ func (p Point) HasLineOfSight(target ints.Point, blocking []ints.Point) bool {
 	}
 }
 
-// FieldOfView returns the subset of candidates visible from center,
+// FieldOfView returns the subset of candidates visible from p,
 // given a set of blocking points. Adjacent cells (Chebyshev distance ≤ 1)
 // are always visible.
 func (p Point) FieldOfView(candidates []ints.Point, blocking []ints.Point) []ints.Point {

@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased](https://github.com/gravitton/grid/compare/v1.2.0...master)
 ### Changed
 - Require Go 1.27
+- `System` gained the direction methods that were package-level functions: `System.Directions()`, `System.Offsets()`, `System.Offset(direction)`, `System.Has(direction)` and `System.DistanceTo(from, to)`, matching the method style `geometry` v1.10.0 and `hexagon` v1.3.0 moved to (**breaking**)
+- Neighbors are now ordered by increasing angle — `Cardinal` yields right, down, left, up (was east, north, west, south) — following the `Direction` reorder in `geometry` v1.11.0. The neighbor set is unchanged; only the visit order, and therefore pathfinding tie-breaks, differ (**breaking**)
+- `System.Offsets` returns a fresh slice instead of one aliasing the package's own table, so callers can no longer mutate it (**breaking**)
+- `System.Offset` returns the zero vector for a direction outside the system instead of panicking (**breaking**)
+
+### Added
+- `System.String()` — human-readable name for each system constant
+
+### Removed
+- `Direction` and its `E`, `NE`, `N`, `NW`, `W`, `SW`, `S`, `SE` constants — superseded by `geom.Direction` from `geometry` v1.10.0 (**breaking**)
+- `Directions`, `CardinalDirections`, `DiagonalDirections` — superseded by `geom.Directions`, `geom.CardinalDirections`, `geom.DiagonalDirections` and `System.Directions` (**breaking**)
+- `NeighborOffsets(system)`, `NeighborOffset(system, direction)` and `DistanceTo(from, to, system)` — replaced by the `System` methods of the same names (**breaking**)
+
+### Fixed
+- `Grid.Iter` no longer writes the resolved bounds back into the caller's `IterOptions`, which made a reused options value stick to the first grid's bounds
 
 
 ## [v1.2.0 (2026-05-12)](https://github.com/gravitton/grid/compare/v1.1.0...v1.2.0)

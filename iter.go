@@ -33,29 +33,27 @@ type IterOptions struct {
 // tiles are always yielded back-to-front regardless of grid type.
 // Cells at the boundary of the bounds may lie outside the grid (cell.Valid() == false).
 func (g *Grid[T]) Iter(options *IterOptions) iter.Seq[*Cell[T]] {
-	if options == nil {
-		options = &IterOptions{}
+	var bounds floats.Rectangle
+	if options != nil {
+		bounds = options.Bounds
 	}
 
-	if options.Bounds.IsZero() {
-		options.Bounds = g.Bounds()
+	if bounds.IsZero() {
+		bounds = g.Bounds()
 	}
 
 	return func(yield func(*Cell[T]) bool) {
 		switch g.kind {
-		case kindDefault:
-			g.iterDefault(options.Bounds, yield)
 		case kindIsometric:
-			g.iterIsometric(options.Bounds, yield)
+			g.iterIsometric(bounds, yield)
 		case kindHexagonalFlatTop:
-			g.iterHexagonal(options.Bounds, yield, false, true)
+			g.iterHexagonal(bounds, yield, false, true)
 		case kindHexagonalPointyTop:
-			g.iterHexagonal(options.Bounds, yield, false, false)
+			g.iterHexagonal(bounds, yield, false, false)
 		default:
-			g.iterDefault(options.Bounds, yield)
+			g.iterDefault(bounds, yield)
 		}
 	}
-
 }
 
 func (g *Grid[T]) iterDefault(bounds floats.Rectangle, yield func(*Cell[T]) bool) {
@@ -166,16 +164,16 @@ func (g *Grid[T]) iterHexagonal(bounds floats.Rectangle, yield func(*Cell[T]) bo
 }
 
 // iterHexagonalDirection returns an index sequence for one axis of hex iteration.
-// When double is false it emits a single pass from -1 to max+1 (inclusive),
+// When double is false it emits a single pass from -1 to count+1 (inclusive),
 // adding one cell of padding on each edge for partial visibility.
 // When double is true it emits two interleaved passes — even indices then odd
 // (or odd then even when the starting index is odd) — so tiles in each parity
 // group are visited before the next group, giving correct back-to-front draw
 // order within a staggered hex strip.
-func (g *Grid[T]) iterHexagonalDirection(max int, double bool, odd bool) iter.Seq[int] {
+func (g *Grid[T]) iterHexagonalDirection(count int, double bool, odd bool) iter.Seq[int] {
 	if !double {
 		return func(yield func(int) bool) {
-			for index := -1; index < max+2; index++ {
+			for index := -1; index < count+2; index++ {
 				if !yield(index) {
 					return
 				}
@@ -189,17 +187,16 @@ func (g *Grid[T]) iterHexagonalDirection(max int, double bool, odd bool) iter.Se
 	}
 
 	return func(yield func(int) bool) {
-		for index := i; index < max+2; index += 2 {
+		for index := i; index < count+2; index += 2 {
 			if !yield(index) {
 				return
 			}
 		}
 
-		for index := j; index < max+2; index += 2 {
+		for index := j; index < count+2; index += 2 {
 			if !yield(index) {
 				return
 			}
 		}
-
 	}
 }

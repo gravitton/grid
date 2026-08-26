@@ -48,7 +48,7 @@ func TestGrid_Iter_EarlyStop(t *testing.T) {
 func TestGrid_Iter_Bounds(t *testing.T) {
 	g := NewRectGrid[int](geom.Sz(10, 10), geom.Sz(32.0, 32.0))
 	// Viewport covering only cells (0,0)–(1,1) centers plus half-cell padding.
-	viewport := geom.RectFromMinMax(geom.Pt(0.0, 0.0), geom.Pt(64.0, 64.0))
+	viewport := geom.RectangleFromMinMax(geom.Pt(0.0, 0.0), geom.Pt(64.0, 64.0))
 	valid := 0
 	for cell := range g.Iter(&IterOptions{Bounds: viewport}) {
 		if cell.Valid() {

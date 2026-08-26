@@ -92,7 +92,6 @@ Full documentation is available at [pkg.go.dev/github.com/gravitton/grid][link-g
 | `Cell[T]` | Single cell — provides value access, spatial info, and pathfinding |
 | `Array[T]` | Low-level flat 2D array |
 | `Point` | Grid coordinate with spatial query methods (`Range`, `FieldOfView`, `HasLineOfSight`) |
-| `Direction` | One of eight neighbor directions: `E`, `NE`, `N`, `NW`, `W`, `SW`, `S`, `SE` |
 | `System` | Movement connectivity: `Cardinal` (4-dir) or `Diagonal` (8-dir) |
 
 ### Constructors
@@ -206,23 +205,21 @@ g.Range(index ints.Point, n int, valid ValidFunc[T]) []ints.Point
 
 Both rectangular and hexagonal grids apply a field-of-view algorithm to `Range` — blocked cells occlude cells behind them. On rectangular grids this uses Bresenham line-of-sight; on hexagonal grids it uses the hex FoV algorithm.
 
-### Directions
+### Movement systems
+
+Directions come from [`gravitton/geometry`][link-geometry] — `geom.Direction`, ordered by
+increasing angle from `geom.DirectionRight` (clockwise as drawn on a screen with Y pointing down).
+`System` selects which of them are neighbors:
 
 ```go
-// Direction constants (ordered counterclockwise from East)
-E, NE, N, NW, W, SW, S, SE Direction
+Cardinal, Diagonal System
 
-// Direction vectors
-CardinalDirections [4]ints.Vector  // E, N, W, S
-DiagonalDirections [4]ints.Vector  // NE, NW, SW, SE
-Directions         [8]ints.Vector  // all 8, indexed by Direction constant
-
-d.Opposite() Direction
-d.String() string
-
-NeighborOffsets(system System) []ints.Vector
-NeighborOffset(system System, direction Direction) ints.Vector
-DistanceTo(from, to ints.Point, system System) int
+s.Directions() []geom.Direction              // Cardinal: Right, Down, Left, Up
+s.Offsets() []ints.Vector                    // lattice steps, in Directions order
+s.Offset(direction geom.Direction) ints.Vector // zero vector outside the system
+s.Has(direction geom.Direction) bool
+s.DistanceTo(from, to ints.Point) int        // Manhattan / Chebyshev
+s.String() string
 ```
 
 ### Point
@@ -271,4 +268,5 @@ The MIT License (MIT). Please see [License File][link-licence] for more informat
 [link-changelog]:           ./CHANGELOG.md
 [link-workflow]:            https://github.com/gravitton/grid/actions
 [link-go-dev-reference]:    https://pkg.go.dev/github.com/gravitton/grid
+[link-geometry]:            https://github.com/gravitton/geometry
 [link-coverage]:            https://coveralls.io/github/gravitton/grid

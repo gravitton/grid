@@ -47,6 +47,8 @@ func newRectGrid[T any](grid ints.Size, size floats.Size, transform *Transform, 
 	o := applyRectGridOptions(opts)
 
 	system := o.movement
+	offsets := system.Offsets()
+
 	layout := NewLayout(transform,
 		LayoutOpts.Size(grid),
 		LayoutOpts.CellSize(size),
@@ -55,7 +57,7 @@ func newRectGrid[T any](grid ints.Size, size floats.Size, transform *Transform, 
 	return NewGrid[T](
 		layout,
 		func(from, to ints.Point) int {
-			return DistanceTo(from, to, system)
+			return system.DistanceTo(from, to)
 		},
 		func(index ints.Point, n int, valid ValidIndexFunc) []ints.Point {
 			p := Pt(index.XY())
@@ -71,7 +73,7 @@ func newRectGrid[T any](grid ints.Size, size floats.Size, transform *Transform, 
 			return p.FieldOfView(candidates, blocking)
 		},
 		func(index ints.Point) []ints.Vector {
-			return NeighborOffsets(system)
+			return offsets
 		},
 	)
 }
