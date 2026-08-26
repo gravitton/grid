@@ -180,12 +180,15 @@ func (g *Grid[T]) cellPolygon(index ints.Point) floats.RegularPolygon {
 }
 
 func (g *Grid[T]) cellNeighbors(index ints.Point) []ints.Point {
-	var neighbors []ints.Point
-	for _, dir := range g.neighbors(index) {
-		next := index.Add(dir)
+	offsets := g.neighbors(index)
+
+	neighbors := make([]ints.Point, 0, len(offsets))
+	for _, offset := range offsets {
+		next := index.Add(offset)
 		if g.valid(next) {
 			neighbors = append(neighbors, next)
 		}
 	}
+
 	return neighbors
 }

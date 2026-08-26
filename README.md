@@ -205,6 +205,8 @@ g.Range(index ints.Point, n int, valid ValidFunc[T]) []ints.Point
 
 Both rectangular and hexagonal grids apply a field-of-view algorithm to `Range` — blocked cells occlude cells behind them. On rectangular grids this uses Bresenham line-of-sight; on hexagonal grids it uses the hex FoV algorithm.
 
+Where a rectangular sightline crosses a cell corner it is blocked only when both cells flanking that corner block, so a diagonal run of blockers is opaque while sight still passes the corner of a single isolated one. Visibility is reciprocal — `a` sees `b` exactly when `b` sees `a`.
+
 ### Movement systems
 
 Directions come from [`gravitton/geometry`][link-geometry] — `geom.Direction`, ordered by

@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Neighbors are now ordered by increasing angle — `Cardinal` yields right, down, left, up (was east, north, west, south) — following the `Direction` reorder in `geometry` v1.11.0. The neighbor set is unchanged; only the visit order, and therefore pathfinding tie-breaks, differ (**breaking**)
 - `System.Offsets` returns a fresh slice instead of one aliasing the package's own table, so callers can no longer mutate it (**breaking**)
 - `System.Offset` returns the zero vector for a direction outside the system instead of panicking (**breaking**)
+- Bumped `geometry` to v1.12.0 and `hexagon` to v1.4.0, and the canonical-endpoint ordering in `Point.HasLineOfSight` now uses `ints.Point.Compare` instead of a local helper
 
 ### Added
 - `System.String()` — human-readable name for each system constant
@@ -24,6 +25,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ### Fixed
 - `Grid.Iter` no longer writes the resolved bounds back into the caller's `IterOptions`, which made a reused options value stick to the first grid's bounds
+- `Point.HasLineOfSight` is now reciprocal — it walks from a canonical endpoint, so `a` sees `b` exactly when `b` sees `a`. A Bresenham walk traces a different chain of cells when reversed, which let one point see another that could not see it back (**breaking**)
+- `Point.HasLineOfSight` no longer sees through a diagonal wall — a line crossing a cell corner is now opaque when both cells flanking that corner block, so a diagonal run of blockers hides what is behind it. Sight still passes the corner of a single isolated blocker, and `Grid.Range` inherits the fix on rectangular grids (**breaking**)
+- `Point.FieldOfView` indexes the blocking points once per call instead of scanning the slice at every step of every line walk, cutting `Grid.Range` on a rectangular grid from ~6.5 ms to ~220 µs at radius 40
+- `Grid.cellNeighbors` allocates the neighbor slice at its final capacity instead of growing it, saving one allocation per node expansion in every search algorithm (~14% off `Grid.AStar`)
 
 
 ## [v1.2.0 (2026-05-12)](https://github.com/gravitton/grid/compare/v1.1.0...v1.2.0)

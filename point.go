@@ -1,8 +1,6 @@
 package grid
 
 import (
-	"slices"
-
 	geom "github.com/gravitton/geometry"
 	"github.com/gravitton/geometry/types/ints"
 )
@@ -56,13 +54,31 @@ func (p Point) Range(n int) []ints.Point {
 	return results
 }
 
-// HasLineOfSight reports whether there is a clear line of sight from src to dst,
-// given a set of blocking points. All intermediate cells (excluding src and dst)
-// must not be in blocking. The destination itself may be a blocker — it is
+// HasLineOfSight reports whether there is a clear line of sight from p to target,
+// given a set of blocking points. All intermediate cells (excluding p and target)
+// must not be in blocking. The target itself may be a blocker — it is
 // visible but does not allow sight through it.
+//
+// Where the line crosses a cell corner it is blocked only when both cells flanking
+// that corner block, so a diagonal run of blockers is opaque while sight still
+// passes diagonally by a single isolated one.
+//
+// Visibility is reciprocal: p sees target exactly when target sees p.
 func (p Point) HasLineOfSight(target ints.Point, blocking []ints.Point) bool {
-	x0, y0 := ints.Point(p).XY()
-	x1, y1 := target.XY()
+	return p.hasLineOfSight(target, newPointSet(blocking))
+}
+
+func (p Point) hasLineOfSight(target ints.Point, blocking pointSet) bool {
+	// A Bresenham walk is not mirror-symmetric — reversing the endpoints can trace a
+	// different chain of cells — so always walk from the lower endpoint. Neither
+	// endpoint is ever tested against blocking, which makes the swap free of meaning.
+	from, to := p.Point(), target
+	if to.Compare(from) < 0 {
+		from, to = to, from
+	}
+
+	x0, y0 := from.XY()
+	x1, y1 := to.XY()
 
 	dx := x1 - x0
 	if dx < 0 {
@@ -89,11 +105,19 @@ func (p Point) HasLineOfSight(target ints.Point, blocking []ints.Point) bool {
 		}
 
 		e2 := 2 * err
-		if e2 > -dy {
+		stepX := e2 > -dy
+		stepY := e2 < dx
+
+		// crossing a corner: opaque only when both flanking cells block
+		if stepX && stepY && blocking.has(geom.Pt(x+sx, y)) && blocking.has(geom.Pt(x, y+sy)) {
+			return false
+		}
+
+		if stepX {
 			err -= dy
 			x += sx
 		}
-		if e2 < dx {
+		if stepY {
 			err += dx
 			y += sy
 		}
@@ -101,7 +125,7 @@ func (p Point) HasLineOfSight(target ints.Point, blocking []ints.Point) bool {
 		if x == x1 && y == y1 {
 			return true
 		}
-		if slices.Contains(blocking, geom.Pt(x, y)) {
+		if blocking.has(geom.Pt(x, y)) {
 			return false
 		}
 	}
@@ -111,11 +135,39 @@ func (p Point) HasLineOfSight(target ints.Point, blocking []ints.Point) bool {
 // given a set of blocking points. Adjacent cells (Chebyshev distance ≤ 1)
 // are always visible.
 func (p Point) FieldOfView(candidates []ints.Point, blocking []ints.Point) []ints.Point {
+	blocked := newPointSet(blocking)
+
 	results := make([]ints.Point, 0, len(candidates))
 	for _, candidate := range candidates {
-		if len(blocking) == 0 || ints.Point(p).ChebyshevDistanceTo(candidate) <= 1 || p.HasLineOfSight(candidate, blocking) {
+		if len(blocking) == 0 || p.Point().ChebyshevDistanceTo(candidate) <= 1 || p.hasLineOfSight(candidate, blocked) {
 			results = append(results, candidate)
 		}
 	}
+
 	return results
+}
+
+// pointSet indexes grid coordinates for constant-time membership tests.
+type pointSet map[ints.Point]struct{}
+
+// newPointSet indexes the given points. It returns nil for an empty input;
+// reads from a nil set are valid and never match.
+func newPointSet(points []ints.Point) pointSet {
+	if len(points) == 0 {
+		return nil
+	}
+
+	set := make(pointSet, len(points))
+	for _, point := range points {
+		set[point] = struct{}{}
+	}
+
+	return set
+}
+
+// has reports whether the set contains the point.
+func (s pointSet) has(point ints.Point) bool {
+	_, found := s[point]
+
+	return found
 }

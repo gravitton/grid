@@ -68,6 +68,52 @@ func TestPoint_HasLineOfSight(t *testing.T) {
 		assert.True(t, origin.HasLineOfSight(geom.Pt(3, 3), nil))
 		assert.False(t, origin.HasLineOfSight(geom.Pt(3, 3), []ints.Point{geom.Pt(1, 1)}))
 	})
+	t.Run("corner between two blockers is opaque", func(t *testing.T) {
+		corner := []ints.Point{geom.Pt(1, 0), geom.Pt(0, 1)}
+
+		assert.False(t, origin.HasLineOfSight(geom.Pt(1, 1), corner))
+		assert.False(t, origin.HasLineOfSight(geom.Pt(2, 2), corner))
+	})
+	t.Run("corner beside a single blocker stays open", func(t *testing.T) {
+		assert.True(t, origin.HasLineOfSight(geom.Pt(1, 1), []ints.Point{geom.Pt(1, 0)}))
+		assert.True(t, origin.HasLineOfSight(geom.Pt(1, 1), []ints.Point{geom.Pt(0, 1)}))
+		assert.True(t, origin.HasLineOfSight(geom.Pt(2, 2), []ints.Point{geom.Pt(2, 1)}))
+	})
+	t.Run("reciprocal", func(t *testing.T) {
+		// a Bresenham walk traces a different chain of cells when reversed, so these
+		// pairs disagreed until the endpoints were canonicalized
+		blocking := []ints.Point{geom.Pt(1, 1)}
+		for _, target := range []ints.Point{geom.Pt(1, 2), geom.Pt(2, 1), geom.Pt(2, 4), geom.Pt(4, 2)} {
+			t.Run(target.String(), func(t *testing.T) {
+				forward := origin.HasLineOfSight(target, blocking)
+				backward := Pt(target.XY()).HasLineOfSight(origin.Point(), blocking)
+
+				assert.Equal(t, forward, backward)
+			})
+		}
+	})
+	t.Run("reciprocal across a box", func(t *testing.T) {
+		blocking := []ints.Point{geom.Pt(1, 1), geom.Pt(-2, 1), geom.Pt(0, -2)}
+		for x := -4; x <= 4; x++ {
+			for y := -4; y <= 4; y++ {
+				a, b := Pt(0, 0), geom.Pt(x, y)
+
+				assert.Equal(t, a.HasLineOfSight(b, blocking), Pt(x, y).HasLineOfSight(a.Point(), blocking))
+			}
+		}
+	})
+	t.Run("diagonal wall hides everything behind it", func(t *testing.T) {
+		var wall []ints.Point
+		for i := -3; i <= 3; i++ {
+			wall = append(wall, geom.Pt(2+i, 2-i))
+		}
+
+		for x := 3; x <= 6; x++ {
+			for y := 3; y <= 6; y++ {
+				assert.False(t, origin.HasLineOfSight(geom.Pt(x, y), wall))
+			}
+		}
+	})
 }
 
 func TestPoint_FieldOfView(t *testing.T) {
