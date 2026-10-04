@@ -21,11 +21,11 @@ const (
 func (s System) Directions() []geom.Direction {
 	switch s {
 	case Cardinal:
-		directions := geom.CardinalDirections
+		directions := geom.CardinalDirections()
 
 		return directions[:]
 	case Diagonal:
-		directions := geom.Directions
+		directions := geom.Directions()
 
 		return directions[:]
 	default:

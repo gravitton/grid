@@ -5,6 +5,7 @@ import (
 
 	"github.com/gravitton/assert"
 	geom "github.com/gravitton/geometry"
+	"github.com/gravitton/geometry/geomtest"
 )
 
 // --- Construction ---
@@ -34,14 +35,14 @@ func TestNewGrid_WithDiagonal(t *testing.T) {
 
 func TestGrid_CellBounds(t *testing.T) {
 	g := NewRectGrid[int](geom.Sz(5, 5), geom.Sz(64.0, 32.0))
-	geom.AssertSize(t, g.CellBounds(), 64.0, 32.0)
+	geomtest.AssertSize(t, g.CellBounds(), geom.Sz(64.0, 32.0))
 	assert.Equal(t, g.CellWidth(), 64.0)
 	assert.Equal(t, g.CellHeight(), 32.0)
 }
 
 func TestGrid_CellSpacing(t *testing.T) {
 	g := NewRectGrid[int](geom.Sz(5, 5), geom.Sz(64.0, 32.0))
-	geom.AssertSize(t, g.CellSpacing(), 64.0, 32.0)
+	geomtest.AssertSize(t, g.CellSpacing(), geom.Sz(64.0, 32.0))
 }
 
 // --- Has ---

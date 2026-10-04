@@ -27,7 +27,7 @@ func TestSystem_Directions(t *testing.T) {
 		Diagonal.Directions()[0] = geom.DirectionNone
 
 		assert.Equal(t, Diagonal.Directions()[0], geom.DirectionRight)
-		assert.Equal(t, geom.Directions[0], geom.DirectionRight)
+		assert.Equal(t, geom.Directions()[0], geom.DirectionRight)
 	})
 }
 

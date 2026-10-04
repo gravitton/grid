@@ -5,6 +5,7 @@ import (
 
 	"github.com/gravitton/assert"
 	geom "github.com/gravitton/geometry"
+	"github.com/gravitton/geometry/geomtest"
 )
 
 func TestCell_Valid(t *testing.T) {
@@ -26,7 +27,7 @@ func TestCell_Index(t *testing.T) {
 func TestCell_Center(t *testing.T) {
 	g := NewRectGrid[int](geom.Sz(5, 5), geom.Sz(32.0, 32.0))
 	// With AlignTopLeft, cell (0,0) center is at (16, 16) for 32×32 cells.
-	geom.AssertPoint(t, g.Get(geom.Pt(0, 0)).Center(), 16.0, 16.0)
+	geomtest.AssertPoint(t, g.Get(geom.Pt(0, 0)).Center(), geom.Pt(16.0, 16.0))
 }
 
 func TestCell_DistanceTo(t *testing.T) {
