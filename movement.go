@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	geom "github.com/gravitton/geometry"
-	"github.com/gravitton/geometry/types/ints"
 )
 
 // Movement is the neighbor connectivity of a square grid.
@@ -64,10 +63,10 @@ func (m Movement) Directions() []geom.Direction {
 
 // Offsets returns the lattice step of every neighbor direction of the movement,
 // in the same order as [Movement.Directions].
-func (m Movement) Offsets() []ints.Vector {
+func (m Movement) Offsets() []geom.Vector[int] {
 	directions := m.Directions()
 
-	offsets := make([]ints.Vector, len(directions))
+	offsets := make([]geom.Vector[int], len(directions))
 	for i, direction := range directions {
 		offsets[i] = direction.Offset[int]()
 	}
@@ -75,28 +74,18 @@ func (m Movement) Offsets() []ints.Vector {
 	return offsets
 }
 
-// within returns every index at most n steps from center under the movement, the center included,
-// and nil for a negative n.
-func (m Movement) within(center ints.Point, n int) []ints.Point {
-	if n < 0 {
-		return nil
+// Offset returns the lattice step of the direction, or the zero vector when the direction
+// is not a neighbor direction of the movement.
+func (m Movement) Offset(direction geom.Direction) geom.Vector[int] {
+	if !m.Contains(direction) {
+		return geom.Vector[int]{}
 	}
 
-	indices := make([]ints.Point, 0, m.withinLen(n))
-	for dx := -n; dx <= n; dx++ {
-		for dy := -n; dy <= n; dy++ {
-			index := center.AddXY(dx, dy)
-			if m.DistanceTo(center, index) <= n {
-				indices = append(indices, index)
-			}
-		}
-	}
-
-	return indices
+	return direction.Offset[int]()
 }
 
-// withinLen returns the number of indices within returns for a radius of n.
-func (m Movement) withinLen(n int) int {
+// rangeLen returns the number of indices within n steps of an index under the movement.
+func (m Movement) rangeLen(n int) int {
 	if m == MovementCardinal {
 		return 2*n*(n+1) + 1
 	}
@@ -104,36 +93,26 @@ func (m Movement) withinLen(n int) int {
 	return (2*n + 1) * (2*n + 1)
 }
 
-// Offset returns the lattice step of the direction, or the zero vector when the direction
-// is not a neighbor direction of the movement.
-func (m Movement) Offset(direction geom.Direction) ints.Vector {
-	if !m.Has(direction) {
-		return ints.Vector{}
-	}
-
-	return direction.Offset[int]()
-}
-
-// Has reports whether the direction is one of the neighbor directions of the movement.
-func (m Movement) Has(direction geom.Direction) bool {
-	switch m {
-	case MovementCardinal:
-		return direction.IsCardinal()
-	case MovementDiagonal:
-		return !direction.IsNone()
-	default:
-		panic(fmt.Sprintf("grid: unknown movement %d", m))
-	}
-}
-
 // DistanceTo returns the grid distance between two indices.
 // MovementCardinal uses Manhattan distance; MovementDiagonal uses Chebyshev distance.
-func (m Movement) DistanceTo(from, to ints.Point) int {
+func (m Movement) DistanceTo(from, to geom.Point[int]) int {
 	switch m {
 	case MovementCardinal:
 		return from.ManhattanDistanceTo(to)
 	case MovementDiagonal:
 		return from.ChebyshevDistanceTo(to)
+	default:
+		panic(fmt.Sprintf("grid: unknown movement %d", m))
+	}
+}
+
+// Contains reports whether the direction is one of the neighbor directions of the movement.
+func (m Movement) Contains(direction geom.Direction) bool {
+	switch m {
+	case MovementCardinal:
+		return direction.IsCardinal()
+	case MovementDiagonal:
+		return !direction.IsNone()
 	default:
 		panic(fmt.Sprintf("grid: unknown movement %d", m))
 	}

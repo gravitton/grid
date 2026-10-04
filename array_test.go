@@ -5,50 +5,51 @@ import (
 
 	"github.com/gravitton/assert"
 	geom "github.com/gravitton/geometry"
-	"github.com/gravitton/geometry/types/ints"
 )
 
-func TestArr_Size(t *testing.T) {
+func TestArray_Constructor(t *testing.T) {
 	a := Arr[int](geom.Sz(4, 3))
+
+	t.Run("has the given size", func(t *testing.T) {
+		assert.Equal(t, a.Size(), geom.Sz(4, 3))
+	})
+	t.Run("holds a zero value per index", func(t *testing.T) {
+		assert.Equal(t, a.Len(), 12)
+		assert.Equal(t, *a.Get(geom.Pt(3, 2)), 0)
+	})
+}
+
+func TestArray_Size(t *testing.T) {
+	a := Arr[int](geom.Sz(4, 3))
+
 	assert.Equal(t, a.Size(), geom.Sz(4, 3))
 	assert.Equal(t, a.Width(), 4)
 	assert.Equal(t, a.Height(), 3)
-	assert.Equal(t, a.Len(), 12)
 }
 
-func TestArray_Has(t *testing.T) {
-	a := Arr[int](geom.Sz(4, 3))
-	assert.True(t, a.Has(geom.Pt(0, 0)))
-	assert.True(t, a.Has(geom.Pt(3, 2)))
-	assert.False(t, a.Has(geom.Pt(-1, 0)))
-	assert.False(t, a.Has(geom.Pt(0, -1)))
-	assert.False(t, a.Has(geom.Pt(4, 0)))
-	assert.False(t, a.Has(geom.Pt(0, 3)))
-}
-
-func TestArray_SetGet(t *testing.T) {
-	a := Arr[int](geom.Sz(4, 3))
-	a.Set(geom.Pt(1, 2), 42)
-	assert.Equal(t, *a.Get(geom.Pt(1, 2)), 42)
-	a.Set(geom.Pt(0, 0), 7)
-	assert.Equal(t, *a.Get(geom.Pt(0, 0)), 7)
+func TestArray_Len(t *testing.T) {
+	assert.Equal(t, Arr[int](geom.Sz(4, 3)).Len(), 12)
 }
 
 func TestArray_Get(t *testing.T) {
 	a := Arr[int](geom.Sz(4, 3))
 
+	t.Run("returns a pointer to the stored value", func(t *testing.T) {
+		a.Set(geom.Pt(1, 2), 42)
+		*a.Get(geom.Pt(1, 2))++
+
+		assert.Equal(t, *a.Get(geom.Pt(1, 2)), 43)
+	})
 	t.Run("panics past the width instead of reading the next row", func(t *testing.T) {
 		assert.PanicsWith(t, func() {
 			a.Get(geom.Pt(4, 0))
 		}, "grid: index (4,0) outside array of size 4x3")
 	})
-
 	t.Run("panics before the first column", func(t *testing.T) {
 		assert.Panics(t, func() {
 			a.Get(geom.Pt(-1, 1))
 		})
 	})
-
 	t.Run("panics outside the rows", func(t *testing.T) {
 		assert.Panics(t, func() {
 			a.Get(geom.Pt(0, 3))
@@ -59,6 +60,13 @@ func TestArray_Get(t *testing.T) {
 func TestArray_Set(t *testing.T) {
 	a := Arr[int](geom.Sz(4, 3))
 
+	t.Run("stores the value at the index alone", func(t *testing.T) {
+		a.Set(geom.Pt(1, 2), 42)
+		a.Set(geom.Pt(0, 0), 7)
+
+		assert.Equal(t, *a.Get(geom.Pt(1, 2)), 42)
+		assert.Equal(t, *a.Get(geom.Pt(0, 0)), 7)
+	})
 	t.Run("panics past the width instead of writing the next row", func(t *testing.T) {
 		assert.Panics(t, func() {
 			a.Set(geom.Pt(4, 0), 7)
@@ -70,10 +78,9 @@ func TestArray_Set(t *testing.T) {
 func TestArray_Fill(t *testing.T) {
 	a := Arr[int](geom.Sz(3, 3))
 	a.Fill(9)
-	for y := range 3 {
-		for x := range 3 {
-			assert.Equal(t, *a.Get(geom.Pt(x, y)), 9)
-		}
+
+	for value := range a.Values() {
+		assert.Equal(t, *value, 9)
 	}
 }
 
@@ -81,61 +88,111 @@ func TestArray_Clear(t *testing.T) {
 	a := Arr[int](geom.Sz(3, 3))
 	a.Fill(9)
 	a.Clear()
-	for y := range 3 {
-		for x := range 3 {
-			assert.Equal(t, *a.Get(geom.Pt(x, y)), 0)
+
+	for value := range a.Values() {
+		assert.Equal(t, *value, 0)
+	}
+}
+
+func TestArray_Clone(t *testing.T) {
+	original := Arr[int](geom.Sz(3, 3))
+	original.Fill(1)
+
+	clone := original.Clone()
+	clone.Set(geom.Pt(0, 0), 99)
+
+	t.Run("holds the same values", func(t *testing.T) {
+		assert.Equal(t, clone.Size(), original.Size())
+		assert.Equal(t, *clone.Get(geom.Pt(2, 2)), 1)
+	})
+	t.Run("a write to the clone leaves the original alone", func(t *testing.T) {
+		assert.Equal(t, *original.Get(geom.Pt(0, 0)), 1)
+		assert.Equal(t, *clone.Get(geom.Pt(0, 0)), 99)
+	})
+}
+
+func TestArray_Keys(t *testing.T) {
+	t.Run("yields every index row by row", func(t *testing.T) {
+		var indices []geom.Point[int]
+		for index := range Arr[int](geom.Sz(3, 2)).Keys() {
+			indices = append(indices, index)
 		}
-	}
+
+		assert.Equal(t, indices, []geom.Point[int]{geom.Pt(0, 0), geom.Pt(1, 0), geom.Pt(2, 0), geom.Pt(0, 1), geom.Pt(1, 1), geom.Pt(2, 1)})
+	})
+	t.Run("stops at the break", func(t *testing.T) {
+		count := 0
+		for range Arr[int](geom.Sz(5, 5)).Keys() {
+			count++
+			if count == 3 {
+				break
+			}
+		}
+
+		assert.Equal(t, count, 3)
+	})
 }
 
-func TestArray_Clone_Independence(t *testing.T) {
-	a1 := Arr[int](geom.Sz(3, 3))
-	a1.Fill(1)
-	a2 := a1.Clone()
-	a2.Set(geom.Pt(0, 0), 99)
-	// Original is unchanged.
-	assert.Equal(t, *a1.Get(geom.Pt(0, 0)), 1)
-	assert.Equal(t, *a2.Get(geom.Pt(0, 0)), 99)
-}
-
-func TestArray_Iter_Order(t *testing.T) {
-	a := Arr[int](geom.Sz(3, 2))
-	var points []ints.Point
-	for p := range a.Keys() {
-		points = append(points, p)
-	}
-	assert.Equal(t, len(points), 6)
-	// Row-major: (0,0), (1,0), (2,0), (0,1), (1,1), (2,1)
-	assert.Equal(t, points[0], geom.Pt(0, 0))
-	assert.Equal(t, points[1], geom.Pt(1, 0))
-	assert.Equal(t, points[2], geom.Pt(2, 0))
-	assert.Equal(t, points[3], geom.Pt(0, 1))
-}
-
-func TestArray_Iter2(t *testing.T) {
+func TestArray_Values(t *testing.T) {
 	a := Arr[int](geom.Sz(2, 2))
-	a.Set(geom.Pt(1, 0), 42)
-	count := 0
-	found := false
-	for p, v := range a.All() {
-		count++
-		if p == geom.Pt(1, 0) {
-			assert.Equal(t, *v, 42)
-			found = true
-		}
-	}
-	assert.Equal(t, count, 4)
-	assert.True(t, found)
-}
 
-func TestArray_Iter_EarlyStop(t *testing.T) {
-	a := Arr[int](geom.Sz(5, 5))
-	count := 0
-	for range a.Keys() {
-		count++
-		if count == 3 {
+	t.Run("yields a pointer into the array", func(t *testing.T) {
+		for value := range a.Values() {
+			*value = 5
+		}
+
+		assert.Equal(t, *a.Get(geom.Pt(1, 1)), 5)
+	})
+	t.Run("stops at the break", func(t *testing.T) {
+		count := 0
+		for range a.Values() {
+			count++
+
 			break
 		}
-	}
-	assert.Equal(t, count, 3)
+
+		assert.Equal(t, count, 1)
+	})
+}
+
+func TestArray_All(t *testing.T) {
+	a := Arr[int](geom.Sz(2, 2))
+	a.Set(geom.Pt(1, 0), 42)
+
+	t.Run("yields every index with its value", func(t *testing.T) {
+		count := 0
+		for index, value := range a.All() {
+			count++
+			assert.Equal(t, value, a.Get(index), index.String()+": ")
+		}
+
+		assert.Equal(t, count, 4)
+	})
+	t.Run("stops at the break", func(t *testing.T) {
+		count := 0
+		for range a.All() {
+			count++
+
+			break
+		}
+
+		assert.Equal(t, count, 1)
+	})
+}
+
+func TestArray_Contains(t *testing.T) {
+	a := Arr[int](geom.Sz(4, 3))
+
+	t.Run("the corners are inside", func(t *testing.T) {
+		assert.True(t, a.Contains(geom.Pt(0, 0)))
+		assert.True(t, a.Contains(geom.Pt(3, 2)))
+	})
+	t.Run("a negative coordinate is outside", func(t *testing.T) {
+		assert.False(t, a.Contains(geom.Pt(-1, 0)))
+		assert.False(t, a.Contains(geom.Pt(0, -1)))
+	})
+	t.Run("the size itself is outside", func(t *testing.T) {
+		assert.False(t, a.Contains(geom.Pt(4, 0)))
+		assert.False(t, a.Contains(geom.Pt(0, 3)))
+	})
 }

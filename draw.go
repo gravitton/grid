@@ -4,39 +4,24 @@ import (
 	"iter"
 	"math"
 
-	"github.com/gravitton/geometry/types/floats"
-	"github.com/gravitton/geometry/types/ints"
+	geom "github.com/gravitton/geometry"
 )
 
-// IterOptions configures bounds-based grid iteration.
-// Pass a Bounds to restrict iteration to cells near the visible rectangle; one
-// extra row and column are included on every edge so partially visible tiles
-// are not culled. Border cells may lie outside the grid (cell.Valid() == false).
+// DrawOrder returns an iterator over the cells in or near bounds, back to front, the order a
+// painter draws them in, so a tile is never drawn over one in front of it. A zero bounds
+// walks the bounds of the whole grid.
 //
-// Draw order is resolved automatically from the grid layout:
-//   - Rectangular (SquareFlat): row-major, top-to-bottom.
-//   - Isometric (SquareIsometric): diagonal depth order (painter's algorithm) —
-//     depths (col+row) are visited in ascending screen-Y order.
-//   - Hex flat-top (HexFlatTop): two-pass column iteration — even columns then
-//     odd — so tiles in the same visual row are drawn back-to-front.
-//   - Hex pointy-top (HexPointyTop): row-major; the row offset is along X only,
-//     so a single pass is sufficient for correct draw order.
-type IterOptions struct {
-	Bounds floats.Rectangle
-}
-
-// Iter returns an iterator over grid cells in draw order (painter's algorithm).
-// Pass nil to iterate every cell using the full grid bounds.
-// Pass an IterOptions to restrict iteration to a viewport subset.
-// The iteration strategy is resolved automatically from the grid layout, so
-// tiles are always yielded back-to-front regardless of grid type.
-// Cells at the boundary of the bounds may lie outside the grid (cell.Valid() == false).
-func (g *Grid[T]) Iter(options *IterOptions) iter.Seq[*Cell[T]] {
-	var bounds floats.Rectangle
-	if options != nil {
-		bounds = options.Bounds
-	}
-
+// The order follows the layout of the grid:
+//   - Rectangular: row by row, top to bottom.
+//   - Isometric: by depth, the sum of column and row, ascending down the screen.
+//   - Hexagonal flat-top: in two passes over the columns, even then odd, so the tiles of one
+//     visual row are drawn back to front.
+//   - Hexagonal pointy-top: row by row; the rows are offset along X only, so one pass is in
+//     order.
+//
+// One row and one column beyond bounds are included on every side, so a tile partly in view is
+// not culled. A cell there may lie outside the grid, where its Valid reports false.
+func (g *Grid[T]) DrawOrder(bounds geom.Box[float64]) iter.Seq[*Cell[T]] {
 	if bounds.IsZero() {
 		bounds = g.Bounds()
 	}
@@ -55,14 +40,14 @@ func (g *Grid[T]) Iter(options *IterOptions) iter.Seq[*Cell[T]] {
 	}
 }
 
-func (g *Grid[T]) iterDefault(bounds floats.Rectangle, yield func(*Cell[T]) bool) {
-	index := g.IndexAt(bounds.Min())
+func (g *Grid[T]) iterDefault(bounds geom.Box[float64], yield func(*Cell[T]) bool) {
+	index := g.IndexAt(bounds.Min)
 
-	cols, rows := bounds.Size.Vector().DivideXY(g.cellSpacing.XY()).Round().Int().XY()
+	cols, rows := bounds.Size().Vector().DivideXY(g.cellSpacing.XY()).Round().Int().XY()
 
 	for row := 0; row <= rows; row++ {
 		for col := 0; col <= cols; col++ {
-			cell := g.Get(index.AddXY(col, row))
+			cell := g.Cell(index.AddXY(col, row))
 
 			if !yield(cell) {
 				return
@@ -77,41 +62,41 @@ func (g *Grid[T]) iterDefault(bounds floats.Rectangle, yield func(*Cell[T]) bool
 // All cells sharing depth d = col+row project to the same screen Y, so depths
 // are iterated in ascending order (larger d = lower on screen = drawn later).
 // For each depth only the column range whose screen X falls within bounds is
-// scanned, with a per-cell IntersectsRectangle check for the boundaries.
+// scanned, with a per-cell IntersectsBox check for the boundaries.
 //
-// Screen-space relationships for SquareIsometric (spacingW = cellWidth/2,
+// Screen-space relationships for an isometric grid (spacingW = cellWidth/2,
 // spacingH = cellHeight/2, origin = center of cell (0,0)):
 //
 //	screen_y = d * spacingH + origin.Y
 //	screen_x = (2*col - d) * spacingW + origin.X
-func (g *Grid[T]) iterIsometric(bounds floats.Rectangle, yield func(*Cell[T]) bool) {
-	origin := g.cellCenter(ints.Pt(0, 0))
+func (g *Grid[T]) iterIsometric(bounds geom.Box[float64], yield func(*Cell[T]) bool) {
+	origin := g.cellCenter(geom.Pt(0, 0))
 	spacingW := g.cellSpacing.Width
 	spacingH := g.cellSpacing.Height
 	halfCellH := g.cellSize.Height * 0.5
 
 	// depth d = col + row; screen_y = d*spacingH + origin.Y
 	// ascending d → ascending screen Y → painter's algorithm back-to-front
-	dMin := int(math.Floor((bounds.Min().Y-origin.Y)/spacingH)) - 1
-	dMax := int(math.Ceil((bounds.Max().Y-origin.Y)/spacingH)) + 1
+	dMin := int(math.Floor((bounds.Min.Y-origin.Y)/spacingH)) - 1
+	dMax := int(math.Ceil((bounds.Max.Y-origin.Y)/spacingH)) + 1
 
 	for d := dMin; d <= dMax; d++ {
 		screenY := float64(d)*spacingH + origin.Y
 
 		// row-cull: skip depths whose tile strip doesn't intersect bounds vertically
-		if screenY+halfCellH <= bounds.Min().Y || screenY-halfCellH >= bounds.Max().Y {
+		if screenY+halfCellH <= bounds.Min.Y || screenY-halfCellH >= bounds.Max.Y {
 			continue
 		}
 
 		// screen_x = (2*col - d)*spacingW + origin.X
 		// → col = (screen_x - origin.X) / (2*spacingW) + d/2
-		colLeft := int(math.Floor((bounds.Min().X-origin.X)/(2*spacingW)+float64(d)*0.5)) - 1
-		colRight := int(math.Ceil((bounds.Max().X-origin.X)/(2*spacingW)+float64(d)*0.5)) + 1
+		colLeft := int(math.Floor((bounds.Min.X-origin.X)/(2*spacingW)+float64(d)*0.5)) - 1
+		colRight := int(math.Ceil((bounds.Max.X-origin.X)/(2*spacingW)+float64(d)*0.5)) + 1
 
 		for col := colLeft; col <= colRight; col++ {
 			row := d - col
-			cell := g.Get(ints.Pt(col, row))
-			if !cell.Bounds().IntersectsRectangle(bounds) {
+			cell := g.Cell(geom.Pt(col, row))
+			if !cell.Bounds().IntersectsBox(bounds) {
 				continue
 			}
 			if !yield(cell) {
@@ -137,20 +122,20 @@ func (g *Grid[T]) iterIsometric(bounds floats.Rectangle, yield func(*Cell[T]) bo
 //
 // One extra cell is included on each edge of bounds so partially visible tiles
 // at the boundary are not culled. Cells beyond that edge are skipped via an
-// IntersectsRectangle check.
-func (g *Grid[T]) iterHexagonal(bounds floats.Rectangle, yield func(*Cell[T]) bool, doubleRows, doubleCols bool) {
-	index := g.IndexAt(bounds.Min())
+// IntersectsBox check.
+func (g *Grid[T]) iterHexagonal(bounds geom.Box[float64], yield func(*Cell[T]) bool, doubleRows, doubleCols bool) {
+	index := g.IndexAt(bounds.Min)
 
 	colsOdd := index.X%2 != 0
 	rowsOdd := index.Y%2 != 0
 
-	cols, rows := bounds.Size.Vector().DivideXY(g.cellSpacing.XY()).Round().Int().XY()
+	cols, rows := bounds.Size().Vector().DivideXY(g.cellSpacing.XY()).Round().Int().XY()
 
 	for row := range g.iterHexagonalDirection(rows, doubleRows, rowsOdd) {
 		for col := range g.iterHexagonalDirection(cols, doubleCols, colsOdd) {
-			cell := g.Get(index.AddXY(col, row))
+			cell := g.Cell(index.AddXY(col, row))
 
-			if (row < 0 || col < 0 || row > rows || col > cols) && !cell.Bounds().IntersectsRectangle(bounds) {
+			if (row < 0 || col < 0 || row > rows || col > cols) && !cell.Bounds().IntersectsBox(bounds) {
 				continue
 			}
 

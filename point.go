@@ -2,31 +2,21 @@ package grid
 
 import (
 	geom "github.com/gravitton/geometry"
-	"github.com/gravitton/geometry/types/ints"
 )
 
 // Point is a grid cell coordinate with spatial query methods (Range, FieldOfView, HasLineOfSight).
-type Point ints.Point
+type Point geom.Point[int]
 
 // Pt constructs a Point at column x, row y.
 func Pt(x, y int) Point {
-	return Point(ints.Pt(x, y))
+	return Point(geom.Pt(x, y))
 }
-
-// DistanceTo returns the grid distance between two points for the given Movement.
-// MovementCardinal uses Manhattan distance; MovementDiagonal uses Chebyshev distance.
-func (p Point) DistanceTo(to ints.Point, movement Movement) int {
-	return movement.DistanceTo(p.Point(), to)
-}
-
-// Point returns the underlying coordinate as an ints.Point.
-func (p Point) Point() ints.Point { return ints.Point(p) }
 
 // Neighbors returns the neighbor coordinates for every direction in movement.
-func (p Point) Neighbors(movement Movement) []ints.Point {
+func (p Point) Neighbors(movement Movement) []geom.Point[int] {
 	offsets := movement.Offsets()
 
-	neighbors := make([]ints.Point, len(offsets))
+	neighbors := make([]geom.Point[int], len(offsets))
 	for i, offset := range offsets {
 		neighbors[i] = p.Point().Add(offset)
 	}
@@ -34,24 +24,31 @@ func (p Point) Neighbors(movement Movement) []ints.Point {
 	return neighbors
 }
 
-// Range returns all cells within Euclidean distance n from p, inclusive.
-func (p Point) Range(n int) []ints.Point {
+// Range returns every index at most n steps from p under the movement, p included, ordered by
+// x and then by y: a diamond for MovementCardinal, a square for MovementDiagonal. It returns
+// nil for a negative n.
+func (p Point) Range(n int, movement Movement) []geom.Point[int] {
 	if n < 0 {
 		return nil
 	}
 
-	results := make([]ints.Point, 0, (2*n+1)*(2*n+1))
-	r2 := n * n
-
+	indices := make([]geom.Point[int], 0, movement.rangeLen(n))
 	for dx := -n; dx <= n; dx++ {
 		for dy := -n; dy <= n; dy++ {
-			if dx*dx+dy*dy <= r2 {
-				results = append(results, geom.Pt(p.X+dx, p.Y+dy))
+			index := geom.Pt(p.X+dx, p.Y+dy)
+			if movement.DistanceTo(p.Point(), index) <= n {
+				indices = append(indices, index)
 			}
 		}
 	}
 
-	return results
+	return indices
+}
+
+// DistanceTo returns the grid distance between two points for the given Movement.
+// MovementCardinal uses Manhattan distance; MovementDiagonal uses Chebyshev distance.
+func (p Point) DistanceTo(to geom.Point[int], movement Movement) int {
+	return movement.DistanceTo(p.Point(), to)
 }
 
 // HasLineOfSight reports whether there is a clear line of sight from p to target,
@@ -64,11 +61,27 @@ func (p Point) Range(n int) []ints.Point {
 // passes diagonally by a single isolated one.
 //
 // Visibility is reciprocal: p sees target exactly when target sees p.
-func (p Point) HasLineOfSight(target ints.Point, blocking []ints.Point) bool {
+func (p Point) HasLineOfSight(target geom.Point[int], blocking []geom.Point[int]) bool {
 	return p.hasLineOfSight(target, newPointSet(blocking))
 }
 
-func (p Point) hasLineOfSight(target ints.Point, blocking pointSet) bool {
+// FieldOfView returns the subset of candidates visible from p,
+// given a set of blocking points. Adjacent cells (Chebyshev distance ≤ 1)
+// are always visible.
+func (p Point) FieldOfView(candidates []geom.Point[int], blocking []geom.Point[int]) []geom.Point[int] {
+	blocked := newPointSet(blocking)
+
+	results := make([]geom.Point[int], 0, len(candidates))
+	for _, candidate := range candidates {
+		if len(blocking) == 0 || p.Point().ChebyshevDistanceTo(candidate) <= 1 || p.hasLineOfSight(candidate, blocked) {
+			results = append(results, candidate)
+		}
+	}
+
+	return results
+}
+
+func (p Point) hasLineOfSight(target geom.Point[int], blocking pointSet) bool {
 	// A Bresenham walk is not mirror-symmetric — reversing the endpoints can trace a
 	// different chain of cells — so always walk from the lower endpoint. Neither
 	// endpoint is ever tested against blocking, which makes the swap free of meaning.
@@ -131,28 +144,17 @@ func (p Point) hasLineOfSight(target ints.Point, blocking pointSet) bool {
 	}
 }
 
-// FieldOfView returns the subset of candidates visible from p,
-// given a set of blocking points. Adjacent cells (Chebyshev distance ≤ 1)
-// are always visible.
-func (p Point) FieldOfView(candidates []ints.Point, blocking []ints.Point) []ints.Point {
-	blocked := newPointSet(blocking)
-
-	results := make([]ints.Point, 0, len(candidates))
-	for _, candidate := range candidates {
-		if len(blocking) == 0 || p.Point().ChebyshevDistanceTo(candidate) <= 1 || p.hasLineOfSight(candidate, blocked) {
-			results = append(results, candidate)
-		}
-	}
-
-	return results
+// Point returns the underlying coordinate as a geom.Point.
+func (p Point) Point() geom.Point[int] {
+	return geom.Point[int](p)
 }
 
 // pointSet indexes grid coordinates for constant-time membership tests.
-type pointSet map[ints.Point]struct{}
+type pointSet map[geom.Point[int]]struct{}
 
 // newPointSet indexes the given points. It returns nil for an empty input;
 // reads from a nil set are valid and never match.
-func newPointSet(points []ints.Point) pointSet {
+func newPointSet(points []geom.Point[int]) pointSet {
 	if len(points) == 0 {
 		return nil
 	}
@@ -166,7 +168,7 @@ func newPointSet(points []ints.Point) pointSet {
 }
 
 // has reports whether the set contains the point.
-func (s pointSet) has(point ints.Point) bool {
+func (s pointSet) has(point geom.Point[int]) bool {
 	_, found := s[point]
 
 	return found

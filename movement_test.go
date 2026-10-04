@@ -121,27 +121,6 @@ func TestMovement_Offset(t *testing.T) {
 	})
 }
 
-func TestMovement_Has(t *testing.T) {
-	t.Run("cardinal", func(t *testing.T) {
-		assert.True(t, MovementCardinal.Has(geom.East))
-		assert.False(t, MovementCardinal.Has(geom.NorthEast))
-		assert.False(t, MovementCardinal.Has(geom.DirectionNone))
-	})
-	t.Run("diagonal", func(t *testing.T) {
-		assert.True(t, MovementDiagonal.Has(geom.East))
-		assert.True(t, MovementDiagonal.Has(geom.NorthEast))
-		assert.False(t, MovementDiagonal.Has(geom.DirectionNone))
-	})
-	t.Run("panics outside the constants", func(t *testing.T) {
-		assert.PanicsWith(t, func() {
-			Movement(99).Has(geom.East)
-		}, "grid: unknown movement 99")
-		assert.PanicsWith(t, func() {
-			MovementNone.Has(geom.East)
-		}, "grid: unknown movement -1")
-	})
-}
-
 func TestMovement_DistanceTo(t *testing.T) {
 	origin := geom.Pt(0, 0)
 	target := geom.Pt(3, 4)
@@ -167,6 +146,27 @@ func TestMovement_DistanceTo(t *testing.T) {
 		}, "grid: unknown movement 99")
 		assert.PanicsWith(t, func() {
 			MovementNone.DistanceTo(geom.Pt(0, 0), geom.Pt(1, 1))
+		}, "grid: unknown movement -1")
+	})
+}
+
+func TestMovement_Contains(t *testing.T) {
+	t.Run("cardinal", func(t *testing.T) {
+		assert.True(t, MovementCardinal.Contains(geom.East))
+		assert.False(t, MovementCardinal.Contains(geom.NorthEast))
+		assert.False(t, MovementCardinal.Contains(geom.DirectionNone))
+	})
+	t.Run("diagonal", func(t *testing.T) {
+		assert.True(t, MovementDiagonal.Contains(geom.East))
+		assert.True(t, MovementDiagonal.Contains(geom.NorthEast))
+		assert.False(t, MovementDiagonal.Contains(geom.DirectionNone))
+	})
+	t.Run("panics outside the constants", func(t *testing.T) {
+		assert.PanicsWith(t, func() {
+			Movement(99).Contains(geom.East)
+		}, "grid: unknown movement 99")
+		assert.PanicsWith(t, func() {
+			MovementNone.Contains(geom.East)
 		}, "grid: unknown movement -1")
 	})
 }

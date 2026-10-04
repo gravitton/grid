@@ -2,29 +2,21 @@ package grid
 
 import (
 	geom "github.com/gravitton/geometry"
-	"github.com/gravitton/geometry/types/floats"
-	"github.com/gravitton/geometry/types/ints"
 	hex "github.com/gravitton/hexagon"
-	"github.com/gravitton/x/slices"
 )
 
-// NewHexagonPointyTopGrid creates a new hexagon grid with a pointy-top layout.
-//
-// hexSize is the circumradius of each hex cell — the distance from the center
-// to any vertex, which equals the edge length for a regular hexagon.
-// Use equal W and H for an undistorted hex; different values skew the cell
-// independently along each axis (e.g. Sz(1, 0.5) produces a hex that is
-// compressed vertically). The pixel bounding box of each cell is
-// hexSize.W*√3 wide and hexSize.H*2 tall.
-//
-// Grid cell (0, 0) is placed at the top-left: even rows are unshifted and
-// odd rows are offset half a cell to the right, so no cell center has a
-// negative x coordinate.
-func NewHexagonPointyTopGrid[T any](size ints.Size, hexSize floats.Size, opts ...HexGridOption) *Grid[T] {
-	return newHexagonGrid[T](size, hexSize, HexPointyTop, hex.OffsetOddR, opts)
+// HexOptions configures a grid of hexagonal cells. The zero value is the default: the odd rows
+// or columns shifted, and the top-left corner of the grid at the world origin.
+type HexOptions struct {
+	// EvenOffset shifts the even rows of a pointy-top grid, or the even columns of a flat-top
+	// one, where the odd ones are shifted without it.
+	EvenOffset bool
+
+	// Origin is the world position of the top-left corner of the bounds of the grid.
+	Origin geom.Point[float64]
 }
 
-// NewHexagonFlatTopGrid creates a new hexagon grid with a flat-top layout.
+// NewHexFlatTop creates a new hexagon grid with a flat-top layout.
 //
 // hexSize is the circumradius of each hex cell — the distance from the center
 // to any vertex, which equals the edge length for a regular hexagon.
@@ -36,83 +28,75 @@ func NewHexagonPointyTopGrid[T any](size ints.Size, hexSize floats.Size, opts ..
 // Grid cell (0, 0) is placed at the top-left: even columns are unshifted and
 // odd columns are offset half a cell downward, so no cell center has a
 // negative y coordinate.
-func NewHexagonFlatTopGrid[T any](size ints.Size, hexSize floats.Size, opts ...HexGridOption) *Grid[T] {
-	return newHexagonGrid[T](size, hexSize, HexFlatTop, hex.OffsetOddQ, opts)
+func NewHexFlatTop[T any](size geom.Size[int], hexSize geom.Size[float64], opts ...func(*HexOptions)) *Grid[T] {
+	return newHex[T](size, hexSize, hexFlatTop, hex.OffsetOddQ, opts)
 }
 
-// HexFlatTopCellSize returns the circumradius for NewHexagonFlatTopGrid where
-// each tile is exactly width pixels wide and width·√3/2 pixels tall (2:√3 ratio).
-func HexFlatTopCellSize(width float64) floats.Size {
-	return geom.SzU(width).Scale(0.5)
+// NewHexPointyTop creates a new hexagon grid with a pointy-top layout.
+//
+// hexSize is the circumradius of each hex cell — the distance from the center
+// to any vertex, which equals the edge length for a regular hexagon.
+// Use equal W and H for an undistorted hex; different values skew the cell
+// independently along each axis (e.g. Sz(1, 0.5) produces a hex that is
+// compressed vertically). The pixel bounding box of each cell is
+// hexSize.W*√3 wide and hexSize.H*2 tall.
+//
+// Grid cell (0, 0) is placed at the top-left: even rows are unshifted and
+// odd rows are offset half a cell to the right, so no cell center has a
+// negative x coordinate.
+func NewHexPointyTop[T any](size geom.Size[int], hexSize geom.Size[float64], opts ...func(*HexOptions)) *Grid[T] {
+	return newHex[T](size, hexSize, hexPointyTop, hex.OffsetOddR, opts)
 }
 
-// HexPointyTopCellSize returns the circumradius for NewHexagonPointyTopGrid where
-// each tile is exactly width pixels wide and width·2/√3 pixels tall (√3:2 ratio).
-func HexPointyTopCellSize(width float64) floats.Size {
-	return geom.SzU(width * 2 / geom.Sqrt3).Scale(0.5)
-}
+func newHex[T any](size geom.Size[int], hexSize geom.Size[float64], transform *transform, system hex.CoordinateSystem, opts []func(*HexOptions)) *Grid[T] {
+	var options HexOptions
+	for _, opt := range opts {
+		opt(&options)
+	}
 
-// HexFlatTopIsometricPixelPerfectCellSize returns the circumradius for
-// NewHexagonFlatTopGrid where each tile is exactly width pixels wide and
-// width·3/4 pixels tall (4:3 ratio), suitable for pixel-perfect isometric rendering.
-func HexFlatTopIsometricPixelPerfectCellSize(width float64) floats.Size {
-	return geom.Sz(width, width*geom.Sqrt3/2).Scale(0.5)
-}
-
-// HexPointyTopIsometricPixelPerfectCellSize returns the circumradius for
-// NewHexagonPointyTopGrid where each tile is exactly width pixels wide and
-// width pixels tall (1:1 ratio), suitable for pixel-perfect isometric rendering.
-func HexPointyTopIsometricPixelPerfectCellSize(width float64) floats.Size {
-	return geom.Sz(width*2/geom.Sqrt3, width).Scale(0.5)
-}
-
-func newHexagonGrid[T any](size ints.Size, hexSize floats.Size, transform *Transform, system hex.CoordinateSystem, opts []HexGridOption) *Grid[T] {
-	o := applyHexGridOptions(opts)
-
-	if o.even {
+	if options.EvenOffset {
 		switch system {
 		case hex.OffsetOddR:
 			system = hex.OffsetEvenR
 		case hex.OffsetOddQ:
 			system = hex.OffsetEvenQ
-		default:
-			// noop
 		}
 	}
 
-	layout := NewLayout(transform,
-		LayoutOpts.Size(size),
-		LayoutOpts.CellSize(hexSize),
-		LayoutOpts.ToPointMapper(func(index ints.Point) floats.Point {
-			return system.From(index).Point().Float()
-		}),
-		LayoutOpts.FromPointMapper(func(pixel floats.Point) ints.Point {
-			return system.To(hex.FracPt(pixel.XY()).Round())
-		}),
-	).AlignTopLeft()
+	toPoint := func(index geom.Point[int]) geom.Point[float64] {
+		return system.From(index).Point().Float()
+	}
+	fromPoint := func(pixel geom.Point[float64]) geom.Point[int] {
+		return system.To(hex.FracPt(pixel.XY()).Round())
+	}
 
-	return NewGrid[T](
-		layout,
-		func(from, to ints.Point) int {
+	return newGrid[T](
+		newLayout(transform, size, hexSize, toPoint, fromPoint).AlignTopLeft().Translate(options.Origin.Vector()),
+		func(from, to geom.Point[int]) int {
 			return system.From(from).DistanceTo(system.From(to))
 		},
-		func(index ints.Point, n int, valid ValidIndexFunc) []ints.Point {
+		func(index geom.Point[int], n int, passable func(index geom.Point[int]) bool) []geom.Point[int] {
 			h := system.From(index)
 
 			var candidates, blocking []hex.Hex
 			for _, candidate := range h.Range(n) {
-				if valid(system.To(candidate)) {
+				if passable(system.To(candidate)) {
 					candidates = append(candidates, candidate)
 				} else {
 					blocking = append(blocking, candidate)
 				}
 			}
 
-			return slices.Map(h.FieldOfView(candidates, blocking), func(h hex.Hex) ints.Point {
-				return system.To(h)
-			})
+			visible := h.FieldOfView(candidates, blocking)
+
+			indices := make([]geom.Point[int], len(visible))
+			for i, seen := range visible {
+				indices[i] = system.To(seen)
+			}
+
+			return indices
 		},
-		func(index ints.Point) []ints.Vector {
+		func(index geom.Point[int]) []geom.Vector[int] {
 			offsets := system.Offsets(index)
 
 			return offsets[:]
@@ -120,29 +104,28 @@ func newHexagonGrid[T any](size ints.Size, hexSize floats.Size, transform *Trans
 	)
 }
 
-// HexGridOption configures a hexagonal grid constructor.
-type HexGridOption func(*hexGridOptions)
-
-type hexGridOptions struct {
-	even bool
+// HexFlatTopCellSize returns the circumradius for NewHexFlatTop where
+// each tile is exactly width pixels wide and width·√3/2 pixels tall (2:√3 ratio).
+func HexFlatTopCellSize(width float64) geom.Size[float64] {
+	return geom.SzU(width).Scale(0.5)
 }
 
-// HexGridOpts is the namespace for hexagonal grid options.
-var HexGridOpts hexGridOptions
-
-// EvenSystem returns an option that switches the offset row/column convention
-// from odd-offset (default) to even-offset.
-func (o hexGridOptions) EvenSystem() HexGridOption {
-	return func(o *hexGridOptions) {
-		o.even = true
-	}
+// HexPointyTopCellSize returns the circumradius for NewHexPointyTop where
+// each tile is exactly width pixels wide and width·2/√3 pixels tall (√3:2 ratio).
+func HexPointyTopCellSize(width float64) geom.Size[float64] {
+	return geom.SzU(width * 2 / geom.Sqrt3).Scale(0.5)
 }
 
-func applyHexGridOptions(opts []HexGridOption) *hexGridOptions {
-	o := &hexGridOptions{}
-	for _, opt := range opts {
-		opt(o)
-	}
+// HexFlatTopIsometricPixelPerfectCellSize returns the circumradius for
+// NewHexFlatTop where each tile is exactly width pixels wide and
+// width·3/4 pixels tall (4:3 ratio), suitable for pixel-perfect isometric rendering.
+func HexFlatTopIsometricPixelPerfectCellSize(width float64) geom.Size[float64] {
+	return geom.Sz(width, width*geom.Sqrt3/2).Scale(0.5)
+}
 
-	return o
+// HexPointyTopIsometricPixelPerfectCellSize returns the circumradius for
+// NewHexPointyTop where each tile is exactly width pixels wide and
+// width pixels tall (1:1 ratio), suitable for pixel-perfect isometric rendering.
+func HexPointyTopIsometricPixelPerfectCellSize(width float64) geom.Size[float64] {
+	return geom.Sz(width*2/geom.Sqrt3, width).Scale(0.5)
 }
