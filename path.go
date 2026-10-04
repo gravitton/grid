@@ -15,27 +15,19 @@ func (g *Grid[T]) Distance(from, to ints.Point) int {
 	return g.distance(from, to)
 }
 
-// Range returns a slice of points in a range.
+// Range returns the indices within n steps of index, under the movement of the grid, that are
+// valid and in sight of it. A nil valid admits every cell.
 func (g *Grid[T]) Range(index ints.Point, n int, valid ValidFunc[T]) []ints.Point {
+	valid = validOrAny(valid)
+
 	return g.toRange(index, n, func(index ints.Point) bool {
 		return g.valid(index) && valid(g.cell(index))
 	})
 }
 
 // Path returns a path from start to goal.
-// ValidFunc and CostFunc are optional.
+// A nil valid admits every cell and a nil cost charges one per step, as in every search.
 func (g *Grid[T]) Path(from, to ints.Point, valid ValidFunc[T], cost CostFunc[T]) []*Cell[T] {
-	if valid == nil {
-		valid = func(current *Cell[T]) bool {
-			return true
-		}
-	}
-	if cost == nil {
-		cost = func(current, next *Cell[T]) float64 {
-			return 1.0
-		}
-	}
-
 	return xslices.Map(g.AStar(from, to, valid, cost), func(point ints.Point) *Cell[T] {
 		return g.cell(point)
 	})
@@ -53,6 +45,8 @@ func (g *Grid[T]) BreadthFirstSearch(start, goal ints.Point, valid ValidFunc[T])
 
 // breadthFirstSearch implements algorithm for Breadth First Search
 func (g *Grid[T]) breadthFirstSearch(start ints.Point, goal *ints.Point, valid ValidFunc[T]) map[ints.Point]ints.Point {
+	valid = validOrAny(valid)
+
 	if !g.checkPath(start, goal, valid) {
 		return nil
 	}
@@ -72,12 +66,9 @@ func (g *Grid[T]) breadthFirstSearch(start ints.Point, goal *ints.Point, valid V
 		}
 
 		for _, next := range g.cellNeighbors(current) {
-			if _, visited := cameFrom[next]; !visited {
+			if _, visited := cameFrom[next]; !visited && valid(g.cell(next)) {
 				cameFrom[next] = current
-
-				if valid(g.cell(next)) {
-					frontier.Push(next)
-				}
+				frontier.Push(next)
 			}
 		}
 	}
@@ -85,21 +76,27 @@ func (g *Grid[T]) breadthFirstSearch(start ints.Point, goal *ints.Point, valid V
 	return cameFrom
 }
 
-// UniformCostSearchField returns a map of points to the previous point in the path.
+// UniformCostSearchField returns a map of points to the previous point in the path, found by
+// uniform cost search, also known as Dijkstra's algorithm.
 func (g *Grid[T]) UniformCostSearchField(start ints.Point, valid ValidFunc[T], cost CostFunc[T]) map[ints.Point]ints.Point {
 	return g.uniformCostSearch(start, nil, valid, cost)
 }
 
-// UniformCostSearch returns a path from start to goal.
+// UniformCostSearch returns the cheapest path from start to goal. It is also known as
+// Dijkstra's algorithm.
 func (g *Grid[T]) UniformCostSearch(start, goal ints.Point, valid ValidFunc[T], cost CostFunc[T]) []ints.Point {
 	return g.reconstructPath(g.uniformCostSearch(start, &goal, valid, cost), start, goal)
 }
 
 // uniformCostSearch implements algorithm for Uniform Cost Search (or Dijkstra’s Algorithm)
 func (g *Grid[T]) uniformCostSearch(start ints.Point, goal *ints.Point, valid ValidFunc[T], cost CostFunc[T]) map[ints.Point]ints.Point {
+	valid = validOrAny(valid)
+
 	if !g.checkPath(start, goal, valid) {
 		return nil
 	}
+
+	cost = costOrUnit(cost)
 
 	frontier := heap.NewComparable[priorityItem]()
 	frontier.Push(&priorityItem{start, 0})
@@ -119,15 +116,16 @@ func (g *Grid[T]) uniformCostSearch(start ints.Point, goal *ints.Point, valid Va
 		}
 
 		for _, next := range g.cellNeighbors(current) {
+			if !valid(g.cell(next)) {
+				continue
+			}
+
 			newCost := costSoFar[current] + cost(g.cell(current), g.cell(next))
 
 			if currentCost, visited := costSoFar[next]; !visited || newCost < currentCost {
 				costSoFar[next] = newCost
 				cameFrom[next] = current
-
-				if valid(g.cell(next)) {
-					frontier.Push(&priorityItem{next, newCost})
-				}
+				frontier.Push(&priorityItem{next, newCost})
 			}
 		}
 	}
@@ -142,6 +140,8 @@ func (g *Grid[T]) GreedyBestFirstSearch(start, goal ints.Point, valid ValidFunc[
 
 // greedyBestFirstSearch implements algorithm for Greedy Best First Search
 func (g *Grid[T]) greedyBestFirstSearch(start ints.Point, goal *ints.Point, valid ValidFunc[T]) map[ints.Point]ints.Point {
+	valid = validOrAny(valid)
+
 	if !g.checkPath(start, goal, valid) {
 		return nil
 	}
@@ -161,12 +161,9 @@ func (g *Grid[T]) greedyBestFirstSearch(start ints.Point, goal *ints.Point, vali
 		}
 
 		for _, next := range g.cellNeighbors(current) {
-			if _, visited := cameFrom[next]; !visited {
+			if _, visited := cameFrom[next]; !visited && valid(g.cell(next)) {
 				cameFrom[next] = current
-
-				if valid(g.cell(next)) {
-					frontier.Push(&priorityItem{next, g.heuristic(next, *goal)})
-				}
+				frontier.Push(&priorityItem{next, g.heuristic(next, *goal)})
 			}
 		}
 	}
@@ -181,9 +178,13 @@ func (g *Grid[T]) AStar(start, goal ints.Point, valid ValidFunc[T], cost CostFun
 
 // astar implements algorithm for A* Search
 func (g *Grid[T]) astar(start ints.Point, goal *ints.Point, valid ValidFunc[T], cost CostFunc[T]) map[ints.Point]ints.Point {
+	valid = validOrAny(valid)
+
 	if !g.checkPath(start, goal, valid) {
 		return nil
 	}
+
+	cost = costOrUnit(cost)
 
 	frontier := heap.NewComparable[priorityItem]()
 	frontier.Push(&priorityItem{start, 0})
@@ -203,15 +204,16 @@ func (g *Grid[T]) astar(start ints.Point, goal *ints.Point, valid ValidFunc[T], 
 		}
 
 		for _, next := range g.cellNeighbors(current) {
+			if !valid(g.cell(next)) {
+				continue
+			}
+
 			newCost := costSoFar[current] + cost(g.cell(current), g.cell(next))
 
 			if currentCost, visited := costSoFar[next]; !visited || newCost < currentCost {
 				costSoFar[next] = newCost
 				cameFrom[next] = current
-
-				if valid(g.cell(next)) {
-					frontier.Push(&priorityItem{next, newCost + g.heuristic(next, *goal)})
-				}
+				frontier.Push(&priorityItem{next, newCost + g.heuristic(next, *goal)})
 			}
 		}
 	}
@@ -230,6 +232,28 @@ func (i *priorityItem) Compare(item *priorityItem) int {
 
 func (g *Grid[T]) heuristic(current, goal ints.Point) float64 {
 	return float64(g.Distance(current, goal))
+}
+
+// validOrAny returns valid, or a function admitting every cell where it is nil.
+func validOrAny[T any](valid ValidFunc[T]) ValidFunc[T] {
+	if valid != nil {
+		return valid
+	}
+
+	return func(*Cell[T]) bool {
+		return true
+	}
+}
+
+// costOrUnit returns cost, or a function charging one per step where it is nil.
+func costOrUnit[T any](cost CostFunc[T]) CostFunc[T] {
+	if cost != nil {
+		return cost
+	}
+
+	return func(_, _ *Cell[T]) float64 {
+		return 1
+	}
 }
 
 func (g *Grid[T]) checkPath(start ints.Point, goal *ints.Point, valid ValidFunc[T]) bool {

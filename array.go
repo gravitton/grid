@@ -1,6 +1,7 @@
 package grid
 
 import (
+	"fmt"
 	"iter"
 
 	geom "github.com/gravitton/geometry"
@@ -45,12 +46,20 @@ func (a Array[T]) Has(index ints.Point) bool {
 
 // Get returns a pointer to the value at index. Panics if index is out of bounds.
 func (a Array[T]) Get(index ints.Point) *T {
-	return &a.data[a.index(index)]
+	if !a.valid(index) {
+		panic(a.outside(index))
+	}
+
+	return a.at(index)
 }
 
 // Set stores value at index. Panics if index is out of bounds.
 func (a Array[T]) Set(index ints.Point, value T) {
-	a.data[a.index(index)] = value
+	if !a.valid(index) {
+		panic(a.outside(index))
+	}
+
+	*a.at(index) = value
 }
 
 // Fill sets every element to value.
@@ -101,15 +110,22 @@ func (a Array[T]) Values() iter.Seq[*T] {
 func (a Array[T]) All() iter.Seq2[ints.Point, *T] {
 	return func(yield func(ints.Point, *T) bool) {
 		for pt := range a.Keys() {
-			if !yield(pt, &a.data[a.index(pt)]) {
+			if !yield(pt, a.at(pt)) {
 				return
 			}
 		}
 	}
 }
 
-func (a Array[T]) index(index ints.Point) int {
-	return index.X + index.Y*a.size.Width
+// at returns a pointer to the value at an index the caller knows to be valid.
+func (a Array[T]) at(index ints.Point) *T {
+	return &a.data[index.X+index.Y*a.size.Width]
+}
+
+// outside returns the panic message for an index outside the array. The formatting is kept out
+// of Get and Set so they stay small enough to inline.
+func (a Array[T]) outside(index ints.Point) string {
+	return fmt.Sprintf("grid: index %s outside array of size %s", index, a.size)
 }
 
 func (a Array[T]) valid(index ints.Point) bool {

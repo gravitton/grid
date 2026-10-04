@@ -64,7 +64,7 @@ func (o layoutOptions) ToPointMapper(fn func(ints.Point) floats.Point) LayoutOpt
 
 // FromPointMapper stores a function that converts fractional layout coordinates
 // (returned by FromPoint) back to offset grid indices.
-// IndexFromPoint uses it when set; defaults to rounding to the nearest integer point.
+// FromPoint uses it when set; it defaults to rounding to the nearest integer point.
 func (o layoutOptions) FromPointMapper(fn func(floats.Point) ints.Point) LayoutOption {
 	return func(l *Layout) {
 		l.fromPointMapper = fn
@@ -138,7 +138,7 @@ func (l Layout) CellSpacing() floats.Size {
 }
 
 // ToPoint converts offset grid coordinates to the pixel center of the cell.
-// If an index mapper was set via WithIndexMapper, it is applied first.
+// The mapper set by LayoutOpts.ToPointMapper, if any, is applied first.
 func (l Layout) ToPoint(index ints.Point) floats.Point {
 	return l.mapToPoint(index).Transform(l.computed.toPoint)
 }
@@ -171,13 +171,13 @@ func (l Layout) CellPolygon(index ints.Point) floats.RegularPolygon {
 
 func (l Layout) kind() kind {
 	switch {
-	case l.transform.sides == 4 && l.transform.orientation == geom.FlatTop:
+	case l.transform.sides == 4 && l.transform.orientation == geom.OrientationFlatTop:
 		return kindDefault
-	case l.transform.sides == 4 && l.transform.orientation == geom.PointyTop:
+	case l.transform.sides == 4 && l.transform.orientation == geom.OrientationPointyTop:
 		return kindIsometric
-	case l.transform.sides == 6 && l.transform.orientation == geom.FlatTop:
+	case l.transform.sides == 6 && l.transform.orientation == geom.OrientationFlatTop:
 		return kindHexagonalFlatTop
-	case l.transform.sides == 6 && l.transform.orientation == geom.PointyTop:
+	case l.transform.sides == 6 && l.transform.orientation == geom.OrientationPointyTop:
 		return kindHexagonalPointyTop
 	default:
 		return kindDefault
@@ -185,8 +185,8 @@ func (l Layout) kind() kind {
 }
 
 // Bounds returns the pixel bounding box for the whole grid of cells.
-// Grid size must be set via WithGridSize. If an index mapper was set via
-// WithIndexMapper it is applied via ToPoint automatically.
+// The grid size must be set by LayoutOpts.Size. The mapper set by LayoutOpts.ToPointMapper,
+// if any, is applied through ToPoint.
 func (l Layout) Bounds() floats.Rectangle {
 	return l.cellsBounds(l.borderCells())
 }
@@ -264,7 +264,7 @@ var (
 	// with circumradius = size * sqrt2/2 (the half-diagonal of the bounding box).
 	SquareFlat = &Transform{
 		sides:       4,
-		orientation: geom.FlatTop,
+		orientation: geom.OrientationFlatTop,
 		toPoint:     floats.IdentityMatrix(),
 		fromPoint:   floats.IdentityMatrix(),
 		bounds:      floats.Vec(1.0, 1.0),
@@ -278,7 +278,7 @@ var (
 	// For the classic ~30° game-iso look use size.W = 2 * size.H.
 	SquareIsometric = &Transform{
 		sides:       4,
-		orientation: geom.PointyTop,
+		orientation: geom.OrientationPointyTop,
 		toPoint:     floats.Mat(0.5, -0.5, 0, 0.5, 0.5, 0),
 		fromPoint:   floats.Mat(1, 1, 0, -1, 1, 0),
 		bounds:      floats.Vec(1.0, 1.0),
@@ -289,7 +289,7 @@ var (
 	// HexFlatTop maps axial hex (q, r) to pixel for flat-top hexagons.
 	HexFlatTop = &Transform{
 		sides:       6,
-		orientation: geom.FlatTop,
+		orientation: geom.OrientationFlatTop,
 		toPoint:     floats.Mat(3.0/2, 0, 0, geom.Sqrt3/2, geom.Sqrt3, 0),
 		fromPoint:   floats.Mat(2.0/3, 0, 0, -1.0/3, geom.Sqrt3/3, 0),
 		bounds:      floats.Vec(2.0, geom.Sqrt3),
@@ -300,7 +300,7 @@ var (
 	// HexPointyTop maps axial hex (q, r) to pixel for pointy-top hexagons.
 	HexPointyTop = &Transform{
 		sides:       6,
-		orientation: geom.PointyTop,
+		orientation: geom.OrientationPointyTop,
 		toPoint:     floats.Mat(geom.Sqrt3, geom.Sqrt3/2, 0, 0, 3.0/2, 0),
 		fromPoint:   floats.Mat(geom.Sqrt3/3, -1.0/3, 0, 0, 2.0/3, 0),
 		bounds:      floats.Vec(geom.Sqrt3, 2.0),

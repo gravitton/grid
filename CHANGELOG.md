@@ -9,19 +9,20 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased](https://github.com/gravitton/grid/compare/v1.2.0...main)
 ### Changed
 - Require Go 1.27
-- `System` gained the direction methods that were package-level functions: `System.Directions()`, `System.Offsets()`, `System.Offset(direction)`, `System.Has(direction)` and `System.DistanceTo(from, to)`, matching the method style `geometry` v1.10.0 and `hexagon` v1.3.0 moved to (**breaking**)
+- `System` is renamed `Movement`, the name pathfinding libraries give the choice between four and eight neighbors; `hex.CoordinateSystem` is a different kind of system (**breaking**)
+- `Movement` gained the direction methods that were package-level functions: `Movement.Directions()`, `Movement.Offsets()`, `Movement.Offset(direction)`, `Movement.Has(direction)` and `Movement.DistanceTo(from, to)`, matching the method style `geometry` v1.10.0 and `hexagon` v1.3.0 moved to (**breaking**)
 - Neighbors are now ordered by increasing angle — `Cardinal` yields right, down, left, up (was east, north, west, south) — following the `Direction` reorder in `geometry` v1.11.0. The neighbor set is unchanged; only the visit order, and therefore pathfinding tie-breaks, differ (**breaking**)
-- `System.Offsets` returns a fresh slice instead of one aliasing the package's own table, so callers can no longer mutate it (**breaking**)
-- `System.Offset` returns the zero vector for a direction outside the system instead of panicking (**breaking**)
+- `Movement.Offsets` returns a fresh slice instead of one aliasing the package's own table, so callers can no longer mutate it (**breaking**)
+- `Movement.Offset` returns the zero vector for a direction outside the system instead of panicking (**breaking**)
 - Bumped `geometry` to v1.15.0, `hexagon` to v1.5.0 and `assert` to v1.6.0
 
 ### Added
-- `System.String()` — human-readable name for each system constant
+- `Movement.String()` — human-readable name for each system constant
 
 ### Removed
 - `Direction` and its `E`, `NE`, `N`, `NW`, `W`, `SW`, `S`, `SE` constants — superseded by `geom.Direction` from `geometry` v1.10.0 (**breaking**)
-- `Directions`, `CardinalDirections`, `DiagonalDirections` — superseded by `geom.Directions`, `geom.CardinalDirections`, `geom.DiagonalDirections` and `System.Directions` (**breaking**)
-- `NeighborOffsets(system)`, `NeighborOffset(system, direction)` and `DistanceTo(from, to, system)` — replaced by the `System` methods of the same names (**breaking**)
+- `Directions`, `CardinalDirections`, `DiagonalDirections` — superseded by `geom.Directions`, `geom.CardinalDirections`, `geom.DiagonalDirections` and `Movement.Directions` (**breaking**)
+- `NeighborOffsets(system)`, `NeighborOffset(system, direction)` and `DistanceTo(from, to, system)` — replaced by the `Movement` methods of the same names (**breaking**)
 
 ### Fixed
 - `Grid.Iter` no longer writes the resolved bounds back into the caller's `IterOptions`, which made a reused options value stick to the first grid's bounds
@@ -29,6 +30,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - `Point.HasLineOfSight` no longer sees through a diagonal wall — a line crossing a cell corner is now opaque when both cells flanking that corner block, so a diagonal run of blockers hides what is behind it. Sight still passes the corner of a single isolated blocker, and `Grid.Range` inherits the fix on rectangular grids (**breaking**)
 - `Point.FieldOfView` indexes the blocking points once per call instead of scanning the slice at every step of every line walk, cutting `Grid.Range` on a rectangular grid from ~6.5 ms to ~220 µs at radius 40
 - `Grid.cellNeighbors` allocates the neighbor slice at its final capacity instead of growing it, saving one allocation per node expansion in every search algorithm (~14% off `Grid.AStar`)
+- `Grid.Range` on a rectangular grid is now the cells within `n` steps of the grid's movement — a Manhattan diamond for cardinal movement, a Chebyshev square for diagonal — instead of a Euclidean disc, which held cells further than `n` steps from `n = 3` on and left out the corners of a diagonal grid. `Point.Range` is unchanged (**breaking**)
+- `Grid.Range` no longer returns the cells that fail `valid`, nor indices outside the grid; both still hide what lies behind them (**breaking**)
+- `BreadthFirstSearchField` and `UniformCostSearchField` no longer hold the cells that fail `valid`, and no search asks `cost` about such a cell (**breaking**)
+- A nil `valid` or `cost` is accepted by every search, both fields and `Grid.Range`, admitting every cell at a cost of one per step, as `Grid.Path` already did; they panicked before
+- `Array.Get` and `Array.Set` panic on an index outside either axis, as documented. An `x` past the width used to read or write a cell of the next row
 
 
 ## [v1.2.0](https://github.com/gravitton/grid/compare/v1.1.0...v1.2.0) (2026-05-12)

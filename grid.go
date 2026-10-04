@@ -153,14 +153,14 @@ func (g *Grid[T]) getData(index ints.Point) *T {
 	if !g.cells.valid(index) {
 		return nil
 	}
-	return g.cells.Get(index)
+	return g.cells.at(index)
 }
 
 func (g *Grid[T]) setData(index ints.Point, value T) {
 	if !g.cells.valid(index) {
 		return
 	}
-	g.cells.Set(index, value)
+	*g.cells.at(index) = value
 }
 
 func (g *Grid[T]) cell(index ints.Point) *Cell[T] {

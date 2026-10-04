@@ -46,8 +46,8 @@ func IsometricPixelPerfectRectCellSize(width float64) floats.Size {
 func newRectGrid[T any](grid ints.Size, size floats.Size, transform *Transform, opts []RectGridOption) *Grid[T] {
 	o := applyRectGridOptions(opts)
 
-	system := o.movement
-	offsets := system.Offsets()
+	movement := o.movement
+	offsets := movement.Offsets()
 
 	layout := NewLayout(transform,
 		LayoutOpts.Size(grid),
@@ -57,20 +57,19 @@ func newRectGrid[T any](grid ints.Size, size floats.Size, transform *Transform, 
 	return NewGrid[T](
 		layout,
 		func(from, to ints.Point) int {
-			return system.DistanceTo(from, to)
+			return movement.DistanceTo(from, to)
 		},
 		func(index ints.Point, n int, valid ValidIndexFunc) []ints.Point {
-			p := Pt(index.XY())
-			candidates := p.Range(n)
-
-			var blocking []ints.Point
-			for _, i := range candidates {
-				if !valid(i) {
-					blocking = append(blocking, i)
+			var candidates, blocking []ints.Point
+			for _, candidate := range movement.within(index, n) {
+				if valid(candidate) {
+					candidates = append(candidates, candidate)
+				} else {
+					blocking = append(blocking, candidate)
 				}
 			}
 
-			return p.FieldOfView(candidates, blocking)
+			return Pt(index.XY()).FieldOfView(candidates, blocking)
 		},
 		func(index ints.Point) []ints.Vector {
 			return offsets
@@ -82,7 +81,7 @@ func newRectGrid[T any](grid ints.Size, size floats.Size, transform *Transform, 
 type RectGridOption func(*rectGridOptions)
 
 type rectGridOptions struct {
-	movement System
+	movement Movement
 }
 
 // RectGridOpts is the namespace for rectangular grid options.

@@ -7,13 +7,13 @@ import (
 	geom "github.com/gravitton/geometry"
 )
 
-func TestSystem_String(t *testing.T) {
+func TestMovement_String(t *testing.T) {
 	assert.Equal(t, Cardinal.String(), "Cardinal")
 	assert.Equal(t, Diagonal.String(), "Diagonal")
-	assert.Equal(t, System(99).String(), "Unknown")
+	assert.Equal(t, Movement(99).String(), "Unknown")
 }
 
-func TestSystem_Directions(t *testing.T) {
+func TestMovement_Directions(t *testing.T) {
 	t.Run("cardinal", func(t *testing.T) {
 		assert.Equal(t, Cardinal.Directions(), []geom.Direction{geom.DirectionRight, geom.DirectionDown, geom.DirectionLeft, geom.DirectionUp})
 	})
@@ -31,14 +31,14 @@ func TestSystem_Directions(t *testing.T) {
 	})
 }
 
-func TestSystem_Directions_Panic(t *testing.T) {
+func TestMovement_Directions_Panic(t *testing.T) {
 	defer func() {
-		assert.Equal(t, recover(), "unsupported system")
+		assert.Equal(t, recover(), "unsupported movement")
 	}()
-	System(99).Directions()
+	Movement(99).Directions()
 }
 
-func TestSystem_Offsets(t *testing.T) {
+func TestMovement_Offsets(t *testing.T) {
 	t.Run("cardinal", func(t *testing.T) {
 		assert.Equal(t, Cardinal.Offsets(), []geom.Vector[int]{
 			geom.Vec(1, 0), geom.Vec(0, 1), geom.Vec(-1, 0), geom.Vec(0, -1),
@@ -51,10 +51,10 @@ func TestSystem_Offsets(t *testing.T) {
 		})
 	})
 	t.Run("matches directions", func(t *testing.T) {
-		for _, system := range []System{Cardinal, Diagonal} {
-			t.Run(system.String(), func(t *testing.T) {
-				directions := system.Directions()
-				offsets := system.Offsets()
+		for _, movement := range []Movement{Cardinal, Diagonal} {
+			t.Run(movement.String(), func(t *testing.T) {
+				directions := movement.Directions()
+				offsets := movement.Offsets()
 
 				assert.Equal(t, len(offsets), len(directions))
 				for i, direction := range directions {
@@ -65,7 +65,7 @@ func TestSystem_Offsets(t *testing.T) {
 	})
 }
 
-func TestSystem_Offset(t *testing.T) {
+func TestMovement_Offset(t *testing.T) {
 	t.Run("cardinal", func(t *testing.T) {
 		assert.Equal(t, Cardinal.Offset(geom.East), geom.Vec(1, 0))
 		assert.Equal(t, Cardinal.Offset(geom.North), geom.Vec(0, -1))
@@ -79,7 +79,7 @@ func TestSystem_Offset(t *testing.T) {
 			})
 		}
 	})
-	t.Run("outside the system", func(t *testing.T) {
+	t.Run("outside the movement", func(t *testing.T) {
 		assert.Equal(t, Cardinal.Offset(geom.NorthEast), geom.Vec(0, 0))
 		assert.Equal(t, Cardinal.Offset(geom.DirectionNone), geom.Vec(0, 0))
 		assert.Equal(t, Diagonal.Offset(geom.DirectionNone), geom.Vec(0, 0))
@@ -90,7 +90,7 @@ func TestSystem_Offset(t *testing.T) {
 	})
 }
 
-func TestSystem_Has(t *testing.T) {
+func TestMovement_Has(t *testing.T) {
 	t.Run("cardinal", func(t *testing.T) {
 		assert.True(t, Cardinal.Has(geom.East))
 		assert.False(t, Cardinal.Has(geom.NorthEast))
@@ -103,14 +103,14 @@ func TestSystem_Has(t *testing.T) {
 	})
 }
 
-func TestSystem_Has_Panic(t *testing.T) {
+func TestMovement_Has_Panic(t *testing.T) {
 	defer func() {
-		assert.Equal(t, recover(), "unsupported system")
+		assert.Equal(t, recover(), "unsupported movement")
 	}()
-	System(99).Has(geom.East)
+	Movement(99).Has(geom.East)
 }
 
-func TestSystem_DistanceTo(t *testing.T) {
+func TestMovement_DistanceTo(t *testing.T) {
 	origin := geom.Pt(0, 0)
 	target := geom.Pt(3, 4)
 
@@ -123,17 +123,17 @@ func TestSystem_DistanceTo(t *testing.T) {
 		assert.Equal(t, Diagonal.DistanceTo(origin, geom.Pt(2, 2)), 2)
 	})
 	t.Run("symmetric", func(t *testing.T) {
-		for _, system := range []System{Cardinal, Diagonal} {
-			t.Run(system.String(), func(t *testing.T) {
-				assert.Equal(t, system.DistanceTo(origin, target), system.DistanceTo(target, origin))
+		for _, movement := range []Movement{Cardinal, Diagonal} {
+			t.Run(movement.String(), func(t *testing.T) {
+				assert.Equal(t, movement.DistanceTo(origin, target), movement.DistanceTo(target, origin))
 			})
 		}
 	})
 }
 
-func TestSystem_DistanceTo_Panic(t *testing.T) {
+func TestMovement_DistanceTo_Panic(t *testing.T) {
 	defer func() {
-		assert.Equal(t, recover(), "unsupported system")
+		assert.Equal(t, recover(), "unsupported movement")
 	}()
-	System(99).DistanceTo(geom.Pt(0, 0), geom.Pt(1, 1))
+	Movement(99).DistanceTo(geom.Pt(0, 0), geom.Pt(1, 1))
 }

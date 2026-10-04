@@ -98,12 +98,13 @@ func newHexagonGrid[T any](size ints.Size, hexSize floats.Size, transform *Trans
 		},
 		func(index ints.Point, n int, valid ValidIndexFunc) []ints.Point {
 			h := system.From(index)
-			candidates := h.Range(n)
 
-			var blocking []hex.Hex
-			for _, i := range candidates {
-				if !valid(system.To(i)) {
-					blocking = append(blocking, i)
+			var candidates, blocking []hex.Hex
+			for _, candidate := range h.Range(n) {
+				if valid(system.To(candidate)) {
+					candidates = append(candidates, candidate)
+				} else {
+					blocking = append(blocking, candidate)
 				}
 			}
 

@@ -4,7 +4,6 @@ import (
 	"iter"
 	"math"
 
-	geom "github.com/gravitton/geometry"
 	"github.com/gravitton/geometry/types/floats"
 	"github.com/gravitton/geometry/types/ints"
 )
@@ -78,7 +77,7 @@ func (g *Grid[T]) iterDefault(bounds floats.Rectangle, yield func(*Cell[T]) bool
 // All cells sharing depth d = col+row project to the same screen Y, so depths
 // are iterated in ascending order (larger d = lower on screen = drawn later).
 // For each depth only the column range whose screen X falls within bounds is
-// scanned, with a per-cell CollisionRectangles check for the boundaries.
+// scanned, with a per-cell IntersectsRectangle check for the boundaries.
 //
 // Screen-space relationships for SquareIsometric (spacingW = cellWidth/2,
 // spacingH = cellHeight/2, origin = center of cell (0,0)):
@@ -112,7 +111,7 @@ func (g *Grid[T]) iterIsometric(bounds floats.Rectangle, yield func(*Cell[T]) bo
 		for col := colLeft; col <= colRight; col++ {
 			row := d - col
 			cell := g.Get(ints.Pt(col, row))
-			if !geom.CollisionRectangles(cell.Bounds(), bounds) {
+			if !cell.Bounds().IntersectsRectangle(bounds) {
 				continue
 			}
 			if !yield(cell) {
@@ -137,8 +136,8 @@ func (g *Grid[T]) iterIsometric(bounds floats.Rectangle, yield func(*Cell[T]) bo
 //     sufficient for correct draw order and doubleRows is always false.
 //
 // One extra cell is included on each edge of bounds so partially visible tiles
-// at the boundary are not culled. Cells outside the grid are skipped via a
-// CollisionRectangles check.
+// at the boundary are not culled. Cells beyond that edge are skipped via an
+// IntersectsRectangle check.
 func (g *Grid[T]) iterHexagonal(bounds floats.Rectangle, yield func(*Cell[T]) bool, doubleRows, doubleCols bool) {
 	index := g.IndexAt(bounds.Min())
 
@@ -151,7 +150,7 @@ func (g *Grid[T]) iterHexagonal(bounds floats.Rectangle, yield func(*Cell[T]) bo
 		for col := range g.iterHexagonalDirection(cols, doubleCols, colsOdd) {
 			cell := g.Get(index.AddXY(col, row))
 
-			if (row < 0 || col < 0 || row > rows || col > cols) && !geom.CollisionRectangles(cell.Bounds(), bounds) {
+			if (row < 0 || col < 0 || row > rows || col > cols) && !cell.Bounds().IntersectsRectangle(bounds) {
 				continue
 			}
 

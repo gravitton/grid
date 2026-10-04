@@ -13,18 +13,18 @@ func Pt(x, y int) Point {
 	return Point(ints.Pt(x, y))
 }
 
-// DistanceTo returns the grid distance between two points for the given System.
+// DistanceTo returns the grid distance between two points for the given Movement.
 // Cardinal uses Manhattan distance; Diagonal uses Chebyshev distance.
-func (p Point) DistanceTo(to ints.Point, system System) int {
-	return system.DistanceTo(p.Point(), to)
+func (p Point) DistanceTo(to ints.Point, movement Movement) int {
+	return movement.DistanceTo(p.Point(), to)
 }
 
 // Point returns the underlying coordinate as an ints.Point.
 func (p Point) Point() ints.Point { return ints.Point(p) }
 
-// Neighbors returns the neighbor coordinates for every direction in system.
-func (p Point) Neighbors(system System) []ints.Point {
-	offsets := system.Offsets()
+// Neighbors returns the neighbor coordinates for every direction in movement.
+func (p Point) Neighbors(movement Movement) []ints.Point {
+	offsets := movement.Offsets()
 
 	neighbors := make([]ints.Point, len(offsets))
 	for i, offset := range offsets {

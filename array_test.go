@@ -34,6 +34,39 @@ func TestArray_SetGet(t *testing.T) {
 	assert.Equal(t, *a.Get(geom.Pt(0, 0)), 7)
 }
 
+func TestArray_Get(t *testing.T) {
+	a := Arr[int](geom.Sz(4, 3))
+
+	t.Run("panics past the width instead of reading the next row", func(t *testing.T) {
+		assert.PanicsWith(t, func() {
+			a.Get(geom.Pt(4, 0))
+		}, "grid: index (4,0) outside array of size 4x3")
+	})
+
+	t.Run("panics before the first column", func(t *testing.T) {
+		assert.Panics(t, func() {
+			a.Get(geom.Pt(-1, 1))
+		})
+	})
+
+	t.Run("panics outside the rows", func(t *testing.T) {
+		assert.Panics(t, func() {
+			a.Get(geom.Pt(0, 3))
+		})
+	})
+}
+
+func TestArray_Set(t *testing.T) {
+	a := Arr[int](geom.Sz(4, 3))
+
+	t.Run("panics past the width instead of writing the next row", func(t *testing.T) {
+		assert.Panics(t, func() {
+			a.Set(geom.Pt(4, 0), 7)
+		})
+		assert.Equal(t, *a.Get(geom.Pt(0, 1)), 0)
+	})
+}
+
 func TestArray_Fill(t *testing.T) {
 	a := Arr[int](geom.Sz(3, 3))
 	a.Fill(9)

@@ -1,11 +1,13 @@
 package grid
 
 import (
+	"strconv"
 	"testing"
 
 	"github.com/gravitton/assert"
 	geom "github.com/gravitton/geometry"
 	"github.com/gravitton/geometry/geomtest"
+	"github.com/gravitton/geometry/types/ints"
 )
 
 // --- Construction ---
@@ -163,21 +165,72 @@ func TestGrid_Distance(t *testing.T) {
 // --- Range ---
 
 func TestGrid_Range(t *testing.T) {
-	g := NewRectGrid[int](geom.Sz(10, 10), geom.Sz(32.0, 32.0))
-	g.Fill(0)
-	all := func(c *Cell[int]) bool { return true }
-	r0 := g.Range(geom.Pt(5, 5), 0, all)
-	assert.Equal(t, len(r0), 1)
-	assert.Equal(t, r0[0], geom.Pt(5, 5))
+	center := geom.Pt(5, 5)
+	cardinal := NewRectGrid[int](geom.Sz(11, 11), geom.Sz(32.0, 32.0))
+	diagonal := NewRectGrid[int](geom.Sz(11, 11), geom.Sz(32.0, 32.0), RectGridOpts.DiagonalMovement())
+	hexagonal := NewHexagonFlatTopGrid[int](geom.Sz(11, 11), geom.Sz(32.0, 32.0))
+	grids := map[string]*Grid[int]{"cardinal": cardinal, "diagonal": diagonal, "hexagonal": hexagonal}
 
-	r1 := g.Range(geom.Pt(5, 5), 1, all)
-	// Range uses Euclidean distance: only cardinal neighbors at exactly distance 1
-	assert.Equal(t, len(r1), 5)
-}
+	t.Run("a negative radius is empty", func(t *testing.T) {
+		assert.Length(t, cardinal.Range(center, -1, nil), 0)
+	})
 
-func TestGrid_Range_Negative(t *testing.T) {
-	g := NewRectGrid[int](geom.Sz(5, 5), geom.Sz(32.0, 32.0))
-	// Negative n short-circuits in square.Range; FieldOfView returns empty.
-	all := func(c *Cell[int]) bool { return true }
-	assert.Equal(t, len(g.Range(geom.Pt(2, 2), -1, all)), 0)
+	t.Run("a zero radius is the center alone", func(t *testing.T) {
+		assert.Equal(t, cardinal.Range(center, 0, nil), []ints.Point{center})
+	})
+
+	t.Run("cardinal is the diamond of Manhattan distance", func(t *testing.T) {
+		assert.Length(t, cardinal.Range(center, 1, nil), 5)
+		assert.Length(t, cardinal.Range(center, 3, nil), 25)
+	})
+
+	t.Run("diagonal is the square of Chebyshev distance", func(t *testing.T) {
+		assert.Length(t, diagonal.Range(center, 1, nil), 9)
+		assert.Length(t, diagonal.Range(center, 3, nil), 49)
+	})
+
+	t.Run("is exactly the cells within the distance", func(t *testing.T) {
+		for name, g := range grids {
+			for n := range 5 {
+				var expected []ints.Point
+				for cell := range g.Iter(nil) {
+					if cell.Valid() && g.Distance(center, cell.Index()) <= n {
+						expected = append(expected, cell.Index())
+					}
+				}
+
+				assert.True(t, Reg(g.Range(center, n, nil)).Equal(Reg(expected)), name+" at "+strconv.Itoa(n)+": ")
+			}
+		}
+	})
+
+	t.Run("a nil valid admits every cell", func(t *testing.T) {
+		all := func(cell *Cell[int]) bool {
+			return true
+		}
+
+		assert.Equal(t, cardinal.Range(center, 2, nil), cardinal.Range(center, 2, all))
+	})
+
+	t.Run("a cell that is not valid is left out and hides what is behind it", func(t *testing.T) {
+		open := func(cell *Cell[int]) bool {
+			return cell.Index() != geom.Pt(5, 6)
+		}
+
+		for name, g := range grids {
+			reach := Reg(g.Range(center, 2, open))
+
+			assert.False(t, reach.Contains(geom.Pt(5, 6)), name+": ")
+			assert.False(t, reach.Contains(geom.Pt(5, 7)), name+": ")
+			assert.True(t, reach.Contains(geom.Pt(5, 4)), name+": ")
+		}
+	})
+
+	t.Run("holds no index outside the grid", func(t *testing.T) {
+		for name, g := range grids {
+			for _, index := range g.Range(geom.Pt(0, 0), 2, nil) {
+				assert.True(t, g.Has(index), name+" at "+index.String()+": ")
+			}
+		}
+	})
 }
