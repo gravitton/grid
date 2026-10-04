@@ -6,14 +6,14 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 
-## [Unreleased](https://github.com/gravitton/grid/compare/v1.2.0...master)
+## [Unreleased](https://github.com/gravitton/grid/compare/v1.2.0...main)
 ### Changed
 - Require Go 1.27
 - `System` gained the direction methods that were package-level functions: `System.Directions()`, `System.Offsets()`, `System.Offset(direction)`, `System.Has(direction)` and `System.DistanceTo(from, to)`, matching the method style `geometry` v1.10.0 and `hexagon` v1.3.0 moved to (**breaking**)
 - Neighbors are now ordered by increasing angle — `Cardinal` yields right, down, left, up (was east, north, west, south) — following the `Direction` reorder in `geometry` v1.11.0. The neighbor set is unchanged; only the visit order, and therefore pathfinding tie-breaks, differ (**breaking**)
 - `System.Offsets` returns a fresh slice instead of one aliasing the package's own table, so callers can no longer mutate it (**breaking**)
 - `System.Offset` returns the zero vector for a direction outside the system instead of panicking (**breaking**)
-- Bumped `geometry` to v1.12.0 and `hexagon` to v1.4.0, and the canonical-endpoint ordering in `Point.HasLineOfSight` now uses `ints.Point.Compare` instead of a local helper
+- Bumped `geometry` to v1.15.0, `hexagon` to v1.5.0 and `assert` to v1.6.0
 
 ### Added
 - `System.String()` — human-readable name for each system constant
@@ -31,7 +31,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - `Grid.cellNeighbors` allocates the neighbor slice at its final capacity instead of growing it, saving one allocation per node expansion in every search algorithm (~14% off `Grid.AStar`)
 
 
-## [v1.2.0 (2026-05-12)](https://github.com/gravitton/grid/compare/v1.1.0...v1.2.0)
+## [v1.2.0](https://github.com/gravitton/grid/compare/v1.1.0...v1.2.0) (2026-05-12)
 ### Added
 - `Array.Values` — iterator over all values (`iter.Seq[*T]`), completing the `Keys` / `Values` / `All` trio
 
@@ -41,7 +41,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - `IterConfig` renamed to `IterOptions`
 
 
-## [v1.1.0 (2026-05-09)](https://github.com/gravitton/grid/compare/v1.0.0...v1.1.0)
+## [v1.1.0](https://github.com/gravitton/grid/compare/v1.0.0...v1.1.0) (2026-05-09)
 ### Added
 - `IsometricRectCellSize(width)` — computes the cell size for `NewIsometricRectGrid` at a true 30° isometric angle
 - `IsometricPixelPerfectRectCellSize(width)` — computes the cell size for `NewIsometricRectGrid` at a pixel-art-friendly 2:1 (width × width/2) ratio
