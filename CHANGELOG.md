@@ -9,14 +9,16 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased](https://github.com/gravitton/grid/compare/v1.2.0...main)
 ### Changed
 - Require Go 1.27
-- `System` is renamed `Movement`, the name pathfinding libraries give the choice between four and eight neighbors; `hex.CoordinateSystem` is a different kind of system (**breaking**)
+- `System` is renamed `Movement`, the name pathfinding libraries give the choice between four and eight neighbors, and its constants `Cardinal` and `Diagonal` are `MovementCardinal` and `MovementDiagonal`; `String` still prints `Cardinal` and `Diagonal` (**breaking**)
 - `Movement` gained the direction methods that were package-level functions: `Movement.Directions()`, `Movement.Offsets()`, `Movement.Offset(direction)`, `Movement.Has(direction)` and `Movement.DistanceTo(from, to)`, matching the method style `geometry` v1.10.0 and `hexagon` v1.3.0 moved to (**breaking**)
-- Neighbors are now ordered by increasing angle — `Cardinal` yields right, down, left, up (was east, north, west, south) — following the `Direction` reorder in `geometry` v1.11.0. The neighbor set is unchanged; only the visit order, and therefore pathfinding tie-breaks, differ (**breaking**)
+- Neighbors are now ordered by increasing angle — `MovementCardinal` yields right, down, left, up (was east, north, west, south) — following the `Direction` reorder in `geometry` v1.11.0. The neighbor set is unchanged; only the visit order, and therefore pathfinding tie-breaks, differ (**breaking**)
 - `Movement.Offsets` returns a fresh slice instead of one aliasing the package's own table, so callers can no longer mutate it (**breaking**)
 - `Movement.Offset` returns the zero vector for a direction outside the system instead of panicking (**breaking**)
+- `Movement.Directions`, `Has` and `DistanceTo` panic with `grid: unknown movement <n>` for a value outside the constants, where the message was `unsupported system`, and `Movement.String` prints `None` for such a value instead of `Unknown` (**breaking**)
 - Bumped `geometry` to v1.15.0, `hexagon` to v1.5.0 and `assert` to v1.6.0
 
 ### Added
+- `MovementNone`, `Movement.IsNone()`, `Movements()` and `ParseMovement(name)`, and text marshalling, so a `Movement` is stored in JSON and as a map key by the name `String` prints, as the `geom` and `hex` enums are
 - `Movement.String()` — human-readable name for each system constant
 
 ### Removed

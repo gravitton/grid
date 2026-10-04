@@ -14,7 +14,7 @@ func Pt(x, y int) Point {
 }
 
 // DistanceTo returns the grid distance between two points for the given Movement.
-// Cardinal uses Manhattan distance; Diagonal uses Chebyshev distance.
+// MovementCardinal uses Manhattan distance; MovementDiagonal uses Chebyshev distance.
 func (p Point) DistanceTo(to ints.Point, movement Movement) int {
 	return movement.DistanceTo(p.Point(), to)
 }

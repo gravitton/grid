@@ -90,7 +90,7 @@ var RectGridOpts rectGridOptions
 // DiagonalMovement returns an option that enables 8-directional (Chebyshev) movement.
 func (o rectGridOptions) DiagonalMovement() RectGridOption {
 	return func(o *rectGridOptions) {
-		o.movement = Diagonal
+		o.movement = MovementDiagonal
 	}
 }
 
