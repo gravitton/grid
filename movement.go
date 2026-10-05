@@ -84,13 +84,17 @@ func (m Movement) Offset(direction geom.Direction) geom.Vector[int] {
 	return direction.Offset[int]()
 }
 
-// rangeLen returns the number of indices within n steps of an index under the movement.
-func (m Movement) rangeLen(n int) int {
-	if m == MovementCardinal {
-		return 2*n*(n+1) + 1
+// neighborCount returns the number of neighbors of an index under the movement, and panics for
+// a movement outside the constants, as Directions does.
+func (m Movement) neighborCount() int {
+	switch m {
+	case MovementCardinal:
+		return 4
+	case MovementDiagonal:
+		return 8
+	default:
+		panic(fmt.Sprintf("grid: unknown movement %d", m))
 	}
-
-	return (2*n + 1) * (2*n + 1)
 }
 
 // DistanceTo returns the grid distance between two indices.

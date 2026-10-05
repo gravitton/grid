@@ -63,44 +63,9 @@ func newHex[T any](size geom.Size[int], hexSize geom.Size[float64], transform *t
 		}
 	}
 
-	toPoint := func(index geom.Point[int]) geom.Point[float64] {
-		return system.From(index).Point().Float()
-	}
-	fromPoint := func(pixel geom.Point[float64]) geom.Point[int] {
-		return system.To(hex.FracPt(pixel.XY()).Round())
-	}
-
 	return newGrid[T](
-		newLayout(transform, size, hexSize, toPoint, fromPoint).AlignTopLeft().Translate(options.Origin.Vector()),
-		func(from, to geom.Point[int]) int {
-			return system.From(from).DistanceTo(system.From(to))
-		},
-		func(index geom.Point[int], n int, passable func(index geom.Point[int]) bool) []geom.Point[int] {
-			h := system.From(index)
-
-			var candidates, blocking []hex.Hex
-			for _, candidate := range h.Range(n) {
-				if passable(system.To(candidate)) {
-					candidates = append(candidates, candidate)
-				} else {
-					blocking = append(blocking, candidate)
-				}
-			}
-
-			visible := h.FieldOfView(candidates, blocking)
-
-			indices := make([]geom.Point[int], len(visible))
-			for i, seen := range visible {
-				indices[i] = system.To(seen)
-			}
-
-			return indices
-		},
-		func(index geom.Point[int]) []geom.Vector[int] {
-			offsets := system.Offsets(index)
-
-			return offsets[:]
-		},
+		newLayout(transform, size, hexSize, system).AlignTopLeft().Translate(options.Origin.Vector()),
+		newHexTopology(system),
 	)
 }
 
@@ -128,4 +93,59 @@ func HexFlatTopIsometricPixelPerfectCellSize(width float64) geom.Size[float64] {
 // width pixels tall (1:1 ratio), suitable for pixel-perfect isometric rendering.
 func HexPointyTopIsometricPixelPerfectCellSize(width float64) geom.Size[float64] {
 	return geom.Sz(width*2/geom.Sqrt3, width).Scale(0.5)
+}
+
+// hexTopology is the neighbor rule of hexagonal cells indexed in an offset coordinate system,
+// the methods of [hex.Hex] reached through the system.
+type hexTopology struct {
+	system hex.CoordinateSystem
+
+	// steps holds the neighbor offsets of an index of even and of odd parity, since the shifted
+	// rows or columns of an offset system step differently from the others.
+	steps [2][6]geom.Vector[int]
+
+	// byColumn is true where the parity is that of the column, as in a flat-top grid.
+	byColumn bool
+}
+
+func newHexTopology(system hex.CoordinateSystem) *hexTopology {
+	return &hexTopology{
+		system:   system,
+		steps:    [2][6]geom.Vector[int]{system.Offsets(geom.Pt(0, 0)), system.Offsets(geom.Pt(1, 1))},
+		byColumn: system == hex.OffsetOddQ || system == hex.OffsetEvenQ,
+	}
+}
+
+func (t *hexTopology) offsets(index geom.Point[int]) []geom.Vector[int] {
+	if t.byColumn {
+		return t.steps[index.X&1][:]
+	}
+
+	return t.steps[index.Y&1][:]
+}
+
+func (t *hexTopology) distance(from, to geom.Point[int]) int {
+	return t.system.From(from).DistanceTo(t.system.From(to))
+}
+
+func (t *hexTopology) rangeOf(index geom.Point[int], n int, passable func(index geom.Point[int]) bool) []geom.Point[int] {
+	h := t.system.From(index)
+
+	var candidates, blocking []hex.Hex
+	for _, candidate := range h.Range(n) {
+		if passable(t.system.To(candidate)) {
+			candidates = append(candidates, candidate)
+		} else {
+			blocking = append(blocking, candidate)
+		}
+	}
+
+	visible := h.FieldOfView(candidates, blocking)
+
+	indices := make([]geom.Point[int], len(visible))
+	for i, seen := range visible {
+		indices[i] = t.system.To(seen)
+	}
+
+	return indices
 }

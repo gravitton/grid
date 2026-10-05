@@ -191,14 +191,14 @@ func TestGrid_Range(t *testing.T) {
 		}
 	})
 	t.Run("a nil passable admits every cell", func(t *testing.T) {
-		all := func(cell *Cell[int]) bool {
+		all := func(cell Cell[int]) bool {
 			return true
 		}
 
 		assert.Equal(t, cardinal.Range(center, 2, nil), cardinal.Range(center, 2, all))
 	})
 	t.Run("a cell that is not passable is left out and hides what is behind it", func(t *testing.T) {
-		open := func(cell *Cell[int]) bool {
+		open := func(cell Cell[int]) bool {
 			return cell.Index() != geom.Pt(5, 6)
 		}
 

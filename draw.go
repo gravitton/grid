@@ -21,13 +21,13 @@ import (
 //
 // One row and one column beyond bounds are included on every side, so a tile partly in view is
 // not culled. A cell there may lie outside the grid, where its Valid reports false.
-func (g *Grid[T]) DrawOrder(bounds geom.Box[float64]) iter.Seq[*Cell[T]] {
+func (g *Grid[T]) DrawOrder(bounds geom.Box[float64]) iter.Seq[Cell[T]] {
 	if bounds.IsZero() {
 		bounds = g.Bounds()
 	}
 
-	return func(yield func(*Cell[T]) bool) {
-		switch g.kind {
+	return func(yield func(Cell[T]) bool) {
+		switch g.layout.kind() {
 		case kindIsometric:
 			g.iterIsometric(bounds, yield)
 		case kindHexagonalFlatTop:
@@ -40,10 +40,10 @@ func (g *Grid[T]) DrawOrder(bounds geom.Box[float64]) iter.Seq[*Cell[T]] {
 	}
 }
 
-func (g *Grid[T]) iterDefault(bounds geom.Box[float64], yield func(*Cell[T]) bool) {
+func (g *Grid[T]) iterDefault(bounds geom.Box[float64], yield func(Cell[T]) bool) {
 	index := g.IndexAt(bounds.Min)
 
-	cols, rows := bounds.Size().Vector().DivideXY(g.cellSpacing.XY()).Round().Int().XY()
+	cols, rows := bounds.Size().Vector().DivideXY(g.layout.CellSpacing().XY()).Round().Int().XY()
 
 	for row := 0; row <= rows; row++ {
 		for col := 0; col <= cols; col++ {
@@ -69,11 +69,11 @@ func (g *Grid[T]) iterDefault(bounds geom.Box[float64], yield func(*Cell[T]) boo
 //
 //	screen_y = d * spacingH + origin.Y
 //	screen_x = (2*col - d) * spacingW + origin.X
-func (g *Grid[T]) iterIsometric(bounds geom.Box[float64], yield func(*Cell[T]) bool) {
+func (g *Grid[T]) iterIsometric(bounds geom.Box[float64], yield func(Cell[T]) bool) {
 	origin := g.cellCenter(geom.Pt(0, 0))
-	spacingW := g.cellSpacing.Width
-	spacingH := g.cellSpacing.Height
-	halfCellH := g.cellSize.Height * 0.5
+	spacingW := g.layout.CellSpacing().Width
+	spacingH := g.layout.CellSpacing().Height
+	halfCellH := g.layout.CellSize().Height * 0.5
 
 	// depth d = col + row; screen_y = d*spacingH + origin.Y
 	// ascending d → ascending screen Y → painter's algorithm back-to-front
@@ -123,13 +123,13 @@ func (g *Grid[T]) iterIsometric(bounds geom.Box[float64], yield func(*Cell[T]) b
 // One extra cell is included on each edge of bounds so partially visible tiles
 // at the boundary are not culled. Cells beyond that edge are skipped via an
 // IntersectsBox check.
-func (g *Grid[T]) iterHexagonal(bounds geom.Box[float64], yield func(*Cell[T]) bool, doubleRows, doubleCols bool) {
+func (g *Grid[T]) iterHexagonal(bounds geom.Box[float64], yield func(Cell[T]) bool, doubleRows, doubleCols bool) {
 	index := g.IndexAt(bounds.Min)
 
 	colsOdd := index.X%2 != 0
 	rowsOdd := index.Y%2 != 0
 
-	cols, rows := bounds.Size().Vector().DivideXY(g.cellSpacing.XY()).Round().Int().XY()
+	cols, rows := bounds.Size().Vector().DivideXY(g.layout.CellSpacing().XY()).Round().Int().XY()
 
 	for row := range g.iterHexagonalDirection(rows, doubleRows, rowsOdd) {
 		for col := range g.iterHexagonalDirection(cols, doubleCols, colsOdd) {

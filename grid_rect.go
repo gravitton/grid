@@ -4,6 +4,7 @@ import (
 	"math"
 
 	geom "github.com/gravitton/geometry"
+	hex "github.com/gravitton/hexagon"
 )
 
 // RectOptions configures a grid of square cells. The zero value is the default: the four
@@ -35,31 +36,9 @@ func newRect[T any](grid geom.Size[int], size geom.Size[float64], transform *tra
 		opt(&options)
 	}
 
-	movement := options.Movement
-	offsets := movement.Offsets()
-
 	return newGrid[T](
-		newLayout(transform, grid, size, nil, nil).AlignTopLeft().Translate(options.Origin.Vector()),
-		func(from, to geom.Point[int]) int {
-			return Point(from).DistanceTo(to, movement)
-		},
-		func(index geom.Point[int], n int, passable func(index geom.Point[int]) bool) []geom.Point[int] {
-			p := Point(index)
-
-			var candidates, blocking []geom.Point[int]
-			for _, candidate := range p.Range(n, movement) {
-				if passable(candidate) {
-					candidates = append(candidates, candidate)
-				} else {
-					blocking = append(blocking, candidate)
-				}
-			}
-
-			return p.FieldOfView(candidates, blocking)
-		},
-		func(index geom.Point[int]) []geom.Vector[int] {
-			return offsets
-		},
+		newLayout(transform, grid, size, hex.CoordinateSystemNone).AlignTopLeft().Translate(options.Origin.Vector()),
+		&squareTopology{options.Movement, options.Movement.Offsets()},
 	)
 }
 
@@ -84,4 +63,34 @@ func IsometricRectCellSize(width float64) geom.Size[float64] {
 // For a geometrically accurate 30° angle use IsometricRectCellSize.
 func IsometricPixelPerfectRectCellSize(width float64) geom.Size[float64] {
 	return geom.Sz(width, width*0.5)
+}
+
+// squareTopology is the neighbor rule of square cells under a movement, the methods of [Point]
+// with that movement.
+type squareTopology struct {
+	movement Movement
+	steps    []geom.Vector[int]
+}
+
+func (t *squareTopology) offsets(geom.Point[int]) []geom.Vector[int] {
+	return t.steps
+}
+
+func (t *squareTopology) distance(from, to geom.Point[int]) int {
+	return Point(from).DistanceTo(to, t.movement)
+}
+
+func (t *squareTopology) rangeOf(index geom.Point[int], n int, passable func(index geom.Point[int]) bool) []geom.Point[int] {
+	p := Point(index)
+
+	var candidates, blocking []geom.Point[int]
+	for _, candidate := range p.Range(n, t.movement) {
+		if passable(candidate) {
+			candidates = append(candidates, candidate)
+		} else {
+			blocking = append(blocking, candidate)
+		}
+	}
+
+	return p.FieldOfView(candidates, blocking)
 }

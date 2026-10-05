@@ -2,38 +2,33 @@ package grid
 
 import (
 	geom "github.com/gravitton/geometry"
+	hex "github.com/gravitton/hexagon"
 )
 
 // Layout is the mapping between the indices of a grid and the world: where a cell is drawn and
 // which cell a point falls in. A grid hands out its own as [Grid.Layout]; every method returns
 // a new layout.
 type Layout struct {
-	transform       *transform
-	size            geom.Size[int]
-	origin          geom.Point[float64]
-	cellScale       geom.Size[float64]
-	toPointMapper   func(geom.Point[int]) geom.Point[float64]
-	fromPointMapper func(geom.Point[float64]) geom.Point[int]
+	transform *transform
+	size      geom.Size[int]
+	origin    geom.Point[float64]
+	cellScale geom.Size[float64]
+
+	// system is the offset coordinate system the indices of a hexagonal grid are in, and unused
+	// on a square one, whose indices are the coordinates the transform works in.
+	system hex.CoordinateSystem
 
 	computed computedTransform
 }
 
 // newLayout returns the layout of a grid of the given size in cells under the transform, with
-// the origin at the world origin. The mappers convert between the indices of the grid and the
-// coordinates the transform works in, and are nil where the two are the same.
-func newLayout(
-	t *transform,
-	size geom.Size[int],
-	cellScale geom.Size[float64],
-	toPointMapper func(geom.Point[int]) geom.Point[float64],
-	fromPointMapper func(geom.Point[float64]) geom.Point[int],
-) Layout {
+// the origin at the world origin.
+func newLayout(t *transform, size geom.Size[int], cellScale geom.Size[float64], system hex.CoordinateSystem) Layout {
 	l := Layout{
-		transform:       t,
-		size:            size,
-		cellScale:       cellScale,
-		toPointMapper:   toPointMapper,
-		fromPointMapper: fromPointMapper,
+		transform: t,
+		size:      size,
+		cellScale: cellScale,
+		system:    system,
 	}
 
 	return l.recalculate()
@@ -170,17 +165,20 @@ func (l Layout) CellPolygon(index geom.Point[int]) geom.RegularPolygon[float64] 
 	return geom.RegularPolygonWithOrientation(l.ToPoint(index), l.computed.polygon, l.transform.sides, l.transform.orientation)
 }
 
+// mapToPoint returns the index in the coordinates the transform works in: axial for a hexagon,
+// the index itself for a square.
 func (l Layout) mapToPoint(index geom.Point[int]) geom.Point[float64] {
-	if l.toPointMapper != nil {
-		return l.toPointMapper(index)
+	if l.transform.sides == 6 {
+		return l.system.From(index).Point().Float()
 	}
 
 	return index.Float()
 }
 
+// mapFromPoint returns the index of the cell the coordinates of the transform fall in.
 func (l Layout) mapFromPoint(point geom.Point[float64]) geom.Point[int] {
-	if l.fromPointMapper != nil {
-		return l.fromPointMapper(point)
+	if l.transform.sides == 6 {
+		return l.system.To(hex.FracPt(point.XY()).Round())
 	}
 
 	return point.Round().Int()

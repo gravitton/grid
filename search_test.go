@@ -31,12 +31,12 @@ func sealedGrid() *Grid[int] {
 	return g
 }
 
-func walkable(cell *Cell[int]) bool {
+func walkable(cell Cell[int]) bool {
 	return *cell.Value() == 0
 }
 
 // testSearch runs the sections every search shares, from testStart to testGoal.
-func testSearch(t *testing.T, search func(g *Grid[int], passable func(*Cell[int]) bool) []geom.Point[int]) {
+func testSearch(t *testing.T, search func(g *Grid[int], passable func(Cell[int]) bool) []geom.Point[int]) {
 	t.Run("nil callbacks admit every cell at unit cost", func(t *testing.T) {
 		path := search(walledGrid(), nil)
 
@@ -58,7 +58,7 @@ func testSearch(t *testing.T, search func(g *Grid[int], passable func(*Cell[int]
 }
 
 // testSearchField runs the sections every search field shares, from testStart.
-func testSearchField(t *testing.T, field func(g *Grid[int], passable func(*Cell[int]) bool) map[geom.Point[int]]geom.Point[int]) {
+func testSearchField(t *testing.T, field func(g *Grid[int], passable func(Cell[int]) bool) map[geom.Point[int]]geom.Point[int]) {
 	t.Run("nil callbacks reach every cell", func(t *testing.T) {
 		assert.Length(t, field(walledGrid(), nil), 25)
 	})
@@ -78,29 +78,29 @@ func testSearchField(t *testing.T, field func(g *Grid[int], passable func(*Cell[
 }
 
 func TestGrid_BreadthFirstSearchField(t *testing.T) {
-	testSearchField(t, func(g *Grid[int], passable func(*Cell[int]) bool) map[geom.Point[int]]geom.Point[int] {
+	testSearchField(t, func(g *Grid[int], passable func(Cell[int]) bool) map[geom.Point[int]]geom.Point[int] {
 		return g.BreadthFirstSearchField(testStart, passable)
 	})
 }
 
 func TestGrid_BreadthFirstSearch(t *testing.T) {
-	testSearch(t, func(g *Grid[int], passable func(*Cell[int]) bool) []geom.Point[int] {
+	testSearch(t, func(g *Grid[int], passable func(Cell[int]) bool) []geom.Point[int] {
 		return g.BreadthFirstSearch(testStart, testGoal, passable)
 	})
 }
 
 func TestGrid_UniformCostSearchField(t *testing.T) {
-	testSearchField(t, func(g *Grid[int], passable func(*Cell[int]) bool) map[geom.Point[int]]geom.Point[int] {
+	testSearchField(t, func(g *Grid[int], passable func(Cell[int]) bool) map[geom.Point[int]]geom.Point[int] {
 		return g.UniformCostSearchField(testStart, passable, nil)
 	})
 }
 
 func TestGrid_UniformCostSearch(t *testing.T) {
-	testSearch(t, func(g *Grid[int], passable func(*Cell[int]) bool) []geom.Point[int] {
+	testSearch(t, func(g *Grid[int], passable func(Cell[int]) bool) []geom.Point[int] {
 		return g.UniformCostSearch(testStart, testGoal, passable, nil)
 	})
 	t.Run("cost is never asked about a cell that is not passable", func(t *testing.T) {
-		walledGrid().UniformCostSearch(testStart, testGoal, walkable, func(current, next *Cell[int]) float64 {
+		walledGrid().UniformCostSearch(testStart, testGoal, walkable, func(current, next Cell[int]) float64 {
 			assert.NotEqual(t, next.Index(), testWall)
 
 			return 1
@@ -109,17 +109,17 @@ func TestGrid_UniformCostSearch(t *testing.T) {
 }
 
 func TestGrid_GreedyBestFirstSearch(t *testing.T) {
-	testSearch(t, func(g *Grid[int], passable func(*Cell[int]) bool) []geom.Point[int] {
+	testSearch(t, func(g *Grid[int], passable func(Cell[int]) bool) []geom.Point[int] {
 		return g.GreedyBestFirstSearch(testStart, testGoal, passable)
 	})
 }
 
 func TestGrid_AStar(t *testing.T) {
-	testSearch(t, func(g *Grid[int], passable func(*Cell[int]) bool) []geom.Point[int] {
+	testSearch(t, func(g *Grid[int], passable func(Cell[int]) bool) []geom.Point[int] {
 		return g.AStar(testStart, testGoal, passable, nil)
 	})
 	t.Run("cost is never asked about a cell that is not passable", func(t *testing.T) {
-		walledGrid().AStar(testStart, testGoal, walkable, func(current, next *Cell[int]) float64 {
+		walledGrid().AStar(testStart, testGoal, walkable, func(current, next Cell[int]) float64 {
 			assert.NotEqual(t, next.Index(), testWall)
 
 			return 1
@@ -132,14 +132,14 @@ func TestGrid_Path(t *testing.T) {
 		path := walledGrid().Path(testStart, testStart, nil, nil)
 
 		assert.Length(t, path, 1)
-		assert.Equal(t, path[0].Index(), testStart)
+		assert.Equal(t, path[0], testStart)
 	})
 	t.Run("a straight path holds both ends", func(t *testing.T) {
 		path := walledGrid().Path(testStart, geom.Pt(4, 0), nil, nil)
 
 		assert.Length(t, path, 5)
-		assert.Equal(t, path[0].Index(), testStart)
-		assert.Equal(t, path[4].Index(), geom.Pt(4, 0))
+		assert.Equal(t, path[0], testStart)
+		assert.Equal(t, path[4], geom.Pt(4, 0))
 	})
 	t.Run("goes around a wall", func(t *testing.T) {
 		g := NewRect[int](geom.Sz(5, 3), geom.Sz(32.0, 32.0))
@@ -149,8 +149,8 @@ func TestGrid_Path(t *testing.T) {
 		path := g.Path(testStart, geom.Pt(4, 0), walkable, nil)
 
 		assert.Length(t, path, 9)
-		assert.Equal(t, path[0].Index(), testStart)
-		assert.Equal(t, path[len(path)-1].Index(), geom.Pt(4, 0))
+		assert.Equal(t, path[0], testStart)
+		assert.Equal(t, path[len(path)-1], geom.Pt(4, 0))
 	})
 	t.Run("a goal walled off has no path", func(t *testing.T) {
 		assert.Length(t, sealedGrid().Path(testStart, testGoal, walkable, nil), 0)
