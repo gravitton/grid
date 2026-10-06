@@ -165,26 +165,58 @@ func (g *Grid[T]) Range(index geom.Point[int], radius int, passable func(Cell[T]
 		return Region{}
 	}
 
-	return setOf(g.appendRange(make([]geom.Point[int], 0, g.topology.rangeLen(radius)), index, radius, passable))
+	return setOfSorted(g.appendRange(make([]geom.Point[int], 0, g.topology.rangeLen(radius)), index, radius, passable))
 }
 
 // AppendRange appends the indices of the cells Range returns to dst, in no order to rely on,
 // and returns the extended slice, for a caller who wants them without a region.
 func (g *Grid[T]) AppendRange(dst []geom.Point[int], index geom.Point[int], radius int, passable func(Cell[T]) bool) []geom.Point[int] {
-	if !g.passes(index, passable) {
+	if radius < 0 || !g.passes(index, passable) {
 		return dst
 	}
 
 	return g.appendRange(dst, index, radius, passable)
 }
 
-// appendRange appends the indices in range of an index the caller knows to pass.
+// appendRange appends the indices in range of an index the caller knows to pass. It asks
+// passable about every cell within radius once and keeps the cells that pass; only where one
+// was refused can anything be hidden, and only then is a sightline walked, to each cell kept,
+// past the cells refused. A nil passable refuses nothing.
 func (g *Grid[T]) appendRange(dst []geom.Point[int], index geom.Point[int], radius int, passable func(Cell[T]) bool) []geom.Point[int] {
-	g.walkRangeFrom(index, radius, passable, func(candidate geom.Point[int]) bool {
-		dst = append(dst, candidate)
+	start := len(dst)
+	dst = g.topology.appendWithin(dst, index, radius)
 
-		return true
-	})
+	passed, refused := dst[:start], refusals{origin: geom.Pt(index.X-radius-1, index.Y-radius-1), side: 2*radius + 3}
+	for _, candidate := range dst[start:] {
+		switch {
+		case !g.Contains(candidate):
+		case candidate == index || passable == nil || passable(g.Cell(candidate)):
+			passed = append(passed, candidate)
+		default:
+			refused.add(candidate)
+		}
+	}
+
+	if refused.isEmpty() {
+		return passed
+	}
+
+	return g.appendSeen(passed[:start], index, passed[start:], refused)
+}
+
+// appendSeen appends the candidates in sight of index past the cells refused and the edge of
+// the grid. The candidates may lie in dst past its length: a candidate is read before the place
+// it is kept at is written.
+func (g *Grid[T]) appendSeen(dst []geom.Point[int], index geom.Point[int], candidates []geom.Point[int], refused refusals) []geom.Point[int] {
+	blocked := func(at geom.Point[int]) bool {
+		return !g.Contains(at) || refused.contains(at)
+	}
+
+	for _, candidate := range candidates {
+		if g.topology.sees(index, candidate, blocked) {
+			dst = append(dst, candidate)
+		}
+	}
 
 	return dst
 }
@@ -197,23 +229,22 @@ func (g *Grid[T]) RangeSeq(index geom.Point[int], radius int, passable func(Cell
 }
 
 // walkRange yields the indices of the cells Range returns and reports whether it yielded them
-// all. It checks the index and then calls walkRangeFrom. The check is made here, inside the
-// closure of RangeSeq, and not before it: RangeSeq then does nothing but build the closure and
-// stays small enough to inline.
+// all. The index is checked here, inside the closure of RangeSeq, and not before it: RangeSeq
+// then does nothing but build the closure and stays small enough to inline. The range is
+// gathered before any of it is yielded, since a cell is known to be in sight only once every
+// cell around it was asked about.
 func (g *Grid[T]) walkRange(index geom.Point[int], radius int, passable func(Cell[T]) bool, yield func(geom.Point[int]) bool) bool {
-	if !g.passes(index, passable) {
+	if radius < 0 || !g.passes(index, passable) {
 		return true
 	}
 
-	return g.walkRangeFrom(index, radius, passable, yield)
-}
+	for _, found := range g.appendRange(make([]geom.Point[int], 0, g.topology.rangeLen(radius)), index, radius, passable) {
+		if !yield(found) {
+			return false
+		}
+	}
 
-// walkRangeFrom yields the indices in range of an index the caller knows to pass, which is not
-// asked about again, and reports whether it yielded them all.
-func (g *Grid[T]) walkRangeFrom(index geom.Point[int], radius int, passable func(Cell[T]) bool, yield func(geom.Point[int]) bool) bool {
-	return g.topology.walkRange(index, radius, func(candidate geom.Point[int]) bool {
-		return candidate == index || g.passes(candidate, passable)
-	}, yield)
+	return true
 }
 
 // passes reports whether the index is inside the grid and its cell passable.
@@ -233,8 +264,8 @@ func (g *Grid[T]) Contains(index geom.Point[int]) bool {
 }
 
 // topology is the neighbor rule of one kind of cell: the steps to the cells adjacent to an
-// index, the number of steps between two, and the indices within a number of steps that are
-// passable and in sight.
+// index, the number of steps between two, the indices within a number of steps, and whether
+// one index is in sight of another.
 type topology interface {
 	// offsets returns the steps from the index to its neighbors, in the order of the directions
 	// of the kind. The slice is the topology's own and is never written to.
@@ -244,11 +275,41 @@ type topology interface {
 	// a grid.
 	distance(from, to geom.Point[int]) int
 
-	// rangeLen returns the number of indices within radius of an index, the most walkRange
-	// yields.
+	// rangeLen returns the number of indices within radius of an index, what appendWithin
+	// appends.
 	rangeLen(radius int) int
 
-	// walkRange yields the indices within radius of index that are passable and in sight of
-	// it, in no order the kinds share, and reports whether it yielded them all.
-	walkRange(index geom.Point[int], radius int, passable func(index geom.Point[int]) bool, yield func(geom.Point[int]) bool) bool
+	// appendWithin appends every index within radius of index, inside a grid or not, in the
+	// order of a region, so a range kept in that order is a region with nothing to sort.
+	appendWithin(dst []geom.Point[int], index geom.Point[int], radius int) []geom.Point[int]
+
+	// sees reports whether to is in sight of from past the indices blocked reports, neither end
+	// blocking.
+	sees(from, to geom.Point[int], blocked func(index geom.Point[int]) bool) bool
+}
+
+// refusals is the set of the cells a range was refused, dense over the square of indices around
+// its center and made at the first one, so a range that is refused nothing makes none.
+type refusals struct {
+	origin geom.Point[int]
+	side   int
+	cells  []bool
+}
+
+func (r *refusals) add(index geom.Point[int]) {
+	if r.cells == nil {
+		r.cells = make([]bool, r.side*r.side)
+	}
+
+	r.cells[index.X-r.origin.X+(index.Y-r.origin.Y)*r.side] = true
+}
+
+func (r *refusals) contains(index geom.Point[int]) bool {
+	x, y := index.X-r.origin.X, index.Y-r.origin.Y
+
+	return x >= 0 && x < r.side && y >= 0 && y < r.side && r.cells[x+y*r.side]
+}
+
+func (r *refusals) isEmpty() bool {
+	return r.cells == nil
 }
