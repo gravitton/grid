@@ -1,6 +1,7 @@
 package grid
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/gravitton/assert"
@@ -14,63 +15,127 @@ func TestCell_Index(t *testing.T) {
 	assert.Equal(t, g.Cell(geom.Pt(1, 3)).Index(), geom.Pt(1, 3))
 }
 
+func TestCell_Size(t *testing.T) {
+	g := NewRect[int](geom.Sz(5, 5), geom.Sz(32.0, 16.0))
+
+	geomtest.AssertSize(t, g.Cell(geom.Pt(1, 3)).Size(), g.CellSize())
+}
+
 func TestCell_Center(t *testing.T) {
 	g := NewRect[int](geom.Sz(5, 5), geom.Sz(32.0, 32.0))
 
 	geomtest.AssertPoint(t, g.Cell(geom.Pt(0, 0)).Center(), geom.Pt(16.0, 16.0))
 }
 
-func TestCell_Neighbors(t *testing.T) {
-	cardinal := NewRect[int](geom.Sz(5, 5), geom.Sz(32.0, 32.0))
-	diagonal := NewRect[int](geom.Sz(5, 5), geom.Sz(32.0, 32.0), withDiagonalMovement)
+func TestCell_Bounds(t *testing.T) {
+	g := NewRect[int](geom.Sz(5, 5), geom.Sz(32.0, 32.0))
 
-	t.Run("cardinal", func(t *testing.T) {
-		t.Run("center", func(t *testing.T) {
-			assert.Length(t, cardinal.Cell(geom.Pt(2, 2)).Neighbors(), 4)
+	geomtest.AssertBox(t, g.Cell(geom.Pt(1, 2)).Bounds(), geom.Box[float64]{Min: geom.Pt(32.0, 64.0), Max: geom.Pt(64.0, 96.0)})
+}
+
+func TestCell_Polygon(t *testing.T) {
+	for name, g := range layoutGrids() {
+		t.Run(name, func(t *testing.T) {
+			cell := g.Cell(geom.Pt(2, 3))
+
+			t.Run("is centered on the cell", func(t *testing.T) {
+				geomtest.AssertPoint(t, cell.Polygon().Center, cell.Center())
+			})
+			t.Run("has a vertex for every side", func(t *testing.T) {
+				assert.Equal(t, cell.Polygon().N, len(slices.Collect(cell.Polygon().Vertices())))
+			})
+			t.Run("fills the bounds of the cell", func(t *testing.T) {
+				geomtest.AssertBox(t, cell.Polygon().Bounds(), cell.Bounds())
+			})
 		})
-		t.Run("corner", func(t *testing.T) {
-			assert.Length(t, cardinal.Cell(geom.Pt(0, 0)).Neighbors(), 2)
-		})
-		t.Run("edge", func(t *testing.T) {
-			assert.Length(t, cardinal.Cell(geom.Pt(1, 0)).Neighbors(), 3)
-		})
+	}
+}
+
+func TestCell_Value(t *testing.T) {
+	g := NewRect[int](geom.Sz(5, 5), geom.Sz(32.0, 32.0))
+
+	t.Run("points into the grid", func(t *testing.T) {
+		*g.Cell(geom.Pt(1, 2)).Value() = 42
+
+		assert.Equal(t, *g.Cell(geom.Pt(1, 2)).Value(), 42)
 	})
-	t.Run("diagonal", func(t *testing.T) {
-		t.Run("center", func(t *testing.T) {
-			assert.Length(t, diagonal.Cell(geom.Pt(2, 2)).Neighbors(), 8)
-		})
-		t.Run("corner", func(t *testing.T) {
-			assert.Length(t, diagonal.Cell(geom.Pt(0, 0)).Neighbors(), 3)
-		})
+	t.Run("is nil outside the grid", func(t *testing.T) {
+		assert.Nil(t, g.Cell(geom.Pt(99, 99)).Value())
 	})
+}
+
+func TestCell_Set(t *testing.T) {
+	g := NewRect[int](geom.Sz(5, 5), geom.Sz(32.0, 32.0))
+
+	t.Run("stores the value", func(t *testing.T) {
+		g.Cell(geom.Pt(1, 2)).Set(42)
+
+		assert.Equal(t, *g.Cell(geom.Pt(1, 2)).Value(), 42)
+	})
+	t.Run("a write outside the grid does nothing", func(t *testing.T) {
+		g.Cell(geom.Pt(99, 99)).Set(7)
+
+		assert.Equal(t, *g.Cell(geom.Pt(1, 2)).Value(), 42)
+	})
+}
+
+func TestCell_Neighbors(t *testing.T) {
+	grids, center := rangeGrids()
+
+	for name, g := range grids {
+		for _, index := range []geom.Point[int]{center, geom.Pt(0, 0), geom.Pt(10, 3), geom.Pt(-1, 0)} {
+			assert.Equal(t, g.Cell(index).Neighbors(), g.Neighbors(index), name+" at "+index.String()+": ")
+		}
+	}
+}
+
+func TestCell_AppendNeighbors(t *testing.T) {
+	grids, center := rangeGrids()
+
+	for name, g := range grids {
+		assert.Equal(t, g.Cell(center).AppendNeighbors([]geom.Point[int]{geom.Pt(-9, -9)}), g.AppendNeighbors([]geom.Point[int]{geom.Pt(-9, -9)}, center), name+": ")
+	}
 }
 
 func TestCell_Range(t *testing.T) {
-	g := NewRect[int](geom.Sz(10, 10), geom.Sz(32.0, 32.0))
+	grids, center := rangeGrids()
+	open := func(cell Cell[int]) bool {
+		return cell.Index() != geom.Pt(5, 6)
+	}
 
-	assert.Length(t, g.Cell(geom.Pt(5, 5)).Range(1, nil), 5)
+	for name, g := range grids {
+		assert.True(t, g.Cell(center).Range(3, open).Equal(g.Range(center, 3, open)), name+": ")
+	}
 }
 
 func TestCell_DistanceTo(t *testing.T) {
-	g := NewRect[int](geom.Sz(10, 10), geom.Sz(32.0, 32.0))
+	grids, center := rangeGrids()
 
-	assert.Equal(t, g.Cell(geom.Pt(0, 0)).DistanceTo(geom.Pt(3, 4)), 7)
+	for name, g := range grids {
+		assert.Equal(t, g.Cell(center).DistanceTo(geom.Pt(1, 9)), g.Distance(center, geom.Pt(1, 9)), name+": ")
+	}
 }
 
 func TestCell_PathTo(t *testing.T) {
-	g := NewRect[int](geom.Sz(5, 5), geom.Sz(32.0, 32.0))
+	grids, center := rangeGrids()
+	open := func(cell Cell[int]) bool {
+		return cell.Index() != geom.Pt(5, 6)
+	}
 
-	assert.Length(t, g.Cell(geom.Pt(0, 0)).PathTo(geom.Pt(4, 0), nil, nil), 5)
+	for name, g := range grids {
+		assert.Equal(t, g.Cell(center).PathTo(geom.Pt(5, 9), open, nil), g.Path(center, geom.Pt(5, 9), open, nil), name+": ")
+	}
 }
 
-func TestCell_Valid(t *testing.T) {
+func TestCell_IsValid(t *testing.T) {
 	g := NewRect[int](geom.Sz(4, 4), geom.Sz(32.0, 32.0))
 
-	t.Run("in bounds", func(t *testing.T) {
-		assert.True(t, g.Cell(geom.Pt(0, 0)).Valid())
-		assert.True(t, g.Cell(geom.Pt(3, 3)).Valid())
+	t.Run("a cell of the grid is valid", func(t *testing.T) {
+		assert.True(t, g.Cell(geom.Pt(0, 0)).IsValid())
+		assert.True(t, g.Cell(geom.Pt(3, 3)).IsValid())
 	})
-	t.Run("out of bounds", func(t *testing.T) {
-		assert.False(t, g.Cell(geom.Pt(10, 10)).Valid())
+	t.Run("a cell outside it is not", func(t *testing.T) {
+		assert.False(t, g.Cell(geom.Pt(4, 0)).IsValid())
+		assert.False(t, g.Cell(geom.Pt(0, -1)).IsValid())
 	})
 }
