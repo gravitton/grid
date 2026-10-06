@@ -16,8 +16,9 @@ const (
 	// MovementDiagonal connects all eight neighbors, adding the four corner diagonals.
 	MovementDiagonal
 
-	// MovementNone is the absence of a movement. It names no neighbors, so Directions, Has and
-	// DistanceTo have nothing to answer for it and panic.
+	// MovementNone is the absence of a movement. It names no neighbors, so Directions and
+	// Offsets are nil and Contains is false for every direction. DistanceTo alone has no answer
+	// for it and panics.
 	MovementNone Movement = -1
 )
 
@@ -44,8 +45,7 @@ func ParseMovement(name string) (Movement, error) {
 }
 
 // Directions returns the neighbor directions of the movement, ordered by increasing angle
-// from [geom.DirectionRight]. It panics for a movement outside the constants, as Has and
-// DistanceTo do.
+// from [geom.DirectionRight], and nil for a movement outside the constants.
 func (m Movement) Directions() []geom.Direction {
 	switch m {
 	case MovementCardinal:
@@ -57,21 +57,25 @@ func (m Movement) Directions() []geom.Direction {
 
 		return directions[:]
 	default:
-		panic(fmt.Sprintf("grid: unknown movement %d", m))
+		return nil
 	}
 }
 
-// Offsets returns the lattice step of every neighbor direction of the movement,
-// in the same order as [Movement.Directions].
+// Offsets returns the lattice step of every neighbor direction of the movement, in the same
+// order as [Movement.Directions], and nil for a movement outside the constants.
 func (m Movement) Offsets() []geom.Vector[int] {
-	directions := m.Directions()
+	switch m {
+	case MovementCardinal:
+		offsets := geom.CardinalOffsets[int]()
 
-	offsets := make([]geom.Vector[int], len(directions))
-	for i, direction := range directions {
-		offsets[i] = direction.Offset[int]()
+		return offsets[:]
+	case MovementDiagonal:
+		offsets := geom.DirectionOffsets[int]()
+
+		return offsets[:]
+	default:
+		return nil
 	}
-
-	return offsets
 }
 
 // Offset returns the lattice step of the direction, or the zero vector when the direction
@@ -84,21 +88,22 @@ func (m Movement) Offset(direction geom.Direction) geom.Vector[int] {
 	return direction.Offset[int]()
 }
 
-// neighborCount returns the number of neighbors of an index under the movement, and panics for
-// a movement outside the constants, as Directions does.
-func (m Movement) neighborCount() int {
+// neighborsLen returns the number of neighbors of an index under the movement, the length of
+// Directions, Offsets and Point.Neighbors, and zero for a movement outside the constants.
+func (m Movement) neighborsLen() int {
 	switch m {
 	case MovementCardinal:
 		return 4
 	case MovementDiagonal:
 		return 8
 	default:
-		panic(fmt.Sprintf("grid: unknown movement %d", m))
+		return 0
 	}
 }
 
 // DistanceTo returns the grid distance between two indices.
 // MovementCardinal uses Manhattan distance; MovementDiagonal uses Chebyshev distance.
+// It panics for a movement outside the constants, under which no index is reached from another.
 func (m Movement) DistanceTo(from, to geom.Point[int]) int {
 	switch m {
 	case MovementCardinal:
@@ -106,11 +111,12 @@ func (m Movement) DistanceTo(from, to geom.Point[int]) int {
 	case MovementDiagonal:
 		return from.ChebyshevDistanceTo(to)
 	default:
-		panic(fmt.Sprintf("grid: unknown movement %d", m))
+		panic(m.unknown())
 	}
 }
 
 // Contains reports whether the direction is one of the neighbor directions of the movement.
+// It is false for a movement outside the constants.
 func (m Movement) Contains(direction geom.Direction) bool {
 	switch m {
 	case MovementCardinal:
@@ -118,7 +124,7 @@ func (m Movement) Contains(direction geom.Direction) bool {
 	case MovementDiagonal:
 		return !direction.IsNone()
 	default:
-		panic(fmt.Sprintf("grid: unknown movement %d", m))
+		return false
 	}
 }
 
@@ -127,6 +133,12 @@ func (m Movement) Contains(direction geom.Direction) bool {
 // MovementNone.
 func (m Movement) IsNone() bool {
 	return m != MovementCardinal && m != MovementDiagonal
+}
+
+// unknown returns what a method with no answer for a movement outside the constants panics
+// with.
+func (m Movement) unknown() string {
+	return fmt.Sprintf("grid: unknown movement %d", m)
 }
 
 // String returns the name of the movement constant.
