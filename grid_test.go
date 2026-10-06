@@ -660,14 +660,14 @@ func ExampleGrid_Range() {
 	index := geom.Pt(2, 2)
 
 	fmt.Println(g.Distance(index, geom.Pt(4, 3)))
-	fmt.Println(g.Range(index, 1, nil))
-	fmt.Println(g.Range(index, 2, walkable))
+	fmt.Println(g.Range(index, 1, nil).Elements())
+	fmt.Println(g.Range(index, 2, walkable).Elements())
 	fmt.Println(g.Cell(index).Range(2, walkable).Equal(g.Range(index, 2, walkable)))
 	fmt.Println(g.Range(geom.Pt(2, 1), 2, walkable).IsEmpty())
 	// Output:
 	// 3
-	// Reg((1,2);(2,1);(2,2);(2,3);(3,2))
-	// Reg((0,2);(1,1);(1,2);(1,3);(2,2);(2,3);(2,4);(3,1);(3,2);(3,3);(4,2))
+	// [(1,2) (2,1) (2,2) (2,3) (3,2)]
+	// [(0,2) (1,1) (1,2) (1,3) (2,2) (2,3) (2,4) (3,1) (3,2) (3,3) (4,2)]
 	// true
 	// true
 }

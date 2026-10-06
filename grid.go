@@ -165,7 +165,7 @@ func (g *Grid[T]) Range(index geom.Point[int], radius int, passable func(Cell[T]
 		return Region{}
 	}
 
-	return setOfSorted(g.appendRange(make([]geom.Point[int], 0, g.topology.rangeLen(radius)), index, radius, passable))
+	return Region{g.appendRange(make([]geom.Point[int], 0, g.topology.rangeLen(radius)), index, radius, passable)}
 }
 
 // AppendRange appends the indices of the cells Range returns to dst, in no order to rely on,
