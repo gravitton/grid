@@ -1,6 +1,8 @@
 package grid
 
 import (
+	"strconv"
+
 	geom "github.com/gravitton/geometry"
 )
 
@@ -91,4 +93,16 @@ func (c Cell[T]) PathTo(to geom.Point[int], passable func(Cell[T]) bool, cost fu
 // IsValid reports whether the cell is one of the grid, as [Grid.Contains] does for its index.
 func (c Cell[T]) IsValid() bool {
 	return c.grid.Contains(c.index)
+}
+
+// String returns the cell as the call that gives it, Cell and its index.
+func (c Cell[T]) String() string {
+	buf := make([]byte, 0, stringSize)
+	buf = append(buf, "Cell("...)
+	buf = strconv.AppendInt(buf, int64(c.index.X), 10)
+	buf = append(buf, ',')
+	buf = strconv.AppendInt(buf, int64(c.index.Y), 10)
+	buf = append(buf, ')')
+
+	return string(buf)
 }

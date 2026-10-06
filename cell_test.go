@@ -139,3 +139,34 @@ func TestCell_IsValid(t *testing.T) {
 		assert.False(t, g.Cell(geom.Pt(0, -1)).IsValid())
 	})
 }
+
+func TestCell_String(t *testing.T) {
+	g := NewRect[int](geom.Sz(4, 4), geom.Sz(32.0, 32.0))
+
+	t.Run("is the call that gives it", func(t *testing.T) {
+		assert.Equal(t, g.Cell(geom.Pt(1, 3)).String(), "Cell(1,3)")
+	})
+	t.Run("a cell outside the grid prints the same way", func(t *testing.T) {
+		assert.Equal(t, g.Cell(geom.Pt(-2, 9)).String(), "Cell(-2,9)")
+	})
+	t.Run("is Cell and its index as geom prints it", func(t *testing.T) {
+		for cell := range g.All() {
+			assert.Equal(t, cell.String(), "Cell"+cell.Index().String(), cell.Index().String()+": ")
+		}
+	})
+	t.Run("allocates once", func(t *testing.T) {
+		cell := g.Cell(geom.Pt(1, 3))
+
+		assert.Equal(t, testing.AllocsPerRun(10, func() {
+			sinkString = cell.String()
+		}), 1.0)
+	})
+}
+
+func BenchmarkCell_String(b *testing.B) {
+	cell := NewRect[int](geom.Sz(4, 4), geom.Sz(32.0, 32.0)).Cell(geom.Pt(1, 3))
+
+	for b.Loop() {
+		sinkString = cell.String()
+	}
+}
