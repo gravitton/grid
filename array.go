@@ -1,6 +1,7 @@
 package grid
 
 import (
+	"encoding/json"
 	"fmt"
 	"iter"
 
@@ -136,4 +137,39 @@ func (a Array[T]) outside(index geom.Point[int]) string {
 // Contains reports whether the index is inside the array: a column and a row it has.
 func (a Array[T]) Contains(index geom.Point[int]) bool {
 	return index.X >= 0 && index.X < a.size.Width && index.Y >= 0 && index.Y < a.size.Height
+}
+
+// MarshalJSON implements json.Marshaler with the size of the array, flat as a [geom.Size]
+// writes it, and its values row by row. The zero value writes null for its values, an array
+// made by Arr an empty array.
+func (a Array[T]) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Size   geom.Size[int] `json:",embed"`
+		Values []T            `json:"d"`
+	}{a.size, a.data})
+}
+
+// UnmarshalJSON implements json.Unmarshaler. It returns an error for a negative width or height
+// and for a number of values other than the width times the height.
+func (a *Array[T]) UnmarshalJSON(data []byte) error {
+	var decoded struct {
+		Size   geom.Size[int] `json:",embed"`
+		Values []T            `json:"d"`
+	}
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+
+	size := decoded.Size
+	if size.Width < 0 || size.Height < 0 {
+		return fmt.Errorf("grid: array of negative size %s", size)
+	}
+
+	if len(decoded.Values) != size.Width*size.Height {
+		return fmt.Errorf("grid: array of size %s with %d values", size, len(decoded.Values))
+	}
+
+	*a = Array[T]{size, decoded.Values}
+
+	return nil
 }
