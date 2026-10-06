@@ -7,68 +7,78 @@ import (
 	geom "github.com/gravitton/geometry"
 )
 
-// Array is a 2D array.
+// Array is a table of values of type T, one for every index of a size in columns and rows,
+// stored row by row. It is the storage under a [Grid] and serves alone where a table needs no
+// layout. Like a slice it is a handle: a copy of an Array shares its values, and Clone is what
+// gives storage of its own. The zero value is the empty array.
 type Array[T any] struct {
 	size geom.Size[int]
 	data []T
 }
 
-// Arr makes a new Array from Size.
+// Arr returns an array of the given size, every value zero. It panics for a negative width or
+// height.
 func Arr[T any](size geom.Size[int]) Array[T] {
-	return Array[T]{size, make([]T, size.Area())}
+	if size.Width < 0 || size.Height < 0 {
+		panic(fmt.Sprintf("grid: array of negative size %s", size))
+	}
+
+	return Array[T]{size, make([]T, size.Width*size.Height)}
 }
 
-// Size returns Array size.
+// Size returns the number of columns and rows of the array.
 func (a Array[T]) Size() geom.Size[int] {
 	return a.size
 }
 
-// Width returns Array width.
+// Width returns the number of columns of the array.
 func (a Array[T]) Width() int {
 	return a.size.Width
 }
 
-// Height returns Array height.
+// Height returns the number of rows of the array.
 func (a Array[T]) Height() int {
 	return a.size.Height
 }
 
-// Len returns Array length.
+// Len returns the number of values of the array, its width times its height.
 func (a Array[T]) Len() int {
 	return len(a.data)
 }
 
-// Get returns a pointer to the value at index. Panics if index is out of bounds.
+// Get returns a pointer to the value at index, into the array. It panics for an index outside
+// the array.
 func (a Array[T]) Get(index geom.Point[int]) *T {
-	if !a.valid(index) {
+	if !a.Contains(index) {
 		panic(a.outside(index))
 	}
 
 	return a.at(index)
 }
 
-// Set stores value at index. Panics if index is out of bounds.
+// Set stores value at index. It panics for an index outside the array.
 func (a Array[T]) Set(index geom.Point[int], value T) {
-	if !a.valid(index) {
+	if !a.Contains(index) {
 		panic(a.outside(index))
 	}
 
 	*a.at(index) = value
 }
 
-// Fill sets every element to value.
+// Fill sets every value of the array to value.
 func (a Array[T]) Fill(value T) {
 	for i := range a.data {
 		a.data[i] = value
 	}
 }
 
-// Clear resets every element to the zero value.
+// Clear resets every value of the array to the zero value.
 func (a Array[T]) Clear() {
 	clear(a.data)
 }
 
-// Clone returns a deep copy of the array.
+// Clone returns a copy of the array with storage of its own: the same values, copied as an
+// assignment copies them, so a write to one array leaves the other alone.
 func (a Array[T]) Clone() Array[T] {
 	data := make([]T, len(a.data))
 	copy(data, a.data)
@@ -76,7 +86,7 @@ func (a Array[T]) Clone() Array[T] {
 	return Array[T]{a.size, data}
 }
 
-// Keys returns iterator over all points.
+// Keys returns an iterator over every index of the array, row by row.
 func (a Array[T]) Keys() iter.Seq[geom.Point[int]] {
 	return func(yield func(geom.Point[int]) bool) {
 		for y := range a.Height() {
@@ -89,7 +99,8 @@ func (a Array[T]) Keys() iter.Seq[geom.Point[int]] {
 	}
 }
 
-// Values returns an iterator over all values.
+// Values returns an iterator over a pointer to every value, into the array, in the order of
+// Keys.
 func (a Array[T]) Values() iter.Seq[*T] {
 	return func(yield func(*T) bool) {
 		for i := range a.data {
@@ -100,33 +111,29 @@ func (a Array[T]) Values() iter.Seq[*T] {
 	}
 }
 
-// All returns an iterator over all (point, value) pairs.
+// All returns an iterator over every index with a pointer to its value, into the array, in the
+// order of Keys.
 func (a Array[T]) All() iter.Seq2[geom.Point[int], *T] {
 	return func(yield func(geom.Point[int], *T) bool) {
-		for pt := range a.Keys() {
-			if !yield(pt, a.at(pt)) {
+		for index := range a.Keys() {
+			if !yield(index, a.at(index)) {
 				return
 			}
 		}
 	}
 }
 
-// at returns a pointer to the value at an index the caller knows to be valid.
+// at returns a pointer to the value at an index the caller knows to be inside the array.
 func (a Array[T]) at(index geom.Point[int]) *T {
 	return &a.data[index.X+index.Y*a.size.Width]
 }
 
-// outside returns the panic message for an index outside the array. The formatting is kept out
-// of Get and Set so they stay small enough to inline.
+// outside returns the panic message Get and Set share for an index outside the array.
 func (a Array[T]) outside(index geom.Point[int]) string {
 	return fmt.Sprintf("grid: index %s outside array of size %s", index, a.size)
 }
 
-// Contains reports whether the index is within bounds.
+// Contains reports whether the index is inside the array: a column and a row it has.
 func (a Array[T]) Contains(index geom.Point[int]) bool {
-	return a.valid(index)
-}
-
-func (a Array[T]) valid(index geom.Point[int]) bool {
-	return index.X >= 0 && index.X < a.Width() && index.Y >= 0 && index.Y < a.Height()
+	return index.X >= 0 && index.X < a.size.Width && index.Y >= 0 && index.Y < a.size.Height
 }
