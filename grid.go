@@ -14,7 +14,6 @@ type Grid[T any] struct {
 	cells    Array[T]
 	layout   Layout
 	topology topology
-	bounds   geom.Box[float64]
 }
 
 // newGrid returns a grid stored for the size of the layout, with the neighbor rule of its kind
@@ -24,7 +23,6 @@ func newGrid[T any](layout Layout, topology topology) *Grid[T] {
 		cells:    Arr[T](layout.Size()),
 		layout:   layout,
 		topology: topology,
-		bounds:   layout.Bounds(),
 	}
 }
 
@@ -52,7 +50,7 @@ func (g *Grid[T]) Layout() Layout {
 
 // Bounds returns the box around every cell of the grid, in world coordinates.
 func (g *Grid[T]) Bounds() geom.Box[float64] {
-	return g.bounds
+	return g.layout.Bounds()
 }
 
 // CellSize returns the size of a cell as drawn: the width and height of the box around it,

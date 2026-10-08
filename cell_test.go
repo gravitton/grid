@@ -28,9 +28,50 @@ func TestCell_Center(t *testing.T) {
 }
 
 func TestCell_Bounds(t *testing.T) {
-	g := NewRect[int](geom.Sz(5, 5), geom.Sz(32.0, 32.0))
+	awkward := testGrids(geom.Sz(6, 5), geom.Sz(8.48, 89.09), geom.Pt(-816.19, 732.64))
 
-	geomtest.AssertBox(t, g.Cell(geom.Pt(1, 2)).Bounds(), geom.Box[float64]{Min: geom.Pt(32.0, 64.0), Max: geom.Pt(64.0, 96.0)})
+	t.Run("a square spans its column and row", func(t *testing.T) {
+		g := NewRect[int](geom.Sz(5, 5), geom.Sz(32.0, 32.0))
+
+		geomtest.AssertBox(t, g.Cell(geom.Pt(1, 2)).Bounds(), geom.Box[float64]{Min: geom.Pt(32.0, 64.0), Max: geom.Pt(64.0, 96.0)})
+	})
+	t.Run("is centered on the cell at its size", func(t *testing.T) {
+		for name, g := range awkward {
+			for cell := range g.All() {
+				geomtest.AssertPoint(t, cell.Bounds().Center(), cell.Center(), name+" "+cell.Index().String()+": ")
+				geomtest.AssertSize(t, cell.Bounds().Size(), cell.Size(), name+" "+cell.Index().String()+": ")
+			}
+		}
+	})
+	t.Run("neighboring squares meet in the same numbers", func(t *testing.T) {
+		g := awkward["rectangular"]
+
+		for cell := range g.All() {
+			right := g.Cell(cell.Index().AddXY(1, 0)).Bounds()
+			below := g.Cell(cell.Index().AddXY(0, 1)).Bounds()
+
+			assert.Equal(t, right.Min.X, cell.Bounds().Max.X, cell.Index().String()+": ")
+			assert.Equal(t, below.Min.Y, cell.Bounds().Max.Y, cell.Index().String()+": ")
+		}
+	})
+	t.Run("the box around every cell is the bounds of the grid to the bit", func(t *testing.T) {
+		for name, g := range awkward {
+			around := g.Cell(geom.Pt(0, 0)).Bounds()
+			for cell := range g.All() {
+				around = around.Union(cell.Bounds())
+			}
+
+			assert.Equal(t, around, g.Bounds(), name+": ")
+		}
+	})
+	t.Run("allocates nothing", func(t *testing.T) {
+		cell := awkward["flat-top"].Cell(geom.Pt(2, 3))
+		allocs := testing.AllocsPerRun(100, func() {
+			sinkBox = cell.Bounds()
+		})
+
+		assert.Equal(t, allocs, 0.0)
+	})
 }
 
 func TestCell_Polygon(t *testing.T) {

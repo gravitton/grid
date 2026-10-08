@@ -21,6 +21,30 @@ func layoutGrids() map[string]*Grid[int] {
 	}
 }
 
+// testGrids returns one grid of each kind and offset, of the given size in cells, at the given
+// origin.
+func testGrids(size geom.Size[int], cellSize geom.Size[float64], origin geom.Point[float64]) map[string]*Grid[int] {
+	rect := func(options *RectOptions) {
+		options.Origin = origin
+	}
+	odd := func(options *HexOptions) {
+		options.Origin = origin
+	}
+	even := func(options *HexOptions) {
+		options.Origin = origin
+		options.EvenOffset = true
+	}
+
+	return map[string]*Grid[int]{
+		"rectangular":     NewRect[int](size, cellSize, rect),
+		"isometric":       NewIsometric[int](size, cellSize, rect),
+		"flat-top":        NewHexFlatTop[int](size, cellSize, odd),
+		"flat-top even":   NewHexFlatTop[int](size, cellSize, even),
+		"pointy-top":      NewHexPointyTop[int](size, cellSize, odd),
+		"pointy-top even": NewHexPointyTop[int](size, cellSize, even),
+	}
+}
+
 func TestGrid_Size(t *testing.T) {
 	g := NewRect[int](geom.Sz(10, 5), geom.Sz(32.0, 32.0))
 
@@ -52,7 +76,8 @@ func TestGrid_Layout(t *testing.T) {
 	t.Run("moving the copy leaves the grid where it is", func(t *testing.T) {
 		moved := g.Layout().MoveTo(geom.Pt(500.0, 500.0))
 
-		geomtest.AssertPoint(t, moved.ToPoint(geom.Pt(0, 0)), geom.Pt(500.0, 500.0))
+		geomtest.AssertPoint(t, moved.Bounds().Min, geom.Pt(500.0, 500.0))
+		geomtest.AssertPoint(t, moved.ToPoint(geom.Pt(0, 0)), geom.Pt(532.0, 516.0))
 		geomtest.AssertPoint(t, g.Cell(geom.Pt(0, 0)).Center(), geom.Pt(32.0, 16.0))
 	})
 }

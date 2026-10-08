@@ -33,7 +33,7 @@ func (c Cell[T]) Center() geom.Point[float64] {
 
 // Bounds returns the box around the cell as drawn, in world coordinates.
 func (c Cell[T]) Bounds() geom.Box[float64] {
-	return geom.Rect(c.Center(), c.Size()).Bounds()
+	return c.grid.layout.cellBox(c.index)
 }
 
 // Polygon returns the shape of the cell in world coordinates: a square, a diamond or a
