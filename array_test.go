@@ -45,6 +45,11 @@ func TestArray_Constructor(t *testing.T) {
 			Arr[int](geom.Sz(-2, -3))
 		}, "grid: array of negative size -2x-3")
 	})
+	t.Run("panics for a size of more values than an int counts", func(t *testing.T) {
+		assert.PanicsWith(t, func() {
+			Arr[int](geom.Sz(1<<32, 1<<32))
+		}, "grid: array of size 4294967296x4294967296 is too large")
+	})
 	t.Run("the zero value is the empty array", func(t *testing.T) {
 		var zero Array[int]
 
@@ -414,6 +419,11 @@ func TestArray_JSON(t *testing.T) {
 
 		assert.ErrorContains(t, json.Unmarshal([]byte(`{"w":-1,"h":2,"d":[]}`), &decoded), "grid: array of negative size -1x2")
 		assert.ErrorContains(t, json.Unmarshal([]byte(`{"w":-2,"h":-3,"d":[1,2,3,4,5,6]}`), &decoded), "grid: array of negative size -2x-3")
+	})
+	t.Run("rejects a size of more values than an int counts", func(t *testing.T) {
+		var decoded Array[int]
+
+		assert.ErrorContains(t, json.Unmarshal([]byte(`{"w":4294967296,"h":4294967296,"d":[]}`), &decoded), "grid: array of size 4294967296x4294967296 is too large")
 	})
 	t.Run("rejects what is not an array", func(t *testing.T) {
 		var decoded Array[int]

@@ -115,13 +115,13 @@ func (g *Grid[T]) appendNeighbors(dst []geom.Point[int], index geom.Point[int]) 
 // is not passable is left out and hides what lies behind it. A nil passable admits every cell.
 // It is empty for a negative radius, and for an index that is outside the grid or not passable
 // itself: nothing is seen from where nothing can stand. A radius beyond the grid costs no more
-// than one that reaches its far corner.
+// than one that reaches the cell farthest from index.
 func (g *Grid[T]) Range(index geom.Point[int], radius int, passable func(Cell[T]) bool) Region {
 	if radius < 0 || !g.passes(index, passable) {
 		return Region{}
 	}
 
-	radius = g.reach(radius)
+	radius = g.farthest(index, radius)
 
 	return Region{g.appendRange(make([]geom.Point[int], 0, g.topology.rangeLen(radius)), index, radius, passable)}
 }
@@ -133,7 +133,7 @@ func (g *Grid[T]) AppendRange(dst []geom.Point[int], index geom.Point[int], radi
 		return dst
 	}
 
-	return g.appendRange(dst, index, g.reach(radius), passable)
+	return g.appendRange(dst, index, g.farthest(index, radius), passable)
 }
 
 // appendRange appends the indices in range of an index the caller knows to pass. It asks
@@ -196,7 +196,7 @@ func (g *Grid[T]) walkRange(index geom.Point[int], radius int, passable func(Cel
 		return true
 	}
 
-	radius = g.reach(radius)
+	radius = g.farthest(index, radius)
 
 	for _, found := range g.appendRange(make([]geom.Point[int], 0, g.topology.rangeLen(radius)), index, radius, passable) {
 		if !yield(found) {
@@ -207,12 +207,19 @@ func (g *Grid[T]) walkRange(index geom.Point[int], radius int, passable func(Cel
 	return true
 }
 
-// reach returns the radius cut to the number of steps no two cells of the grid are further
-// apart than under any neighbor rule, a column and a row a step each. A range gathers every
-// index within its radius before it asks which lie in the grid, so one that reached further
-// would cost the square of the radius for the same cells.
-func (g *Grid[T]) reach(radius int) int {
-	return min(radius, g.Width()+g.Height())
+// farthest returns the radius cut to the number of steps from the index to the cell of the
+// grid farthest from it, which is one of its four corners under every neighbor rule. A range
+// gathers every index within its radius before it asks which lie in the grid, so one that
+// reached further would cost the square of the radius for the same cells.
+func (g *Grid[T]) farthest(index geom.Point[int], radius int) int {
+	right, bottom := g.Width()-1, g.Height()-1
+
+	return min(radius, max(
+		g.topology.distance(index, geom.Pt(0, 0)),
+		g.topology.distance(index, geom.Pt(right, 0)),
+		g.topology.distance(index, geom.Pt(0, bottom)),
+		g.topology.distance(index, geom.Pt(right, bottom)),
+	))
 }
 
 // passes reports whether the index is inside the grid and its cell passable.

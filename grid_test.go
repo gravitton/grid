@@ -384,8 +384,21 @@ func TestGrid_Range(t *testing.T) {
 		for name, g := range grids {
 			across := g.Width() + g.Height()
 
-			for _, radius := range []int{across, across + 1, 1 << 40, math.MaxInt} {
+			for _, radius := range []int{across, 1 << 40, math.MaxInt} {
 				assert.Equal(t, g.Range(geom.Pt(0, 0), radius, nil).Len(), g.Width()*g.Height(), name+" "+strconv.Itoa(radius)+": ")
+			}
+		}
+	})
+	t.Run("the farthest cell is in a range of any radius beyond it, from every cell of a small grid", func(t *testing.T) {
+		for size := range Arr[int](geom.Sz(7, 7)).Keys() {
+			size := geom.Sz(size.X+1, size.Y+1)
+			small := testGrids(size, geom.Sz(32.0, 20.0), geom.Pt(0.0, 0.0))
+			small["diagonal"] = NewRect[int](size, geom.Sz(32.0, 32.0), withDiagonalMovement)
+
+			for name, g := range small {
+				for cell := range g.All() {
+					assert.Equal(t, cell.Range(math.MaxInt, nil).Len(), g.Width()*g.Height(), name+" "+size.String()+" from "+cell.Index().String()+": ")
+				}
 			}
 		}
 	})

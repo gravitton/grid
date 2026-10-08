@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"iter"
+	"math"
 
 	geom "github.com/gravitton/geometry"
 )
@@ -18,13 +19,27 @@ type Array[T any] struct {
 }
 
 // Arr returns an array of the given size, every value zero. It panics for a negative width or
-// height.
+// height, and for a size of more values than an int counts.
 func Arr[T any](size geom.Size[int]) Array[T] {
-	if size.Width < 0 || size.Height < 0 {
-		panic(fmt.Sprintf("grid: array of negative size %s", size))
+	if err := validateSize(size); err != nil {
+		panic(err.Error())
 	}
 
 	return Array[T]{size, make([]T, size.Width*size.Height)}
+}
+
+// validateSize returns the error of a size no array has: a negative width or height, or a
+// width and a height whose product is past the largest int and would wrap to a length that is
+// not theirs.
+func validateSize(size geom.Size[int]) error {
+	if size.Width < 0 || size.Height < 0 {
+		return fmt.Errorf("grid: array of negative size %s", size)
+	}
+	if size.Height != 0 && size.Width > math.MaxInt/size.Height {
+		return fmt.Errorf("grid: array of size %s is too large", size)
+	}
+
+	return nil
 }
 
 // Size returns the number of columns and rows of the array.
@@ -161,8 +176,8 @@ func (a *Array[T]) UnmarshalJSON(data []byte) error {
 	}
 
 	size := decoded.Size
-	if size.Width < 0 || size.Height < 0 {
-		return fmt.Errorf("grid: array of negative size %s", size)
+	if err := validateSize(size); err != nil {
+		return err
 	}
 
 	if len(decoded.Values) != size.Width*size.Height {

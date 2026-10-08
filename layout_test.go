@@ -485,6 +485,23 @@ func TestGrid_MoveTo(t *testing.T) {
 			}
 		})
 	}
+	t.Run("panics for an origin so far that a cell is lost between two floats", func(t *testing.T) {
+		far := geom.Pt(1e18, 50.0)
+
+		for _, g := range testGrids(geom.Sz(6, 5), geom.Sz(32.0, 20.0), start) {
+			assert.PanicsWith(t, func() {
+				g.MoveTo(far)
+			}, "grid: grid cannot be laid out at origin "+far.String())
+		}
+	})
+	t.Run("a failed move leaves the grid where it was", func(t *testing.T) {
+		g := NewRect[int](geom.Sz(6, 5), geom.Sz(32.0, 20.0))
+
+		assert.Panics(t, func() {
+			g.MoveTo(geom.Pt(1e18, 50.0))
+		})
+		assert.Equal(t, g.Bounds().Min, geom.Pt(0.0, 0.0))
+	})
 	t.Run("panics for an origin the far corner is past the largest number at", func(t *testing.T) {
 		far := geom.Pt(math.MaxFloat64, 50.0)
 
@@ -581,6 +598,31 @@ func TestGrid_Resize(t *testing.T) {
 		g.Resize(scale)
 
 		geomtest.AssertSize(t, clone.CellSize(), geom.Sz(64.0, 32.0))
+	})
+	t.Run("panics for a size too small to tell cells apart where the grid is", func(t *testing.T) {
+		tiny := geom.Sz(1e-20, 1e-20)
+
+		for _, g := range testGrids(geom.Sz(6, 5), geom.Sz(64.0, 32.0), geom.Pt(1e6, 1e6)) {
+			assert.PanicsWith(t, func() {
+				g.Resize(tiny)
+			}, "grid: cell of size "+tiny.String()+" cannot be laid out")
+		}
+	})
+	t.Run("panics for a cell that is not finite on a grid of no cells", func(t *testing.T) {
+		huge := geom.Sz(1e308, 1e308)
+		g := NewHexFlatTop[int](geom.Sz(0, 0), geom.Sz(32.0, 32.0))
+
+		assert.PanicsWith(t, func() {
+			g.Resize(huge)
+		}, "grid: cell of size "+huge.String()+" cannot be laid out")
+	})
+	t.Run("a failed resize leaves the grid as it was", func(t *testing.T) {
+		g := grids()["rectangular"]
+
+		assert.Panics(t, func() {
+			g.Resize(geom.Sz(-1.0, 2.0))
+		})
+		geomtest.AssertSize(t, g.CellSize(), geom.Sz(64.0, 32.0))
 	})
 	t.Run("panics for a size too small to halve", func(t *testing.T) {
 		smallest := geom.Sz(math.SmallestNonzeroFloat64, 32.0)

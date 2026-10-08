@@ -52,7 +52,8 @@ func (g *Grid[T]) CellAt(point geom.Point[float64]) Cell[T] {
 
 // MoveTo places the top-left corner of the bounds of the grid at origin. Every cell keeps its
 // value and its size. It panics for an origin with a NaN or infinite coordinate, and for one
-// so far that the grid would reach past the largest number.
+// so far that the grid would reach past the largest number or its cells could not be told
+// apart.
 func (g *Grid[T]) MoveTo(origin geom.Point[float64]) {
 	g.layout = g.layout.moveTo(origin)
 }
@@ -60,8 +61,8 @@ func (g *Grid[T]) MoveTo(origin geom.Point[float64]) {
 // Resize replaces the scale the constructor of the grid took: the size of a square or
 // isometric cell, the circumradius per axis of a hexagon. The origin stays where it is and
 // every cell keeps its value. It panics for a scale that is not positive and finite on both
-// axes, for one so small that a step of its lattice is nothing, and for one so large that the
-// grid would reach past the largest number.
+// axes, for one so small that its cells could not be told apart where the grid is, and for one
+// so large that the grid would reach past the largest number.
 func (g *Grid[T]) Resize(cellScale geom.Size[float64]) {
 	g.layout = g.layout.resize(cellScale)
 }
@@ -96,12 +97,13 @@ func newLayout(kind kind, size geom.Size[int], cellScale geom.Size[float64]) lay
 }
 
 // moveTo returns a copy of the layout with the top-left corner of its bounds at origin. It
-// panics for an origin the bounds are not finite at: one with a NaN or infinite coordinate, or
-// so far that the far corner is past the largest number.
+// panics for an origin the layout does not resolve at: one with a NaN or infinite coordinate,
+// or so far that the far corner is past the largest number or a step is lost in the gap
+// between two floats.
 func (l layout) moveTo(origin geom.Point[float64]) layout {
 	l.transform.origin = origin
 	l.bounds = geom.BoxFromMinMax(origin, l.transform.at(l.extent.Max))
-	if !l.bounds.Max.IsFinite() {
+	if !l.resolves() {
 		panic(fmt.Sprintf("grid: grid cannot be laid out at origin %s", origin))
 	}
 
@@ -109,9 +111,9 @@ func (l layout) moveTo(origin geom.Point[float64]) layout {
 }
 
 // resize returns a copy of the layout with the scale its constructor took replaced. The origin
-// stays where it is. It panics for a scale that is not positive and finite on both axes, for
-// one so small that a step of its lattice is nothing, and for one the cell or the bounds are
-// not finite at.
+// stays where it is. It panics for a scale the layout does not resolve at, one that is not
+// positive and finite on both axes or so small that a step of its lattice is nothing or is
+// lost at the origin, and for one the size of a cell is not finite at.
 func (l layout) resize(cellScale geom.Size[float64]) layout {
 	k := l.transform.kind
 
@@ -123,11 +125,24 @@ func (l layout) resize(cellScale geom.Size[float64]) layout {
 	l.cellSpacing = l.transform.span(k.spacing())
 	l.polygon = geom.RegularPolygonWithOrientation(geom.Point[float64]{}, k.radius().ScaleXY(cellScale.XY()), k.sides(), k.orientation())
 
-	if !step.IsPositive() || !l.cellSize.IsFinite() || !l.bounds.Max.IsFinite() {
+	if !l.resolves() || !l.cellSize.IsFinite() {
 		panic(fmt.Sprintf("grid: cell of size %s cannot be laid out", cellScale))
 	}
 
 	return l
+}
+
+// resolves reports whether the layout tells a step of its lattice from the next at both corners
+// of its bounds, on both axes: the first step in from each corner is a point strictly inside.
+// It is false for a step that is zero, negative or not a number, for an origin or a far corner
+// that is not finite, and for an origin so far that a step is less than the gap between two
+// floats there, where the cells would fall on one another.
+func (l layout) resolves() bool {
+	origin, corner := l.transform.origin, l.transform.at(l.extent.Max)
+	first := l.transform.at(l.extent.Min.AddXY(1, 1))
+	last := l.transform.at(l.extent.Max.AddXY(-1, -1))
+
+	return first.X > origin.X && first.Y > origin.Y && last.X < corner.X && last.Y < corner.Y
 }
 
 // kind is one of the layouts a grid is built in, a hexagonal one for each row or column that
