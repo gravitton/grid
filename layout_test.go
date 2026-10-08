@@ -481,10 +481,19 @@ func TestGrid_MoveTo(t *testing.T) {
 			for _, g := range before {
 				assert.PanicsWith(t, func() {
 					g.MoveTo(corner)
-				}, "grid: origin "+corner.String()+" is not finite")
+				}, "grid: grid cannot be laid out at origin "+corner.String())
 			}
 		})
 	}
+	t.Run("panics for an origin the far corner is past the largest number at", func(t *testing.T) {
+		far := geom.Pt(math.MaxFloat64, 50.0)
+
+		for _, g := range testGrids(geom.Sz(6, 5), geom.Sz(1e300, 1e300), start) {
+			assert.PanicsWith(t, func() {
+				g.MoveTo(far)
+			}, "grid: grid cannot be laid out at origin "+far.String())
+		}
+	})
 	t.Run("allocates nothing", func(t *testing.T) {
 		before, _ := moved()
 
@@ -581,10 +590,11 @@ func TestGrid_Resize(t *testing.T) {
 		}, "grid: cell of size "+smallest.String()+" cannot be laid out")
 	})
 	for name, bad := range map[string]geom.Size[float64]{
-		"zero":     geom.Sz(0.0, 32.0),
-		"negative": geom.Sz(32.0, -32.0),
-		"NaN":      geom.Sz(math.NaN(), 32.0),
-		"infinite": geom.Sz(32.0, math.Inf(1)),
+		"zero":      geom.Sz(0.0, 32.0),
+		"negative":  geom.Sz(32.0, -32.0),
+		"NaN":       geom.Sz(math.NaN(), 32.0),
+		"infinite":  geom.Sz(32.0, math.Inf(1)),
+		"too large": geom.Sz(math.MaxFloat64, 32.0),
 	} {
 		t.Run("panics for a "+name+" size", func(t *testing.T) {
 			for _, g := range grids() {

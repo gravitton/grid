@@ -266,6 +266,28 @@ func TestCell_Range(t *testing.T) {
 	}
 }
 
+func TestCell_AppendRange(t *testing.T) {
+	grids, center := rangeGrids()
+	open := func(cell Cell[int]) bool {
+		return cell.Index() != geom.Pt(5, 6)
+	}
+
+	for name, g := range grids {
+		assert.Equal(t, g.Cell(center).AppendRange([]geom.Point[int]{geom.Pt(-9, -9)}, 3, open), g.AppendRange([]geom.Point[int]{geom.Pt(-9, -9)}, center, 3, open), name+": ")
+	}
+}
+
+func TestCell_RangeSeq(t *testing.T) {
+	grids, center := rangeGrids()
+	open := func(cell Cell[int]) bool {
+		return cell.Index() != geom.Pt(5, 6)
+	}
+
+	for name, g := range grids {
+		assert.Equal(t, slices.Collect(g.Cell(center).RangeSeq(3, open)), slices.Collect(g.RangeSeq(center, 3, open)), name+": ")
+	}
+}
+
 func TestCell_DistanceTo(t *testing.T) {
 	grids, center := rangeGrids()
 

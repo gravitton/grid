@@ -51,7 +51,8 @@ func (g *Grid[T]) CellAt(point geom.Point[float64]) Cell[T] {
 }
 
 // MoveTo places the top-left corner of the bounds of the grid at origin. Every cell keeps its
-// value and its size. It panics for an origin with a NaN or infinite coordinate.
+// value and its size. It panics for an origin with a NaN or infinite coordinate, and for one
+// so far that the grid would reach past the largest number.
 func (g *Grid[T]) MoveTo(origin geom.Point[float64]) {
 	g.layout = g.layout.moveTo(origin)
 }
@@ -59,7 +60,8 @@ func (g *Grid[T]) MoveTo(origin geom.Point[float64]) {
 // Resize replaces the scale the constructor of the grid took: the size of a square or
 // isometric cell, the circumradius per axis of a hexagon. The origin stays where it is and
 // every cell keeps its value. It panics for a scale that is not positive and finite on both
-// axes, and for one so small that a step of its lattice is nothing.
+// axes, for one so small that a step of its lattice is nothing, and for one so large that the
+// grid would reach past the largest number.
 func (g *Grid[T]) Resize(cellScale geom.Size[float64]) {
 	g.layout = g.layout.resize(cellScale)
 }
@@ -78,8 +80,13 @@ type layout struct {
 }
 
 // newLayout returns the layout of a grid of the given size in cells of the given kind, with
-// the origin at the world origin. It panics for a cell scale resize panics for.
+// the origin at the world origin. It panics for a negative size, and for a cell scale resize
+// panics for.
 func newLayout(kind kind, size geom.Size[int], cellScale geom.Size[float64]) layout {
+	if size.Width < 0 || size.Height < 0 {
+		panic(fmt.Sprintf("grid: grid of negative size %s", size))
+	}
+
 	l := layout{
 		transform: transform{kind: kind},
 		extent:    kind.extent(size),
@@ -89,34 +96,36 @@ func newLayout(kind kind, size geom.Size[int], cellScale geom.Size[float64]) lay
 }
 
 // moveTo returns a copy of the layout with the top-left corner of its bounds at origin. It
-// panics for an origin with a NaN or infinite coordinate.
+// panics for an origin the bounds are not finite at: one with a NaN or infinite coordinate, or
+// so far that the far corner is past the largest number.
 func (l layout) moveTo(origin geom.Point[float64]) layout {
-	if !origin.IsFinite() {
-		panic(fmt.Sprintf("grid: origin %s is not finite", origin))
-	}
-
 	l.transform.origin = origin
 	l.bounds = geom.BoxFromMinMax(origin, l.transform.at(l.extent.Max))
+	if !l.bounds.Max.IsFinite() {
+		panic(fmt.Sprintf("grid: grid cannot be laid out at origin %s", origin))
+	}
 
 	return l
 }
 
 // resize returns a copy of the layout with the scale its constructor took replaced. The origin
-// stays where it is. It panics for a scale that is not positive and finite on both axes, and
-// for one so small that a step of its lattice is nothing.
+// stays where it is. It panics for a scale that is not positive and finite on both axes, for
+// one so small that a step of its lattice is nothing, and for one the cell or the bounds are
+// not finite at.
 func (l layout) resize(cellScale geom.Size[float64]) layout {
 	k := l.transform.kind
 
 	step := k.step().ScaleXY(cellScale.XY())
-	if !step.IsPositive() || !step.IsFinite() {
-		panic(fmt.Sprintf("grid: cell of size %s cannot be laid out", cellScale))
-	}
 
-	l.transform = transform{k, l.bounds.Min, l.extent.Min, step}
-	l.bounds = geom.BoxFromMinMax(l.bounds.Min, l.transform.at(l.extent.Max))
+	l.transform = transform{k, l.transform.origin, l.extent.Min, step}
+	l.bounds = geom.BoxFromMinMax(l.transform.origin, l.transform.at(l.extent.Max))
 	l.cellSize = l.transform.span(k.reach().Multiply(2))
 	l.cellSpacing = l.transform.span(k.spacing())
 	l.polygon = geom.RegularPolygonWithOrientation(geom.Point[float64]{}, k.radius().ScaleXY(cellScale.XY()), k.sides(), k.orientation())
+
+	if !step.IsPositive() || !l.cellSize.IsFinite() || !l.bounds.Max.IsFinite() {
+		panic(fmt.Sprintf("grid: cell of size %s cannot be laid out", cellScale))
+	}
 
 	return l
 }

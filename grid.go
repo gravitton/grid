@@ -9,7 +9,8 @@ import (
 // Grid holds a value of type T for every cell of a rectangular, isometric or hexagonal layout,
 // maps its cells to the world, and answers the neighbor, range and path queries between them.
 // An index is the column and row of a cell, on every layout. A grid is built by [NewRect],
-// [NewIsometric], [NewHexFlatTop] or [NewHexPointyTop].
+// [NewIsometric], [NewHexFlatTop] or [NewHexPointyTop]; the zero value is no grid, and its
+// methods are not to be called.
 type Grid[T any] struct {
 	cells    Array[T]
 	layout   layout
@@ -113,11 +114,14 @@ func (g *Grid[T]) appendNeighbors(dst []geom.Point[int], index geom.Point[int]) 
 // passable and in sight of it: what a unit there sees or a blast from there hits. A cell that
 // is not passable is left out and hides what lies behind it. A nil passable admits every cell.
 // It is empty for a negative radius, and for an index that is outside the grid or not passable
-// itself: nothing is seen from where nothing can stand.
+// itself: nothing is seen from where nothing can stand. A radius beyond the grid costs no more
+// than one that reaches its far corner.
 func (g *Grid[T]) Range(index geom.Point[int], radius int, passable func(Cell[T]) bool) Region {
 	if radius < 0 || !g.passes(index, passable) {
 		return Region{}
 	}
+
+	radius = g.reach(radius)
 
 	return Region{g.appendRange(make([]geom.Point[int], 0, g.topology.rangeLen(radius)), index, radius, passable)}
 }
@@ -129,7 +133,7 @@ func (g *Grid[T]) AppendRange(dst []geom.Point[int], index geom.Point[int], radi
 		return dst
 	}
 
-	return g.appendRange(dst, index, radius, passable)
+	return g.appendRange(dst, index, g.reach(radius), passable)
 }
 
 // appendRange appends the indices in range of an index the caller knows to pass. It asks
@@ -192,6 +196,8 @@ func (g *Grid[T]) walkRange(index geom.Point[int], radius int, passable func(Cel
 		return true
 	}
 
+	radius = g.reach(radius)
+
 	for _, found := range g.appendRange(make([]geom.Point[int], 0, g.topology.rangeLen(radius)), index, radius, passable) {
 		if !yield(found) {
 			return false
@@ -199,6 +205,14 @@ func (g *Grid[T]) walkRange(index geom.Point[int], radius int, passable func(Cel
 	}
 
 	return true
+}
+
+// reach returns the radius cut to the number of steps no two cells of the grid are further
+// apart than under any neighbor rule, a column and a row a step each. A range gathers every
+// index within its radius before it asks which lie in the grid, so one that reached further
+// would cost the square of the radius for the same cells.
+func (g *Grid[T]) reach(radius int) int {
+	return min(radius, g.Width()+g.Height())
 }
 
 // passes reports whether the index is inside the grid and its cell passable.

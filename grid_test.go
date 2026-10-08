@@ -3,6 +3,7 @@ package grid
 import (
 	"fmt"
 	"maps"
+	"math"
 	"slices"
 	"strconv"
 	"testing"
@@ -379,6 +380,24 @@ func TestGrid_Range(t *testing.T) {
 	t.Run("a zero radius is the center alone", func(t *testing.T) {
 		assert.Equal(t, grids["cardinal"].Range(center, 0, nil).Elements(), []geom.Point[int]{center})
 	})
+	t.Run("a radius beyond the grid is every cell, however far beyond", func(t *testing.T) {
+		for name, g := range grids {
+			across := g.Width() + g.Height()
+
+			for _, radius := range []int{across, across + 1, 1 << 40, math.MaxInt} {
+				assert.Equal(t, g.Range(geom.Pt(0, 0), radius, nil).Len(), g.Width()*g.Height(), name+" "+strconv.Itoa(radius)+": ")
+			}
+		}
+	})
+	t.Run("a radius beyond the grid still hides what is behind a wall", func(t *testing.T) {
+		open := func(cell Cell[int]) bool {
+			return cell.Index() != geom.Pt(5, 6)
+		}
+
+		for name, g := range grids {
+			assert.True(t, g.Range(center, math.MaxInt, open).Equal(g.Range(center, g.Width()+g.Height(), open)), name+": ")
+		}
+	})
 	t.Run("cardinal is the diamond of Manhattan distance", func(t *testing.T) {
 		assert.Equal(t, grids["cardinal"].Range(center, 1, nil).Len(), 5)
 		assert.Equal(t, grids["cardinal"].Range(center, 3, nil).Len(), 25)
@@ -662,6 +681,9 @@ func TestGrid_AppendRange(t *testing.T) {
 					assert.True(t, g.Range(index, 4, open).Equal(Reg(g.AppendRange(nil, index, 4, open))), index.String()+": ")
 				}
 			})
+			t.Run("a radius beyond the grid appends what one across it does", func(t *testing.T) {
+				assert.Equal(t, g.AppendRange(nil, center, math.MaxInt, open), g.AppendRange(nil, center, g.Width()+g.Height(), open))
+			})
 			t.Run("a negative radius appends nothing and asks nothing", func(t *testing.T) {
 				asked := 0
 
@@ -696,6 +718,9 @@ func TestGrid_RangeSeq(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Run("yields what AppendRange appends", func(t *testing.T) {
 				assert.Equal(t, slices.Collect(g.RangeSeq(center, 3, nil)), g.AppendRange(nil, center, 3, nil))
+			})
+			t.Run("a radius beyond the grid yields what one across it does", func(t *testing.T) {
+				assert.Equal(t, slices.Collect(g.RangeSeq(center, math.MaxInt, nil)), g.AppendRange(nil, center, g.Width()+g.Height(), nil))
 			})
 			t.Run("yields what AppendRange appends behind walls", func(t *testing.T) {
 				open := func(cell Cell[int]) bool {

@@ -1,13 +1,16 @@
 package grid
 
 import (
+	"iter"
+
 	geom "github.com/gravitton/geometry"
 )
 
 // Cell is a handle on one cell of a [Grid]: its index, its value and its place in the world,
 // with the short forms of the queries the grid answers from it. It is passed by value. The cell
 // of an index outside the grid can be held like any other: its IsValid reports false, its Value
-// is nil and its Set stores nothing.
+// is nil and its Set stores nothing. A cell is given by a grid: the zero value belongs to none,
+// and its methods are not to be called.
 type Cell[T any] struct {
 	grid  *Grid[T]
 	index geom.Point[int]
@@ -77,6 +80,17 @@ func (c Cell[T]) AppendNeighbors(dst []geom.Point[int]) []geom.Point[int] {
 // [Grid.Range] does.
 func (c Cell[T]) Range(radius int, passable func(Cell[T]) bool) Region {
 	return c.grid.Range(c.index, radius, passable)
+}
+
+// AppendRange appends the indices of the cells Range returns to dst and returns the extended
+// slice, as [Grid.AppendRange] does.
+func (c Cell[T]) AppendRange(dst []geom.Point[int], radius int, passable func(Cell[T]) bool) []geom.Point[int] {
+	return c.grid.AppendRange(dst, c.index, radius, passable)
+}
+
+// RangeSeq returns an iterator over the indices AppendRange appends, as [Grid.RangeSeq] does.
+func (c Cell[T]) RangeSeq(radius int, passable func(Cell[T]) bool) iter.Seq[geom.Point[int]] {
+	return c.grid.RangeSeq(c.index, radius, passable)
 }
 
 // DistanceTo returns the number of steps from the cell to the given index, as [Grid.Distance]
