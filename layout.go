@@ -7,153 +7,118 @@ import (
 	hex "github.com/gravitton/hexagon"
 )
 
-// Layout is the mapping between the indices of a grid and the world: where a cell is drawn and
-// which cell a point falls in. A grid hands out its own as [Grid.Layout]; every method returns
-// a new layout. Its origin is the top-left corner of its bounds, on every kind of grid. The
-// zero value is a layout of no cells, every index at its origin.
-type Layout struct {
-	kind      kind
-	size      geom.Size[int]
+// Bounds returns the box around every cell of the grid, in world coordinates. Its top-left
+// corner is the origin of the grid, and a grid of no cells has an empty box there.
+func (g *Grid[T]) Bounds() geom.Box[float64] {
+	return g.layout.bounds
+}
+
+// CellSize returns the size of a cell as drawn: the width and height of the box around it,
+// the same for every cell and what [Cell.Size] returns.
+func (g *Grid[T]) CellSize() geom.Size[float64] {
+	return g.layout.cellSize
+}
+
+// CellSpacing returns the distance between the centers of adjacent cells along each axis.
+func (g *Grid[T]) CellSpacing() geom.Size[float64] {
+	return g.layout.cellSpacing
+}
+
+// CellWidth returns the width of a cell as drawn, the width of CellSize.
+func (g *Grid[T]) CellWidth() float64 {
+	return g.layout.cellSize.Width
+}
+
+// CellHeight returns the height of a cell as drawn, the height of CellSize.
+func (g *Grid[T]) CellHeight() float64 {
+	return g.layout.cellSize.Height
+}
+
+// IndexAt returns the index of the cell the point of the world lies in. A point outside the
+// grid gives an index outside it, where Contains reports false. A point on an edge goes to the
+// same side in every cell, where the edge is a number a float holds: on a square to the cell
+// after it, to the right or below; on a diamond a vertex to the cell it is the top of; on a
+// hexagon where hex.FractionalHex.Round puts it. It converts through [geom.Cast] on every
+// layout, so it panics for a point with a NaN or infinite coordinate, and a point too far for
+// an index to count gives a platform-dependent one.
+func (g *Grid[T]) IndexAt(point geom.Point[float64]) geom.Point[int] {
+	return g.layout.transform.fromPoint(point)
+}
+
+// CellAt returns the cell the point of the world lies in, the cell of IndexAt.
+func (g *Grid[T]) CellAt(point geom.Point[float64]) Cell[T] {
+	return g.Cell(g.IndexAt(point))
+}
+
+// MoveTo places the top-left corner of the bounds of the grid at origin. Every cell keeps its
+// value and its size. It panics for an origin with a NaN or infinite coordinate.
+func (g *Grid[T]) MoveTo(origin geom.Point[float64]) {
+	g.layout = g.layout.moveTo(origin)
+}
+
+// Resize replaces the scale the constructor of the grid took: the size of a square or
+// isometric cell, the circumradius per axis of a hexagon. The origin stays where it is and
+// every cell keeps its value. It panics for a scale that is not positive and finite on both
+// axes, and for one so small that a step of its lattice is nothing.
+func (g *Grid[T]) Resize(cellScale geom.Size[float64]) {
+	g.layout = g.layout.resize(cellScale)
+}
+
+// layout is where a grid is in the world: the transform its cells are placed by and what is
+// measured from it once. Its origin is the top-left corner of its bounds, on every kind of
+// grid.
+type layout struct {
 	transform transform
 
-	// bounds, cellSize and cellSpacing are read off the transform where the layout is resized
-	// or placed, so that reading them costs nothing.
+	extent      geom.Box[int]
 	bounds      geom.Box[float64]
 	cellSize    geom.Size[float64]
 	cellSpacing geom.Size[float64]
+	polygon     geom.RegularPolygon[float64]
 }
 
 // newLayout returns the layout of a grid of the given size in cells of the given kind, with
-// the origin at the world origin. It panics for a cell scale [Layout.Resize] panics for.
-func newLayout(kind kind, size geom.Size[int], cellScale geom.Size[float64]) Layout {
-	l := Layout{
-		kind: kind,
-		size: size,
+// the origin at the world origin. It panics for a cell scale resize panics for.
+func newLayout(kind kind, size geom.Size[int], cellScale geom.Size[float64]) layout {
+	l := layout{
+		transform: transform{kind: kind},
+		extent:    kind.extent(size),
 	}
 
-	return l.Resize(cellScale)
+	return l.resize(cellScale)
 }
 
-// Size returns the grid dimensions.
-func (l Layout) Size() geom.Size[int] {
-	return l.size
-}
-
-// Bounds returns the box around every cell of the grid. Its top-left corner is the origin of
-// the layout, and a grid of no cells has an empty box there.
-func (l Layout) Bounds() geom.Box[float64] {
-	return l.bounds
-}
-
-// CellSize returns the size of a cell as drawn: the width and height of the box around it.
-func (l Layout) CellSize() geom.Size[float64] {
-	return l.cellSize
-}
-
-// CellSpacing returns the distance between adjacent cell centers along each axis.
-func (l Layout) CellSpacing() geom.Size[float64] {
-	return l.cellSpacing
-}
-
-// Translate returns a copy of the layout with the origin shifted by change. It panics where
-// [Layout.MoveTo] of the shifted origin does.
-func (l Layout) Translate(change geom.Vector[float64]) Layout {
-	return l.place(l.bounds.Min.Add(change))
-}
-
-// MoveTo returns a copy of the layout with the top-left corner of its bounds at origin. It
+// moveTo returns a copy of the layout with the top-left corner of its bounds at origin. It
 // panics for an origin with a NaN or infinite coordinate.
-func (l Layout) MoveTo(origin geom.Point[float64]) Layout {
-	return l.place(origin)
-}
-
-// Resize returns a copy of the layout with the scale its constructor took replaced: the size of
-// a square or isometric cell, the circumradius per axis of a hexagon. The origin stays where
-// it is. It panics for a scale that is not positive and finite on both axes, and for one so
-// small that a step of its lattice is nothing.
-func (l Layout) Resize(cellScale geom.Size[float64]) Layout {
-	scaled := l.kind.transform().scale(cellScale)
-
-	if !scaled.step.IsPositive() || !scaled.step.IsFinite() {
-		panic(fmt.Sprintf("grid: cell of size %s cannot be laid out", cellScale))
-	}
-
-	l.transform = scaled
-	l.cellSize = scaled.span(l.kind.reach().Multiply(2))
-	l.cellSpacing = scaled.span(l.kind.spacing())
-
-	return l.place(l.bounds.Min)
-}
-
-// place returns the layout with its transform placed so the top-left corner of the bounds is
-// origin. The zero layout has no cells and no step, and keeps every index at its origin.
-func (l Layout) place(origin geom.Point[float64]) Layout {
+func (l layout) moveTo(origin geom.Point[float64]) layout {
 	if !origin.IsFinite() {
 		panic(fmt.Sprintf("grid: origin %s is not finite", origin))
 	}
 
-	extent := l.extent()
-
-	l.transform = l.transform.place(origin, extent.Min)
-	l.bounds = geom.BoxFromMinMax(origin, l.transform.toPoint(extent.Max))
+	l.transform.origin = origin
+	l.bounds = geom.BoxFromMinMax(origin, l.transform.at(l.extent.Max))
 
 	return l
 }
 
-// extent returns the box around every cell of the layout on the lattice of its kind, in whole
-// steps from the center of its first cell. The cells that can reach an edge are the four
-// corners and, where every other row or column of hexagons is shifted, their neighbors along
-// the edges. A layout of no cells has an empty box there.
-func (l Layout) extent() geom.Box[int] {
-	w, h := l.size.XY()
-	if w <= 0 || h <= 0 {
-		return geom.Box[int]{}
+// resize returns a copy of the layout with the scale its constructor took replaced. The origin
+// stays where it is. It panics for a scale that is not positive and finite on both axes, and
+// for one so small that a step of its lattice is nothing.
+func (l layout) resize(cellScale geom.Size[float64]) layout {
+	k := l.transform.kind
+
+	step := k.step().ScaleXY(cellScale.XY())
+	if !step.IsPositive() || !step.IsFinite() {
+		panic(fmt.Sprintf("grid: cell of size %s cannot be laid out", cellScale))
 	}
 
-	cells := [8]geom.Point[int]{
-		geom.Pt(0, 0), geom.Pt(w-1, 0), geom.Pt(0, h-1), geom.Pt(w-1, h-1),
-		geom.Pt(min(1, w-1), 0), geom.Pt(min(1, w-1), h-1), geom.Pt(0, min(1, h-1)), geom.Pt(w-1, min(1, h-1)),
-	}
+	l.transform = transform{k, l.bounds.Min, l.extent.Min, step}
+	l.bounds = geom.BoxFromMinMax(l.bounds.Min, l.transform.at(l.extent.Max))
+	l.cellSize = l.transform.span(k.reach().Multiply(2))
+	l.cellSpacing = l.transform.span(k.spacing())
+	l.polygon = geom.RegularPolygonWithOrientation(geom.Point[float64]{}, k.radius().ScaleXY(cellScale.XY()), k.sides(), k.orientation())
 
-	low := l.kind.lattice(cells[0])
-	high := low
-	for _, index := range cells[1:] {
-		center := l.kind.lattice(index)
-		low = geom.Pt(min(low.X, center.X), min(low.Y, center.Y))
-		high = geom.Pt(max(high.X, center.X), max(high.Y, center.Y))
-	}
-
-	reach := l.kind.reach()
-
-	return geom.BoxFromMinMax(low.Add(reach.Negate()), high.Add(reach))
-}
-
-// ToPoint returns the center of the cell at the given index in the world.
-func (l Layout) ToPoint(index geom.Point[int]) geom.Point[float64] {
-	return l.transform.toPoint(l.kind.lattice(index))
-}
-
-// FromPoint returns the index of the cell the given point of the world falls in. A point on an
-// edge goes to the same side in every cell, where the edge is a number a float holds: on a
-// square to the cell after it, to the right or below; on a diamond a vertex to the cell it is
-// the top of; on a hexagon where hex.FractionalHex.Round puts it.
-func (l Layout) FromPoint(point geom.Point[float64]) geom.Point[int] {
-	return l.kind.index(l.transform.fromPoint(point))
-}
-
-// CellPolygon returns the regular polygon the cell at the given index is drawn as.
-func (l Layout) CellPolygon(index geom.Point[int]) geom.RegularPolygon[float64] {
-	return geom.RegularPolygonWithOrientation(l.ToPoint(index), l.transform.polygon, l.kind.sides(), l.kind.orientation())
-}
-
-// cellBox returns the box around the cell at the given index, its corners points of the
-// lattice as its center is, so the boxes of neighbors meet in the same numbers and the box
-// around them all is the bounds.
-func (l Layout) cellBox(index geom.Point[int]) geom.Box[float64] {
-	center := l.kind.lattice(index)
-	reach := l.kind.reach()
-
-	return geom.BoxFromMinMax(l.transform.toPoint(center.Add(reach.Negate())), l.transform.toPoint(center.Add(reach)))
+	return l
 }
 
 // kind is one of the layouts a grid is built in, a hexagonal one for each row or column that
@@ -207,24 +172,31 @@ func (k kind) system() hex.CoordinateSystem {
 	}
 }
 
-// lattice returns where the center of the cell at the index is on the lattice of the kind, in
-// whole steps from the center of the first cell. A step is as short as the corner of the box
-// around a cell needs to be a point of the lattice too: half a square or a diamond, and for a
-// hexagon half its height and a quarter of its width, or the other way for a pointy-top one.
-func (k kind) lattice(index geom.Point[int]) geom.Point[int] {
+// step returns the distance between two points of the lattice of the kind along each axis, for
+// a cell of unit scale. A step is as short as the corner of the box around a cell needs to be
+// a point of the lattice too: half a square or a diamond, and for a hexagon half its height
+// and a quarter of its width, or the other way for a pointy-top one.
+func (k kind) step() geom.Size[float64] {
+	switch k {
+	case kindHexFlatTop, kindHexFlatTopEven:
+		return geom.Sz(0.5, geom.Sqrt3/2)
+	case kindHexPointyTop, kindHexPointyTopEven:
+		return geom.Sz(geom.Sqrt3/2, 0.5)
+	default:
+		return geom.Sz(0.5, 0.5)
+	}
+}
+
+// radius returns the size of the polygon of a cell of the kind at unit scale: the circumradius
+// per axis, which on a square is half the diagonal of the cell.
+func (k kind) radius() geom.Size[float64] {
 	switch k {
 	case kindIsometric:
-		return geom.Pt(index.X-index.Y, index.X+index.Y)
-	case kindHexFlatTop, kindHexFlatTopEven:
-		h := k.system().From(index)
-
-		return geom.Pt(3*h.Q, 2*h.R+h.Q)
-	case kindHexPointyTop, kindHexPointyTopEven:
-		h := k.system().From(index)
-
-		return geom.Pt(2*h.Q+h.R, 3*h.R)
+		return geom.Sz(0.5, 0.5)
+	case kindHexFlatTop, kindHexFlatTopEven, kindHexPointyTop, kindHexPointyTopEven:
+		return geom.Sz(1.0, 1.0)
 	default:
-		return geom.Pt(2*index.X, 2*index.Y)
+		return geom.Sz(geom.Sqrt2/2, geom.Sqrt2/2)
 	}
 }
 
@@ -256,15 +228,67 @@ func (k kind) spacing() geom.Vector[int] {
 	}
 }
 
+// extent returns the box around every cell of a grid of the kind and the given size in cells,
+// on its lattice, in whole steps from the center of the first cell. The cells that can reach
+// an edge are the four corners and, where every other row or column of hexagons is shifted,
+// their neighbors along the edges. A grid of no cells has an empty box there.
+func (k kind) extent(size geom.Size[int]) geom.Box[int] {
+	w, h := size.XY()
+	if w <= 0 || h <= 0 {
+		return geom.Box[int]{}
+	}
+
+	cells := [8]geom.Point[int]{
+		geom.Pt(0, 0), geom.Pt(w-1, 0), geom.Pt(0, h-1), geom.Pt(w-1, h-1),
+		geom.Pt(min(1, w-1), 0), geom.Pt(min(1, w-1), h-1), geom.Pt(0, min(1, h-1)), geom.Pt(w-1, min(1, h-1)),
+	}
+
+	low := k.lattice(cells[0])
+	high := low
+	for _, index := range cells[1:] {
+		center := k.lattice(index)
+		low = geom.Pt(min(low.X, center.X), min(low.Y, center.Y))
+		high = geom.Pt(max(high.X, center.X), max(high.Y, center.Y))
+	}
+
+	reach := k.reach()
+
+	return geom.BoxFromMinMax(low.Add(reach.Negate()), high.Add(reach))
+}
+
+// lattice returns where the center of the cell at the index is on the lattice of the kind, in
+// whole steps from the center of the first cell: the index doubled for a square, the diagonals
+// through it for a diamond, and for a hexagon its axial coordinate, which its coordinate system turns the index
+// into, doubled along the axis its neighbors interlock on.
+func (k kind) lattice(index geom.Point[int]) geom.Point[int] {
+	x, y := index.XY()
+
+	switch k {
+	case kindIsometric:
+		return geom.Pt(x-y, x+y)
+	case kindHexFlatTop, kindHexFlatTopEven:
+		h := k.system().From(index)
+
+		return geom.Pt(3*h.Q, 2*h.R+h.Q)
+	case kindHexPointyTop, kindHexPointyTopEven:
+		h := k.system().From(index)
+
+		return geom.Pt(2*h.Q+h.R, 3*h.R)
+	default:
+		return geom.Pt(2*x, 2*y)
+	}
+}
+
 // index returns the index of the cell a position on the lattice of the kind falls in, the
 // inverse of lattice for a position between its points. A square and a diamond own the edges
-// their position rounds up from, and a hexagon the ones hex.FractionalHex.Round gives it.
+// their position rounds up from, and a hexagon the ones hex.FractionalHex.Round gives it. The
+// position is a number on both axes, which its caller sees to.
 func (k kind) index(position geom.Point[float64]) geom.Point[int] {
 	x, y := position.XY()
 
 	switch k {
 	case kindIsometric:
-		return geom.Pt(geom.RoundHalfUp((x+y)/2), geom.RoundHalfUp((y-x)/2)).Int()
+		return geom.Pt(geom.Cast[int](geom.RoundHalfUp((x+y)/2)), geom.Cast[int](geom.RoundHalfUp((y-x)/2)))
 	case kindHexFlatTop, kindHexFlatTopEven:
 		q := x / 3
 
@@ -274,73 +298,27 @@ func (k kind) index(position geom.Point[float64]) geom.Point[int] {
 
 		return k.system().To(hex.FracPt((x-r)/2, r).Round())
 	default:
-		return geom.Pt(geom.RoundHalfUp(x/2), geom.RoundHalfUp(y/2)).Int()
+		return geom.Pt(geom.Cast[int](geom.RoundHalfUp(x/2)), geom.Cast[int](geom.RoundHalfUp(y/2)))
 	}
 }
 
-// transform returns the mapping of a cell of the kind at unit scale, not placed yet.
-func (k kind) transform() transform {
-	switch k {
-	case kindIsometric:
-		return transform{
-			step:    geom.Sz(0.5, 0.5),
-			polygon: geom.Sz(0.5, 0.5),
-		}
-	case kindHexFlatTop, kindHexFlatTopEven:
-		return transform{
-			step:    geom.Sz(0.5, geom.Sqrt3/2),
-			polygon: geom.Sz(1.0, 1.0),
-		}
-	case kindHexPointyTop, kindHexPointyTopEven:
-		return transform{
-			step:    geom.Sz(geom.Sqrt3/2, 0.5),
-			polygon: geom.Sz(1.0, 1.0),
-		}
-	default:
-		return transform{
-			step:    geom.Sz(0.5, 0.5),
-			polygon: geom.Sz(geom.Sqrt2/2, geom.Sqrt2/2),
-		}
-	}
-}
-
-// transform is the mapping between the lattice of a kind and the world: the step between two
-// points of the lattice along each axis, where the corner of the bounds is in the world and on
-// the lattice, and the size of the polygon. A kind gives its own at unit scale, and a layout
-// scales and places it. The size of a cell and the spacing of two are whole steps of the kind,
-// its reach doubled and its spacing, which a layout reads off once.
+// transform is the mapping between the indices of a kind and the world: the kind, where the
+// corner of the bounds is in the world and on the lattice of the kind, and the step between
+// two points of the lattice along each axis. It is all a cell is placed by, and small, so the
+// grid and its cells read it alone.
 //
 // Every center, edge and corner of the box around a cell is the origin and a whole number of
 // steps, so a point goes to the world in one product and one sum per axis and comes back in
 // one difference and one quotient, each exact where its result is a number a float holds.
 // That keeps an edge on the same side in every cell and the corner of the bounds in the first
 // one; a matrix each way, as it was until 2026-10-07, folds the origin into a constant and
-// rounds twice. The polygon of a square is measured by its circumradius, half the diagonal of
-// the cell.
+// rounds twice. The arithmetic is written out, each product rounded before it is added, where
+// it went through the vectors of geom until 2026-10-08 at twice the time.
 type transform struct {
-	origin  geom.Point[float64]
-	corner  geom.Point[int]
-	step    geom.Size[float64]
-	polygon geom.Size[float64]
-}
-
-// scale returns the transform of a cell the given factor larger along each axis.
-func (t transform) scale(factor geom.Size[float64]) transform {
-	x, y := factor.XY()
-
-	t.step = t.step.ScaleXY(x, y)
-	t.polygon = t.polygon.ScaleXY(x, y)
-
-	return t
-}
-
-// place returns the transform with the given point of the lattice, the corner of the bounds,
-// at origin in the world.
-func (t transform) place(origin geom.Point[float64], corner geom.Point[int]) transform {
-	t.origin = origin
-	t.corner = corner
-
-	return t
+	kind   kind
+	origin geom.Point[float64]
+	corner geom.Point[int]
+	step   geom.Size[float64]
 }
 
 // span returns the extent in the world of the given number of steps along each axis.
@@ -348,17 +326,35 @@ func (t transform) span(steps geom.Vector[int]) geom.Size[float64] {
 	return t.step.ScaleXY(steps.Float().XY())
 }
 
-// toPoint returns the point of the world at the given point of the lattice.
-func (t transform) toPoint(lattice geom.Point[int]) geom.Point[float64] {
-	return t.origin.Add(lattice.Subtract(t.corner).Float().MultiplyXY(t.step.XY()))
+// at returns the point of the world at the given point of the lattice.
+func (t transform) at(lattice geom.Point[int]) geom.Point[float64] {
+	return geom.Pt(
+		t.origin.X+float64(float64(lattice.X-t.corner.X)*t.step.Width),
+		t.origin.Y+float64(float64(lattice.Y-t.corner.Y)*t.step.Height),
+	)
 }
 
-// fromPoint returns the position on the lattice of the given point of the world, in steps
-// along each axis. A transform of no scale has every point at the first point of the lattice.
-func (t transform) fromPoint(point geom.Point[float64]) geom.Point[float64] {
-	if !t.step.IsPositive() {
-		return geom.Point[float64]{}
-	}
+// toPoint returns the center of the cell at the given index in the world.
+func (t transform) toPoint(index geom.Point[int]) geom.Point[float64] {
+	return t.at(t.kind.lattice(index))
+}
 
-	return point.Subtract(t.origin).DivideXY(t.step.XY()).Add(t.corner.Vector().Float()).Point()
+// fromPoint returns the index of the cell the given point of the world falls in. It is
+// the arithmetic alone and checks nothing: kind.index converts through geom.Cast, which
+// panics for what a point that is not finite or a step of zero comes to.
+func (t transform) fromPoint(point geom.Point[float64]) geom.Point[int] {
+	return t.kind.index(geom.Pt(
+		(point.X-t.origin.X)/t.step.Width+float64(t.corner.X),
+		(point.Y-t.origin.Y)/t.step.Height+float64(t.corner.Y),
+	))
+}
+
+// cellBox returns the box around the cell at the given index, its corners points of the
+// lattice as its center is, so the boxes of neighbors meet in the same numbers and the box
+// around them all is the bounds.
+func (t transform) cellBox(index geom.Point[int]) geom.Box[float64] {
+	center := t.kind.lattice(index)
+	reach := t.kind.reach()
+
+	return geom.BoxFromMinMax(t.at(center.Add(reach.Negate())), t.at(center.Add(reach)))
 }

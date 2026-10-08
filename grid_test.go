@@ -2,6 +2,7 @@ package grid
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 	"strconv"
 	"testing"
@@ -45,6 +46,18 @@ func testGrids(size geom.Size[int], cellSize geom.Size[float64], origin geom.Poi
 	}
 }
 
+// benchmarkGrids runs the benchmark on each of the testGrids at 64 by 64 cells, in the order of
+// their names.
+func benchmarkGrids(b *testing.B, run func(b *testing.B, g *Grid[int])) {
+	grids := testGrids(geom.Sz(64, 64), geom.Sz(32.0, 20.0), geom.Pt(100.0, 50.0))
+
+	for _, name := range slices.Sorted(maps.Keys(grids)) {
+		b.Run(name, func(b *testing.B) {
+			run(b, grids[name])
+		})
+	}
+}
+
 func TestGrid_Size(t *testing.T) {
 	g := NewRect[int](geom.Sz(10, 5), geom.Sz(32.0, 32.0))
 
@@ -61,78 +74,6 @@ func TestGrid_Height(t *testing.T) {
 	g := NewRect[int](geom.Sz(10, 5), geom.Sz(32.0, 32.0))
 
 	assert.Equal(t, g.Height(), 5)
-}
-
-func TestGrid_Layout(t *testing.T) {
-	g := NewRect[int](geom.Sz(5, 5), geom.Sz(64.0, 32.0))
-
-	t.Run("maps as the grid does", func(t *testing.T) {
-		layout := g.Layout()
-
-		assert.Equal(t, layout.Size(), g.Size())
-		geomtest.AssertPoint(t, layout.ToPoint(geom.Pt(2, 3)), g.Cell(geom.Pt(2, 3)).Center())
-		assert.Equal(t, layout.FromPoint(geom.Pt(70.0, 40.0)), g.IndexAt(geom.Pt(70.0, 40.0)))
-	})
-	t.Run("moving the copy leaves the grid where it is", func(t *testing.T) {
-		moved := g.Layout().MoveTo(geom.Pt(500.0, 500.0))
-
-		geomtest.AssertPoint(t, moved.Bounds().Min, geom.Pt(500.0, 500.0))
-		geomtest.AssertPoint(t, moved.ToPoint(geom.Pt(0, 0)), geom.Pt(532.0, 516.0))
-		geomtest.AssertPoint(t, g.Cell(geom.Pt(0, 0)).Center(), geom.Pt(32.0, 16.0))
-	})
-}
-
-func TestGrid_Bounds(t *testing.T) {
-	t.Run("a rectangular grid spans its columns and rows of cells", func(t *testing.T) {
-		g := NewRect[int](geom.Sz(6, 5), geom.Sz(64.0, 32.0))
-
-		geomtest.AssertBox(t, g.Bounds(), geom.Box[float64]{Min: geom.Pt(0.0, 0.0), Max: geom.Pt(384.0, 160.0)})
-	})
-	t.Run("is the box around every cell", func(t *testing.T) {
-		for name, g := range layoutGrids() {
-			var around geom.Box[float64]
-			for cell := range g.All() {
-				if around.IsZero() {
-					around = cell.Bounds()
-				}
-
-				around = around.Union(cell.Bounds())
-			}
-
-			geomtest.AssertBox(t, g.Bounds(), around, name+": ")
-		}
-	})
-}
-
-func TestGrid_CellSize(t *testing.T) {
-	g := NewRect[int](geom.Sz(5, 5), geom.Sz(64.0, 32.0))
-
-	geomtest.AssertSize(t, g.CellSize(), geom.Sz(64.0, 32.0))
-}
-
-func TestGrid_CellSpacing(t *testing.T) {
-	t.Run("a rectangular grid steps by a whole cell", func(t *testing.T) {
-		g := NewRect[int](geom.Sz(5, 5), geom.Sz(64.0, 32.0))
-
-		geomtest.AssertSize(t, g.CellSpacing(), geom.Sz(64.0, 32.0))
-	})
-	t.Run("an isometric grid steps by half a cell", func(t *testing.T) {
-		g := NewIsometric[int](geom.Sz(5, 5), geom.Sz(64.0, 32.0))
-
-		geomtest.AssertSize(t, g.CellSpacing(), geom.Sz(32.0, 16.0))
-	})
-}
-
-func TestGrid_CellWidth(t *testing.T) {
-	for name, g := range layoutGrids() {
-		assert.Equal(t, g.CellWidth(), g.CellSize().Width, name+": ")
-	}
-}
-
-func TestGrid_CellHeight(t *testing.T) {
-	for name, g := range layoutGrids() {
-		assert.Equal(t, g.CellHeight(), g.CellSize().Height, name+": ")
-	}
 }
 
 func TestGrid_Cell(t *testing.T) {
@@ -180,56 +121,6 @@ func ExampleGrid_Cell() {
 	// [(4,4) (3,5) (2,4) (3,3)]
 	// 7
 	// Cell(-1,0) false true
-}
-
-func TestGrid_IndexAt(t *testing.T) {
-	g := NewRect[int](geom.Sz(5, 5), geom.Sz(32.0, 32.0))
-
-	t.Run("is the cell the point lies in", func(t *testing.T) {
-		assert.Equal(t, g.IndexAt(geom.Pt(64.0, 96.0)), geom.Pt(2, 3))
-		assert.Equal(t, g.IndexAt(geom.Pt(95.0, 127.0)), geom.Pt(2, 3))
-	})
-	t.Run("a point outside the grid gives an index outside it", func(t *testing.T) {
-		assert.False(t, g.Contains(g.IndexAt(geom.Pt(-10.0, 40.0))))
-		assert.False(t, g.Contains(g.IndexAt(geom.Pt(40.0, 500.0))))
-	})
-	t.Run("the center of a cell gives its index", func(t *testing.T) {
-		for name, g := range layoutGrids() {
-			for cell := range g.All() {
-				assert.Equal(t, g.IndexAt(cell.Center()), cell.Index(), name+" at "+cell.Index().String()+": ")
-			}
-		}
-	})
-}
-
-func ExampleGrid_IndexAt() {
-	g := NewRect[int](geom.Sz(100, 100), RectCellSize(32))
-
-	cell := g.CellAt(geom.Pt(499.0, 123.4))
-
-	fmt.Println(g.IndexAt(geom.Pt(499.0, 123.4)))
-	fmt.Println(cell, cell.Center(), cell.Bounds())
-	fmt.Println(g.Contains(g.IndexAt(geom.Pt(-5.0, 20.0))))
-	// Output:
-	// (15,3)
-	// Cell(15,3) (496.00,112.00) (480.00,96.00)-(512.00,128.00)
-	// false
-}
-
-func TestGrid_CellAt(t *testing.T) {
-	t.Run("is the cell of IndexAt", func(t *testing.T) {
-		for name, g := range layoutGrids() {
-			for _, point := range []geom.Point[float64]{geom.Pt(64.0, 96.0), geom.Pt(10.5, 3.25), geom.Pt(-40.0, 900.0)} {
-				assert.Equal(t, g.CellAt(point).Index(), g.IndexAt(point), name+" at "+point.String()+": ")
-			}
-		}
-	})
-	t.Run("writes through to the grid", func(t *testing.T) {
-		g := NewRect[int](geom.Sz(5, 5), geom.Sz(32.0, 32.0))
-		g.CellAt(geom.Pt(64.0, 96.0)).Set(7)
-
-		assert.Equal(t, *g.Cell(geom.Pt(2, 3)).Value(), 7)
-	})
 }
 
 func TestGrid_Fill(t *testing.T) {

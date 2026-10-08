@@ -1,8 +1,6 @@
 package grid
 
 import (
-	"strconv"
-
 	geom "github.com/gravitton/geometry"
 )
 
@@ -28,18 +26,21 @@ func (c Cell[T]) Size() geom.Size[float64] {
 
 // Center returns the center of the cell in world coordinates.
 func (c Cell[T]) Center() geom.Point[float64] {
-	return c.grid.layout.ToPoint(c.index)
+	return c.grid.layout.transform.toPoint(c.index)
 }
 
 // Bounds returns the box around the cell as drawn, in world coordinates.
 func (c Cell[T]) Bounds() geom.Box[float64] {
-	return c.grid.layout.cellBox(c.index)
+	return c.grid.layout.transform.cellBox(c.index)
 }
 
 // Polygon returns the shape of the cell in world coordinates: a square, a diamond or a
 // hexagon.
 func (c Cell[T]) Polygon() geom.RegularPolygon[float64] {
-	return c.grid.layout.CellPolygon(c.index)
+	polygon := c.grid.layout.polygon
+	polygon.Center = c.Center()
+
+	return polygon
 }
 
 // Value returns a pointer to the value of the cell, into the grid, or nil for a cell outside
@@ -97,12 +98,5 @@ func (c Cell[T]) IsValid() bool {
 
 // String returns the cell as the call that gives it, Cell and its index.
 func (c Cell[T]) String() string {
-	buf := make([]byte, 0, stringSize)
-	buf = append(buf, "Cell("...)
-	buf = strconv.AppendInt(buf, int64(c.index.X), 10)
-	buf = append(buf, ',')
-	buf = strconv.AppendInt(buf, int64(c.index.Y), 10)
-	buf = append(buf, ')')
-
-	return string(buf)
+	return "Cell" + c.index.String()
 }

@@ -12,15 +12,15 @@ import (
 // [NewIsometric], [NewHexFlatTop] or [NewHexPointyTop].
 type Grid[T any] struct {
 	cells    Array[T]
-	layout   Layout
+	layout   layout
 	topology topology
 }
 
-// newGrid returns a grid stored for the size of the layout, with the neighbor rule of its kind
-// of cell.
-func newGrid[T any](layout Layout, topology topology) *Grid[T] {
+// newGrid returns a grid of the given size in cells, placed by the layout, with the neighbor
+// rule of its kind of cell.
+func newGrid[T any](size geom.Size[int], layout layout, topology topology) *Grid[T] {
 	return &Grid[T]{
-		cells:    Arr[T](layout.Size()),
+		cells:    Arr[T](size),
 		layout:   layout,
 		topology: topology,
 	}
@@ -41,54 +41,10 @@ func (g *Grid[T]) Height() int {
 	return g.cells.Height()
 }
 
-// Layout returns the mapping between the indices of the grid and the world, for a caller who
-// places or measures cells without the grid. It is a copy: moving or resizing it leaves the
-// grid where it is.
-func (g *Grid[T]) Layout() Layout {
-	return g.layout
-}
-
-// Bounds returns the box around every cell of the grid, in world coordinates.
-func (g *Grid[T]) Bounds() geom.Box[float64] {
-	return g.layout.Bounds()
-}
-
-// CellSize returns the size of a cell as drawn: the width and height of the box around it,
-// the same for every cell and what [Cell.Size] returns.
-func (g *Grid[T]) CellSize() geom.Size[float64] {
-	return g.layout.CellSize()
-}
-
-// CellSpacing returns the distance between the centers of adjacent cells along each axis.
-func (g *Grid[T]) CellSpacing() geom.Size[float64] {
-	return g.layout.CellSpacing()
-}
-
-// CellWidth returns the width of a cell as drawn, the width of CellSize.
-func (g *Grid[T]) CellWidth() float64 {
-	return g.CellSize().Width
-}
-
-// CellHeight returns the height of a cell as drawn, the height of CellSize.
-func (g *Grid[T]) CellHeight() float64 {
-	return g.CellSize().Height
-}
-
 // Cell returns the cell at index, a handle on its value and its place in the world. An index
 // outside the grid gives a cell whose IsValid reports false.
 func (g *Grid[T]) Cell(index geom.Point[int]) Cell[T] {
 	return Cell[T]{g, index}
-}
-
-// IndexAt returns the index of the cell the point of the world lies in. A point outside the
-// grid gives an index outside it, where Contains reports false.
-func (g *Grid[T]) IndexAt(point geom.Point[float64]) geom.Point[int] {
-	return g.layout.FromPoint(point)
-}
-
-// CellAt returns the cell the point of the world lies in, the cell of IndexAt.
-func (g *Grid[T]) CellAt(point geom.Point[float64]) Cell[T] {
-	return g.Cell(g.IndexAt(point))
 }
 
 // Fill sets every cell to value.

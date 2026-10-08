@@ -22,9 +22,84 @@ func TestCell_Size(t *testing.T) {
 }
 
 func TestCell_Center(t *testing.T) {
-	g := NewRect[int](geom.Sz(5, 5), geom.Sz(32.0, 32.0))
+	grids := testGrids(geom.Sz(6, 5), geom.Sz(32.0, 20.0), geom.Pt(100.0, 50.0))
 
-	geomtest.AssertPoint(t, g.Cell(geom.Pt(0, 0)).Center(), geom.Pt(16.0, 16.0))
+	t.Run("a square is a cell from the one before it", func(t *testing.T) {
+		g := NewRect[int](geom.Sz(4, 3), geom.Sz(64.0, 32.0))
+
+		geomtest.AssertPoint(t, g.Cell(geom.Pt(0, 0)).Center(), geom.Pt(32.0, 16.0))
+		geomtest.AssertPoint(t, g.Cell(geom.Pt(1, 0)).Center(), geom.Pt(96.0, 16.0))
+		geomtest.AssertPoint(t, g.Cell(geom.Pt(0, 1)).Center(), geom.Pt(32.0, 48.0))
+		geomtest.AssertPoint(t, g.Cell(geom.Pt(2, 3)).Center(), geom.Pt(160.0, 112.0))
+	})
+	t.Run("a diamond steps down both ways", func(t *testing.T) {
+		g := NewIsometric[int](geom.Sz(4, 3), geom.Sz(64.0, 32.0))
+
+		geomtest.AssertPoint(t, g.Cell(geom.Pt(0, 0)).Center(), geom.Pt(96.0, 16.0))
+		geomtest.AssertPoint(t, g.Cell(geom.Pt(1, 0)).Center(), geom.Pt(128.0, 32.0))
+		geomtest.AssertPoint(t, g.Cell(geom.Pt(0, 1)).Center(), geom.Pt(64.0, 32.0))
+	})
+	t.Run("the odd columns of flat-top hexagons are shifted down", func(t *testing.T) {
+		g := NewHexFlatTop[int](geom.Sz(4, 3), geom.Sz(10.0, 10.0))
+
+		geomtest.AssertPoint(t, g.Cell(geom.Pt(0, 0)).Center(), geom.Pt(10.0, geom.Sqrt3*5))
+		geomtest.AssertPoint(t, g.Cell(geom.Pt(1, 0)).Center(), geom.Pt(25.0, geom.Sqrt3*10))
+		geomtest.AssertPoint(t, g.Cell(geom.Pt(0, 1)).Center(), geom.Pt(10.0, geom.Sqrt3*15))
+	})
+	t.Run("the even columns of flat-top hexagons are shifted down with EvenOffset", func(t *testing.T) {
+		g := NewHexFlatTop[int](geom.Sz(4, 3), geom.Sz(10.0, 10.0), func(options *HexOptions) {
+			options.EvenOffset = true
+		})
+
+		geomtest.AssertPoint(t, g.Cell(geom.Pt(0, 0)).Center(), geom.Pt(10.0, geom.Sqrt3*10))
+		geomtest.AssertPoint(t, g.Cell(geom.Pt(1, 0)).Center(), geom.Pt(25.0, geom.Sqrt3*5))
+	})
+	t.Run("the odd rows of pointy-top hexagons are shifted right", func(t *testing.T) {
+		g := NewHexPointyTop[int](geom.Sz(4, 3), geom.Sz(10.0, 10.0))
+
+		geomtest.AssertPoint(t, g.Cell(geom.Pt(0, 0)).Center(), geom.Pt(geom.Sqrt3*5, 10.0))
+		geomtest.AssertPoint(t, g.Cell(geom.Pt(1, 0)).Center(), geom.Pt(geom.Sqrt3*15, 10.0))
+		geomtest.AssertPoint(t, g.Cell(geom.Pt(0, 1)).Center(), geom.Pt(geom.Sqrt3*10, 25.0))
+	})
+	t.Run("the even rows of pointy-top hexagons are shifted right with EvenOffset", func(t *testing.T) {
+		g := NewHexPointyTop[int](geom.Sz(4, 3), geom.Sz(10.0, 10.0), func(options *HexOptions) {
+			options.EvenOffset = true
+		})
+
+		geomtest.AssertPoint(t, g.Cell(geom.Pt(0, 0)).Center(), geom.Pt(geom.Sqrt3*10, 10.0))
+		geomtest.AssertPoint(t, g.Cell(geom.Pt(0, 1)).Center(), geom.Pt(geom.Sqrt3*5, 25.0))
+	})
+	t.Run("rounds each product before it is added", func(t *testing.T) {
+		corner, cellSize := geom.Pt(-816.19, 732.64), geom.Sz(8.48, 89.09)
+		g := testGrids(geom.Sz(64, 64), cellSize, corner)["rectangular"]
+
+		for index := range Arr[int](g.Size()).Keys() {
+			center := geom.Pt(
+				corner.X+float64(float64(2*index.X+1)*float64(cellSize.Width*0.5)),
+				corner.Y+float64(float64(2*index.Y+1)*float64(cellSize.Height*0.5)),
+			)
+
+			assert.Equal(t, g.Cell(index).Center(), center, index.String()+": ")
+		}
+	})
+	t.Run("allocates nothing", func(t *testing.T) {
+		for name, g := range grids {
+			cell := g.Cell(geom.Pt(2, 3))
+			allocs := testing.AllocsPerRun(100, func() {
+				sinkCenter = cell.Center()
+			})
+
+			assert.Equal(t, allocs, 0.0, name+": ")
+		}
+	})
+}
+
+func BenchmarkCell_Center(b *testing.B) {
+	benchmarkGrids(b, func(b *testing.B, g *Grid[int]) {
+		for i := range b.N {
+			sinkCenter = g.Cell(geom.Pt(i&63, 7)).Center()
+		}
+	})
 }
 
 func TestCell_Bounds(t *testing.T) {
@@ -74,22 +149,64 @@ func TestCell_Bounds(t *testing.T) {
 	})
 }
 
-func TestCell_Polygon(t *testing.T) {
-	for name, g := range layoutGrids() {
-		t.Run(name, func(t *testing.T) {
-			cell := g.Cell(geom.Pt(2, 3))
+func BenchmarkCell_Bounds(b *testing.B) {
+	benchmarkGrids(b, func(b *testing.B, g *Grid[int]) {
+		for i := range b.N {
+			sinkBox = g.Cell(geom.Pt(i&63, 7)).Bounds()
+		}
+	})
+}
 
-			t.Run("is centered on the cell", func(t *testing.T) {
-				geomtest.AssertPoint(t, cell.Polygon().Center, cell.Center())
+func TestCell_Polygon(t *testing.T) {
+	grids := testGrids(geom.Sz(6, 5), geom.Sz(32.0, 20.0), geom.Pt(100.0, 50.0))
+
+	t.Run("a square and a diamond have four sides", func(t *testing.T) {
+		assert.Equal(t, grids["rectangular"].Cell(geom.Pt(2, 3)).Polygon().N, 4)
+		assert.Equal(t, grids["isometric"].Cell(geom.Pt(2, 3)).Polygon().N, 4)
+	})
+	t.Run("a hexagon has six sides", func(t *testing.T) {
+		assert.Equal(t, grids["flat-top"].Cell(geom.Pt(2, 3)).Polygon().N, 6)
+		assert.Equal(t, grids["pointy-top"].Cell(geom.Pt(2, 3)).Polygon().N, 6)
+	})
+	t.Run("is centered on the cell", func(t *testing.T) {
+		for name, g := range grids {
+			for index := range Arr[int](g.Size()).Keys() {
+				geomtest.AssertPoint(t, g.Cell(index).Polygon().Center, g.Cell(index).Center(), name+" "+index.String()+": ")
+			}
+		}
+	})
+	t.Run("fills the bounds of the cell", func(t *testing.T) {
+		for name, g := range grids {
+			for index := range Arr[int](g.Size()).Keys() {
+				geomtest.AssertBox(t, g.Cell(index).Polygon().Bounds(), g.Cell(index).Bounds(), name+" "+index.String()+": ")
+			}
+		}
+	})
+	t.Run("has a vertex for every side", func(t *testing.T) {
+		for name, g := range grids {
+			polygon := g.Cell(geom.Pt(2, 3)).Polygon()
+
+			assert.Equal(t, polygon.N, len(slices.Collect(polygon.Vertices())), name+": ")
+		}
+	})
+	t.Run("allocates nothing", func(t *testing.T) {
+		for name, g := range grids {
+			cell := g.Cell(geom.Pt(4, 3))
+			allocs := testing.AllocsPerRun(100, func() {
+				sinkPolygon = cell.Polygon()
 			})
-			t.Run("has a vertex for every side", func(t *testing.T) {
-				assert.Equal(t, cell.Polygon().N, len(slices.Collect(cell.Polygon().Vertices())))
-			})
-			t.Run("fills the bounds of the cell", func(t *testing.T) {
-				geomtest.AssertBox(t, cell.Polygon().Bounds(), cell.Bounds())
-			})
-		})
-	}
+
+			assert.Equal(t, allocs, 0.0, name+": ")
+		}
+	})
+}
+
+func BenchmarkCell_Polygon(b *testing.B) {
+	benchmarkGrids(b, func(b *testing.B, g *Grid[int]) {
+		for i := range b.N {
+			sinkPolygon = g.Cell(geom.Pt(i&63, 7)).Polygon()
+		}
+	})
 }
 
 func TestCell_Value(t *testing.T) {
