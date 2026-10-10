@@ -29,18 +29,18 @@ func (c Cell[T]) Size() geom.Size[float64] {
 
 // Center returns the center of the cell in world coordinates.
 func (c Cell[T]) Center() geom.Point[float64] {
-	return c.grid.layout.transform.toPoint(c.index)
+	return c.grid.layout.toWorld(c.index)
 }
 
 // Bounds returns the box around the cell as drawn, in world coordinates.
 func (c Cell[T]) Bounds() geom.Box[float64] {
-	return c.grid.layout.transform.cellBox(c.index)
+	return c.grid.layout.cellBounds(c.index)
 }
 
 // Polygon returns the shape of the cell in world coordinates: a square, a diamond or a
 // hexagon.
 func (c Cell[T]) Polygon() geom.RegularPolygon[float64] {
-	polygon := c.grid.layout.polygon
+	polygon := c.grid.layout.cellPolygon
 	polygon.Center = c.Center()
 
 	return polygon
