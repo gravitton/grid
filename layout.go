@@ -7,14 +7,13 @@ import (
 	hex "github.com/gravitton/hexagon"
 )
 
-// Bounds returns the box around every cell of the grid, in world coordinates. Its top-left
-// corner is the origin of the grid, and a grid of no cells has an empty box there.
+// Bounds returns the box around every cell of the grid in the world, its top-left corner the
+// origin of the grid, and an empty box at the origin for a grid of no cells.
 func (g *Grid[T]) Bounds() geom.Box[float64] {
 	return g.layout.bounds
 }
 
-// CellSize returns the size of a cell as drawn: the width and height of the box around it,
-// the same for every cell and what [Cell.Size] returns.
+// CellSize returns the size of a cell as drawn, the width and height of the box around it.
 func (g *Grid[T]) CellSize() geom.Size[float64] {
 	return g.layout.cellSize
 }
@@ -24,53 +23,46 @@ func (g *Grid[T]) CellSpacing() geom.Size[float64] {
 	return g.layout.cellSpacing
 }
 
-// CellWidth returns the width of a cell as drawn, the width of CellSize.
+// CellWidth returns the width of CellSize.
 func (g *Grid[T]) CellWidth() float64 {
 	return g.layout.cellSize.Width
 }
 
-// CellHeight returns the height of a cell as drawn, the height of CellSize.
+// CellHeight returns the height of CellSize.
 func (g *Grid[T]) CellHeight() float64 {
 	return g.layout.cellSize.Height
 }
 
-// IndexAt returns the index of the cell the point of the world lies in. A point outside the
-// grid gives an index outside it, where Contains reports false. A point on an edge goes to the
-// same side in every cell, where the edge is a number a float holds: on a square to the cell
-// after it, to the right or below; on a diamond a vertex to the cell it is the top of; on a
-// hexagon where [hex.FractionalHex.Round] puts it. It converts through [geom.Cast] on every
-// layout, so it panics for a point with a NaN or infinite coordinate, and a point too far for
-// an index to count gives a platform-dependent one.
+// IndexAt returns the index of the cell the point of the world lies in, an index outside the
+// grid for a point outside it. A point on an edge goes to the same side in every cell. It
+// panics for a point with a NaN or infinite coordinate.
 func (g *Grid[T]) IndexAt(point geom.Point[float64]) geom.Point[int] {
 	return g.layout.fromWorld(point)
 }
 
-// CellAt returns the cell the point of the world lies in, the cell of IndexAt.
+// CellAt returns the cell at the index of IndexAt. It panics for a point with a NaN or infinite
+// coordinate.
 func (g *Grid[T]) CellAt(point geom.Point[float64]) Cell[T] {
 	return g.Cell(g.IndexAt(point))
 }
 
-// MoveTo places the top-left corner of the bounds of the grid at origin. Every cell keeps its
+// MoveTo places the top-left corner of the bounds of the grid at origin, every cell keeping its
 // value and its size. It panics for an origin with a NaN or infinite coordinate.
 func (g *Grid[T]) MoveTo(origin geom.Point[float64]) {
 	g.layout.moveTo(origin)
 }
 
-// Resize replaces the scale the constructor of the grid took: the size of a square or
-// isometric cell, the circumradius per axis of a hexagon. The origin stays where it is and
-// every cell keeps its value. It panics for a scale that is not positive and finite on both
-// axes.
+// Resize replaces the cell scale the constructor of the grid took, the origin staying where it
+// is and every cell keeping its value. It panics for a cell scale that is not positive and
+// finite on both axes.
 func (g *Grid[T]) Resize(cellScale geom.Size[float64]) {
 	g.layout.resize(cellScale)
 }
 
-// layout is where a grid is in the world. Every center, edge and corner of the box around a
-// cell is a point of one lattice: the origin, the top-left corner of the bounds, and a whole
-// number of steps along each axis. A cell goes to the world in one product and one sum per
-// axis and a point comes back in one difference and one quotient, each exact where its result
-// is a number a float holds, so an edge is on the same side in every cell and the boxes of
-// neighbors meet in the same numbers.
-//
+// layout maps the cells of a grid to the world and back. Every center, edge and corner of
+// the box around a cell is a point of one lattice, the origin plus a whole number of steps
+// along each axis, so a cell goes to the world in one product and one sum per axis and comes
+// back in one difference and one quotient, and the boxes of neighbors meet in the same numbers.
 // Its methods take a pointer, so the grid and its cells read it in place.
 type layout struct {
 	kind          kind
@@ -85,9 +77,9 @@ type layout struct {
 	cellPolygon geom.RegularPolygon[float64]
 }
 
-// newLayout returns the layout of a grid of the given kind and size in cells, its cells at the
-// given scale and the top-left corner of its bounds at origin. It panics where resize and
-// moveTo do.
+// newLayout returns the layout of a grid of the given kind and size in cells, its cells
+// at the given scale and the top-left corner of its bounds at origin. It panics where resize
+// and moveTo do.
 func newLayout(kind kind, size geom.Size[int], cellScale geom.Size[float64], origin geom.Point[float64]) layout {
 	l := layout{
 		kind:          kind,
@@ -103,7 +95,7 @@ func newLayout(kind kind, size geom.Size[int], cellScale geom.Size[float64], ori
 // NaN or infinite coordinate.
 func (l *layout) moveTo(origin geom.Point[float64]) {
 	if !origin.IsFinite() {
-		panic(fmt.Sprintf("grid: origin %s is not finite", origin))
+		panic(fmt.Errorf("grid: origin %s is not finite", origin))
 	}
 
 	l.origin = origin
@@ -114,7 +106,7 @@ func (l *layout) moveTo(origin geom.Point[float64]) {
 // for a scale that is not positive and finite on both axes.
 func (l *layout) resize(cellScale geom.Size[float64]) {
 	if !cellScale.IsPositive() || !cellScale.IsFinite() {
-		panic(fmt.Sprintf("grid: cell scale %s cannot be laid out", cellScale))
+		panic(fmt.Errorf("grid: cell scale %s cannot be laid out", cellScale))
 	}
 
 	l.latticeStep = l.kind.latticeStep().ScaleXY(cellScale.XY())
@@ -124,30 +116,33 @@ func (l *layout) resize(cellScale geom.Size[float64]) {
 	l.cellPolygon = l.kind.cellPolygon(cellScale)
 }
 
-// fromWorld returns the index of the cell the given point of the world falls in. It checks
-// nothing: every kind converts through geom.Cast, which panics for a point that is not finite.
+// fromWorld returns the index of the cell the point of the world falls in. It checks nothing:
+// every kind converts through geom.Cast, which panics for a point that is not finite.
 func (l *layout) fromWorld(point geom.Point[float64]) geom.Point[int] {
 	return l.kind.fromLattice(l.latticeFromWorld(point))
 }
 
-// toWorld returns the center of the cell at the given index in the world.
+// toWorld returns the center of the cell at the index in the world.
 func (l *layout) toWorld(index geom.Point[int]) geom.Point[float64] {
 	return l.latticeToWorld(l.kind.toLattice(index))
 }
 
-// cellBounds returns the box around the cell at the given index, its corners read off the
-// lattice as its center is.
+// cellBounds returns the box around the cell at the index, its corners read off the lattice
+// as its center is.
 func (l *layout) cellBounds(index geom.Point[int]) geom.Box[float64] {
-	center := l.kind.toLattice(index)
+	return l.cellBoundsAt(l.kind.toLattice(index))
+}
+
+// cellBoundsAt returns the box around the cell centered at the position on the lattice.
+func (l *layout) cellBoundsAt(position geom.Point[int]) geom.Box[float64] {
 	sizeSteps := l.kind.sizeSteps()
 	half := geom.Vec(sizeSteps.X/2, sizeSteps.Y/2)
 
-	return geom.BoxFromMinMax(l.latticeToWorld(center.Add(half.Negate())), l.latticeToWorld(center.Add(half)))
+	return geom.BoxFromMinMax(l.latticeToWorld(position.Add(half.Negate())), l.latticeToWorld(position.Add(half)))
 }
 
-// latticeFromWorld returns the position on the lattice of the given point of the world, a
-// fractional one where the point lies between the points of the lattice. It is the inverse of
-// latticeToWorld.
+// latticeFromWorld returns the position on the lattice of the point of the world, fractional
+// between the points of the lattice: the inverse of latticeToWorld.
 func (l *layout) latticeFromWorld(point geom.Point[float64]) geom.Point[float64] {
 	return geom.Pt(
 		(point.X-l.origin.X)/l.latticeStep.Width+float64(l.latticeBounds.Min.X),
@@ -155,8 +150,8 @@ func (l *layout) latticeFromWorld(point geom.Point[float64]) geom.Point[float64]
 	)
 }
 
-// latticeToWorld returns the point of the world at the given position on the lattice. Each
-// product is rounded before it is added, never fused with the sum.
+// latticeToWorld returns the point of the world at the position on the lattice, each product
+// rounded before it is added, never fused with the sum.
 func (l *layout) latticeToWorld(position geom.Point[int]) geom.Point[float64] {
 	return geom.Pt(
 		l.origin.X+float64(float64(position.X-l.latticeBounds.Min.X)*l.latticeStep.Width),
@@ -164,13 +159,14 @@ func (l *layout) latticeToWorld(position geom.Point[int]) geom.Point[float64] {
 	)
 }
 
-// worldSize returns the size in the world of the given number of steps along each axis.
+// worldSize returns the size in the world of a number of steps of the lattice along each axis.
 func (l *layout) worldSize(steps geom.Vector[int]) geom.Size[float64] {
 	return l.latticeStep.ScaleXY(steps.Float().XY())
 }
 
-// kind is one of the layouts a grid is built in, a hexagonal one counted twice: with its odd
-// columns or rows shifted, and with its even ones. The zero value is the rectangular one.
+// kind is the rectangular, isometric or hexagonal choice of a layout, a hexagonal one counted
+// twice: with its odd columns or rows shifted, and with its even ones. The zero value is the
+// rectangular one.
 type kind int
 
 const (
@@ -323,14 +319,8 @@ func (k kind) fromLattice(position geom.Point[float64]) geom.Point[int] {
 		row := geom.RoundHalfUp((y - x) / 2)
 
 		return geom.Pt(geom.Cast[int](column), geom.Cast[int](row))
-	case kindHexFlatTop, kindHexFlatTopEven:
-		q := x / 3
-
-		return k.system().To(hex.FracPt(q, (y-q)/2).Round())
-	case kindHexPointyTop, kindHexPointyTopEven:
-		r := y / 3
-
-		return k.system().To(hex.FracPt((x-r)/2, r).Round())
+	case kindHexFlatTop, kindHexFlatTopEven, kindHexPointyTop, kindHexPointyTopEven:
+		return k.system().To(k.hexFromLattice(position).Round())
 	default:
 		column := geom.RoundHalfUp(x / 2)
 		row := geom.RoundHalfUp(y / 2)
@@ -341,24 +331,43 @@ func (k kind) fromLattice(position geom.Point[float64]) geom.Point[int] {
 
 // toLattice returns where the center of the cell at the index is on the lattice of the kind,
 // in whole steps from the center of the first cell: the index doubled for a square, the
-// diagonals through it for a diamond, and for a hexagon its axial coordinate, which its
-// coordinate system turns the index into, at the spacing of the kind, with half a row more for
-// each column on a flat-top one and half a column more for each row on a pointy-top one.
+// diagonals through it for a diamond, and the lattice position of its hex for a hexagon.
 func (k kind) toLattice(index geom.Point[int]) geom.Point[int] {
 	x, y := index.XY()
 
 	switch k {
 	case kindIsometric:
 		return geom.Pt(x-y, x+y)
-	case kindHexFlatTop, kindHexFlatTopEven:
-		h := k.system().From(index)
-
-		return geom.Pt(3*h.Q, 2*h.R+h.Q)
-	case kindHexPointyTop, kindHexPointyTopEven:
-		h := k.system().From(index)
-
-		return geom.Pt(2*h.Q+h.R, 3*h.R)
+	case kindHexFlatTop, kindHexFlatTopEven, kindHexPointyTop, kindHexPointyTopEven:
+		return k.hexToLattice(k.system().From(index))
 	default:
 		return geom.Pt(2*x, 2*y)
 	}
+}
+
+// hexFromLattice returns the fractional hex at a position on the lattice of a hexagonal kind,
+// the inverse of hexToLattice, which rounds to the hex the position falls in.
+func (k kind) hexFromLattice(position geom.Point[float64]) hex.FractionalHex {
+	x, y := position.XY()
+
+	if k.orientation() == geom.OrientationFlatTop {
+		q := x / 3
+
+		return hex.FracPt(q, (y-q)/2)
+	}
+
+	r := y / 3
+
+	return hex.FracPt((x-r)/2, r)
+}
+
+// hexToLattice returns where the center of a hex is on the lattice of a hexagonal kind, in whole
+// steps from the center of hex zero: three steps a column with half a row more for each on a
+// flat-top one, three steps a row with half a column more for each on a pointy-top one.
+func (k kind) hexToLattice(h hex.Hex) geom.Point[int] {
+	if k.orientation() == geom.OrientationFlatTop {
+		return geom.Pt(3*h.Q, 2*h.R+h.Q)
+	}
+
+	return geom.Pt(2*h.Q+h.R, 3*h.R)
 }

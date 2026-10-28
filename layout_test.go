@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/gravitton/assert"
+	"github.com/gravitton/container"
 	geom "github.com/gravitton/geometry"
 	"github.com/gravitton/geometry/geomtest"
 )
@@ -25,7 +26,7 @@ func testNearest(name string, g *Grid[int], around geom.Point[int], point geom.P
 	half := g.CellSize().Scale(0.5)
 	nearest, best, second := around, math.Inf(1), math.Inf(1)
 
-	for index := range Arr[int](geom.Sz(7, 7)).Keys() {
+	for index := range container.Arr[int](geom.Sz(7, 7)).Keys() {
 		index = around.AddXY(index.X-3, index.Y-3)
 
 		offset := point.Subtract(g.Cell(index).Center()).DivideXY(half.XY())
@@ -72,7 +73,7 @@ func TestGrid_Bounds(t *testing.T) {
 		for _, size := range sizes {
 			for name, g := range testGrids(size, geom.Sz(32.0, 20.0), origin) {
 				around := testCellBox(g, geom.Pt(0, 0))
-				for index := range Arr[int](size).Keys() {
+				for index := range container.Arr[int](size).Keys() {
 					around = around.Union(testCellBox(g, index))
 				}
 
@@ -214,7 +215,7 @@ func TestGrid_IndexAt(t *testing.T) {
 		corner := geom.Pt(7.0, -448.0)
 		g := testGrids(geom.Sz(6, 5), geom.Sz(49.0, 82.0), corner)["rectangular"]
 
-		for index := range Arr[int](geom.Sz(9, 9)).Keys() {
+		for index := range container.Arr[int](geom.Sz(9, 9)).Keys() {
 			index = index.AddXY(-4, -4)
 			edge := corner.AddXY(float64(index.X)*49, float64(index.Y)*82)
 
@@ -237,7 +238,7 @@ func TestGrid_IndexAt(t *testing.T) {
 		}
 
 		for name, vertex := range vertices {
-			for index := range Arr[int](geom.Sz(9, 9)).Keys() {
+			for index := range container.Arr[int](geom.Sz(9, 9)).Keys() {
 				index = index.AddXY(-4, -4)
 
 				assert.Equal(t, g.IndexAt(g.Cell(index).Center().Add(vertex)), index.Add(owners[name]), name+" of "+index.String()+": ")
@@ -252,7 +253,7 @@ func TestGrid_IndexAt(t *testing.T) {
 	})
 	t.Run("the center of a cell gives its index, beyond the grid too", func(t *testing.T) {
 		for name, g := range grids {
-			for index := range Arr[int](geom.Sz(12, 12)).Keys() {
+			for index := range container.Arr[int](geom.Sz(12, 12)).Keys() {
 				index = index.AddXY(-4, -4)
 
 				assert.Equal(t, g.IndexAt(g.Cell(index).Center()), index, name+" "+index.String()+": ")
@@ -261,7 +262,7 @@ func TestGrid_IndexAt(t *testing.T) {
 	})
 	t.Run("round-trips on cells too small to tell from nothing", func(t *testing.T) {
 		for name, g := range testGrids(geom.Sz(6, 5), geom.Sz(1e-7, 3e-9), geom.Pt(0.0, 0.0)) {
-			for index := range Arr[int](g.Size()).Keys() {
+			for index := range container.Arr[int](g.Size()).Keys() {
 				assert.Equal(t, g.IndexAt(g.Cell(index).Center()), index, name+" "+index.String()+": ")
 			}
 		}
@@ -271,7 +272,7 @@ func TestGrid_IndexAt(t *testing.T) {
 			around := geom.Pt(2, 3)
 			center := g.Cell(around).Center()
 
-			for step := range Arr[int](geom.Sz(41, 41)).Keys() {
+			for step := range container.Arr[int](geom.Sz(41, 41)).Keys() {
 				point := center.Add(g.CellSize().Vector().MultiplyXY(float64(step.X-20)/13, float64(step.Y-20)/13))
 
 				if nearest, clear := testNearest(name, g, around, point); clear {
@@ -282,7 +283,7 @@ func TestGrid_IndexAt(t *testing.T) {
 	})
 	t.Run("a point just inside a vertex is the cell of the polygon", func(t *testing.T) {
 		for name, g := range grids {
-			for index := range Arr[int](g.Size()).Keys() {
+			for index := range container.Arr[int](g.Size()).Keys() {
 				center := g.Cell(index).Center()
 				for vertex := range g.Cell(index).Polygon().Vertices() {
 					assert.Equal(t, g.IndexAt(center.Lerp(vertex, 0.99)), index, name+" "+index.String()+": ")
