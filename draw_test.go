@@ -16,7 +16,7 @@ func TestGrid_DrawOrder(t *testing.T) {
 		total, inside := 0, 0
 		for cell := range g.DrawOrder(whole) {
 			total++
-			if cell.Valid() {
+			if cell.IsValid() {
 				inside++
 			}
 		}
@@ -28,7 +28,7 @@ func TestGrid_DrawOrder(t *testing.T) {
 		g := NewRect[int](geom.Sz(3, 4), geom.Sz(32.0, 32.0))
 
 		for cell := range g.DrawOrder(whole) {
-			if !cell.Valid() {
+			if !cell.IsValid() {
 				assert.Nil(t, cell.Value())
 			}
 		}
@@ -46,13 +46,33 @@ func TestGrid_DrawOrder(t *testing.T) {
 
 		assert.Equal(t, count, 3)
 	})
+	t.Run("stops at the break wherever it comes, on every layout", func(t *testing.T) {
+		for name, g := range testGrids(geom.Sz(3, 3), geom.Sz(32.0, 20.0), geom.Pt(0.0, 0.0)) {
+			total := 0
+			for range g.DrawOrder(whole) {
+				total++
+			}
+
+			for stop := 1; stop <= total; stop++ {
+				count := 0
+				for range g.DrawOrder(whole) {
+					count++
+					if count == stop {
+						break
+					}
+				}
+
+				assert.Equal(t, count, stop, name+": ")
+			}
+		}
+	})
 	t.Run("a bounds keeps to the cells in view", func(t *testing.T) {
 		g := NewRect[int](geom.Sz(10, 10), geom.Sz(32.0, 32.0))
-		viewport := geom.BoxFromMinMax(geom.Pt(0.0, 0.0), geom.Pt(64.0, 64.0))
+		viewport := geom.BoxFromMinMax(geom.Pt(-32.0, -32.0), geom.Pt(32.0, 32.0))
 
 		inside := 0
 		for cell := range g.DrawOrder(viewport) {
-			if cell.Valid() {
+			if cell.IsValid() {
 				inside++
 			}
 		}
@@ -64,7 +84,7 @@ func TestGrid_DrawOrder(t *testing.T) {
 
 		previous := -1000
 		for cell := range g.DrawOrder(whole) {
-			if !cell.Valid() {
+			if !cell.IsValid() {
 				continue
 			}
 
@@ -82,7 +102,7 @@ func TestGrid_DrawOrder(t *testing.T) {
 		for name, g := range grids {
 			inside := 0
 			for cell := range g.DrawOrder(whole) {
-				if cell.Valid() {
+				if cell.IsValid() {
 					inside++
 				}
 			}

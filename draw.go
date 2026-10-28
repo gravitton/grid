@@ -7,43 +7,37 @@ import (
 	geom "github.com/gravitton/geometry"
 )
 
-// DrawOrder returns an iterator over the cells in or near bounds, back to front, the order a
-// painter draws them in, so a tile is never drawn over one in front of it. A zero bounds
-// walks the bounds of the whole grid.
-//
-// The order follows the layout of the grid:
-//   - Rectangular: row by row, top to bottom.
-//   - Isometric: by depth, the sum of column and row, ascending down the screen.
-//   - Hexagonal flat-top: in two passes over the columns, even then odd, so the tiles of one
-//     visual row are drawn back to front.
-//   - Hexagonal pointy-top: row by row; the rows are offset along X only, so one pass is in
-//     order.
-//
-// One row and one column beyond bounds are included on every side, so a tile partly in view is
-// not culled. A cell there may lie outside the grid, where its Valid reports false.
+// DrawOrder returns an iterator over the cells in view of bounds, back to front, so a cell is
+// never drawn over one in front of it: row by row on a rectangular or pointy-top grid, by the
+// sum of column and row on an isometric one, and on a flat-top one row by row with the higher
+// columns of each first. A zero bounds is the bounds of the grid. Cells beyond the edge of
+// bounds are included where one may be partly in view, and so are cells outside the grid,
+// whose IsValid reports false.
 func (g *Grid[T]) DrawOrder(bounds geom.Box[float64]) iter.Seq[Cell[T]] {
 	if bounds.IsZero() {
 		bounds = g.Bounds()
 	}
 
 	return func(yield func(Cell[T]) bool) {
-		switch g.layout.kind() {
+		switch g.layout.kind {
 		case kindIsometric:
-			g.iterIsometric(bounds, yield)
-		case kindHexagonalFlatTop:
-			g.iterHexagonal(bounds, yield, false, true)
-		case kindHexagonalPointyTop:
-			g.iterHexagonal(bounds, yield, false, false)
+			g.walkIsometric(bounds, yield)
+		case kindHexFlatTop, kindHexFlatTopEven:
+			g.walkHexagonal(bounds, yield, false, true)
+		case kindHexPointyTop, kindHexPointyTopEven:
+			g.walkHexagonal(bounds, yield, false, false)
 		default:
-			g.iterDefault(bounds, yield)
+			g.walkRect(bounds, yield)
 		}
 	}
 }
 
-func (g *Grid[T]) iterDefault(bounds geom.Box[float64], yield func(Cell[T]) bool) {
+// walkRect yields the cells of a rectangular grid row by row from the one at the corner of
+// bounds.
+func (g *Grid[T]) walkRect(bounds geom.Box[float64], yield func(Cell[T]) bool) {
 	index := g.IndexAt(bounds.Min)
 
-	cols, rows := bounds.Size().Vector().DivideXY(g.layout.CellSpacing().XY()).Round().Int().XY()
+	cols, rows := bounds.Size().Vector().DivideXY(g.CellSpacing().XY()).Round().Int().XY()
 
 	for row := 0; row <= rows; row++ {
 		for col := 0; col <= cols; col++ {
@@ -56,24 +50,14 @@ func (g *Grid[T]) iterDefault(bounds geom.Box[float64], yield func(Cell[T]) bool
 	}
 }
 
-// iterIsometric iterates visible cells for an isometric grid using row-culling
-// and painter's algorithm (back-to-front by screen Y).
-//
-// All cells sharing depth d = col+row project to the same screen Y, so depths
-// are iterated in ascending order (larger d = lower on screen = drawn later).
-// For each depth only the column range whose screen X falls within bounds is
-// scanned, with a per-cell IntersectsBox check for the boundaries.
-//
-// Screen-space relationships for an isometric grid (spacingW = cellWidth/2,
-// spacingH = cellHeight/2, origin = center of cell (0,0)):
-//
-//	screen_y = d * spacingH + origin.Y
-//	screen_x = (2*col - d) * spacingW + origin.X
-func (g *Grid[T]) iterIsometric(bounds geom.Box[float64], yield func(Cell[T]) bool) {
-	origin := g.cellCenter(geom.Pt(0, 0))
-	spacingW := g.layout.CellSpacing().Width
-	spacingH := g.layout.CellSpacing().Height
-	halfCellH := g.layout.CellSize().Height * 0.5
+// walkIsometric yields the cells of an isometric grid in view of bounds by depth, the sum of
+// column and row, which every cell of one screen row shares. A cell of depth d and column c is
+// centered at (2c-d) spacings across and d spacings down from the center of the first cell.
+func (g *Grid[T]) walkIsometric(bounds geom.Box[float64], yield func(Cell[T]) bool) {
+	origin := g.Cell(geom.Pt(0, 0)).Center()
+	spacingW := g.CellSpacing().Width
+	spacingH := g.CellSpacing().Height
+	halfCellH := float64(g.CellSize().Height * 0.5)
 
 	// depth d = col + row; screen_y = d*spacingH + origin.Y
 	// ascending d → ascending screen Y → painter's algorithm back-to-front
@@ -81,7 +65,7 @@ func (g *Grid[T]) iterIsometric(bounds geom.Box[float64], yield func(Cell[T]) bo
 	dMax := int(math.Ceil((bounds.Max.Y-origin.Y)/spacingH)) + 1
 
 	for d := dMin; d <= dMax; d++ {
-		screenY := float64(d)*spacingH + origin.Y
+		screenY := float64(float64(d)*spacingH) + origin.Y
 
 		// row-cull: skip depths whose tile strip doesn't intersect bounds vertically
 		if screenY+halfCellH <= bounds.Min.Y || screenY-halfCellH >= bounds.Max.Y {
@@ -90,8 +74,8 @@ func (g *Grid[T]) iterIsometric(bounds geom.Box[float64], yield func(Cell[T]) bo
 
 		// screen_x = (2*col - d)*spacingW + origin.X
 		// → col = (screen_x - origin.X) / (2*spacingW) + d/2
-		colLeft := int(math.Floor((bounds.Min.X-origin.X)/(2*spacingW)+float64(d)*0.5)) - 1
-		colRight := int(math.Ceil((bounds.Max.X-origin.X)/(2*spacingW)+float64(d)*0.5)) + 1
+		colLeft := int(math.Floor((bounds.Min.X-origin.X)/(2*spacingW)+float64(float64(d)*0.5))) - 1
+		colRight := int(math.Ceil((bounds.Max.X-origin.X)/(2*spacingW)+float64(float64(d)*0.5))) + 1
 
 		for col := colLeft; col <= colRight; col++ {
 			row := d - col
@@ -106,33 +90,20 @@ func (g *Grid[T]) iterIsometric(bounds geom.Box[float64], yield func(Cell[T]) bo
 	}
 }
 
-// iterHexagonal iterates visible cells for a hexagonal offset grid.
-//
-// Hex offset grids stagger every other column (flat-top) or row (pointy-top)
-// by half a cell. Two tiles that appear in the same visual row or column can
-// therefore have different parities, so a naïve single pass would draw them in
-// the wrong order. When doubleRows or doubleCols is true the iterator runs two
-// sub-passes along that axis — one for even-indexed tiles, one for odd-indexed
-// tiles — so all tiles in the same visual strip are drawn back-to-front.
-//
-//   - doubleCols = true for flat-top hex (columns are staggered along Y).
-//   - doubleRows = true for pointy-top hex (rows are staggered along X);
-//     however, the row stagger is purely horizontal, so a single pass is
-//     sufficient for correct draw order and doubleRows is always false.
-//
-// One extra cell is included on each edge of bounds so partially visible tiles
-// at the boundary are not culled. Cells beyond that edge are skipped via an
-// IntersectsBox check.
-func (g *Grid[T]) iterHexagonal(bounds geom.Box[float64], yield func(Cell[T]) bool, doubleRows, doubleCols bool) {
+// walkHexagonal yields the cells of a hexagonal grid in view of bounds, one cell beyond it
+// on each side where it is in view. Where the columns are staggered, two cells of one screen
+// row differ in parity, so doubleCols walks each row in two passes, one parity each; a
+// pointy-top grid staggers its rows across only, and one pass is in order.
+func (g *Grid[T]) walkHexagonal(bounds geom.Box[float64], yield func(Cell[T]) bool, doubleRows, doubleCols bool) {
 	index := g.IndexAt(bounds.Min)
 
 	colsOdd := index.X%2 != 0
 	rowsOdd := index.Y%2 != 0
 
-	cols, rows := bounds.Size().Vector().DivideXY(g.layout.CellSpacing().XY()).Round().Int().XY()
+	cols, rows := bounds.Size().Vector().DivideXY(g.CellSpacing().XY()).Round().Int().XY()
 
-	for row := range g.iterHexagonalDirection(rows, doubleRows, rowsOdd) {
-		for col := range g.iterHexagonalDirection(cols, doubleCols, colsOdd) {
+	for row := range g.hexagonalAxisOrder(rows, doubleRows, rowsOdd) {
+		for col := range g.hexagonalAxisOrder(cols, doubleCols, colsOdd) {
 			cell := g.Cell(index.AddXY(col, row))
 
 			if (row < 0 || col < 0 || row > rows || col > cols) && !cell.Bounds().IntersectsBox(bounds) {
@@ -147,14 +118,9 @@ func (g *Grid[T]) iterHexagonal(bounds geom.Box[float64], yield func(Cell[T]) bo
 	}
 }
 
-// iterHexagonalDirection returns an index sequence for one axis of hex iteration.
-// When double is false it emits a single pass from -1 to count+1 (inclusive),
-// adding one cell of padding on each edge for partial visibility.
-// When double is true it emits two interleaved passes — even indices then odd
-// (or odd then even when the starting index is odd) — so tiles in each parity
-// group are visited before the next group, giving correct back-to-front draw
-// order within a staggered hex strip.
-func (g *Grid[T]) iterHexagonalDirection(count int, double bool, odd bool) iter.Seq[int] {
+// hexagonalAxisOrder returns the offsets along one axis from -1 to count+1, in one pass, or
+// where double is set in two, the offsets that land on an even index first.
+func (g *Grid[T]) hexagonalAxisOrder(count int, double bool, odd bool) iter.Seq[int] {
 	if !double {
 		return func(yield func(int) bool) {
 			for index := -1; index < count+2; index++ {
