@@ -1,30 +1,48 @@
-// Package grid is a generic 2D grid for games: a [Grid] stores a value per cell, maps cells to
-// the world for rectangular, isometric and hexagonal layouts, and answers range, sight and
-// pathfinding queries. It builds on github.com/gravitton/geometry for the shapes and points it
-// speaks and on github.com/gravitton/hexagon for the hexagonal coordinate math.
+// Package grid provides generic 2D grids for games: a [Grid] stores a value per cell, places
+// its cells in the world for rectangular, isometric and hexagonal layouts, and answers range,
+// sight, area and pathfinding queries. It builds on github.com/gravitton/geometry for the
+// shapes and points it speaks, on github.com/gravitton/hexagon for the hexagonal coordinate
+// math, and on github.com/gravitton/container for the storage of a grid and the set under a
+// [Region].
 //
 // # Types
 //
-// [Grid] is built by one of four constructors, [NewRect], [NewIsometric], [NewHexFlatTop] and
-// [NewHexPointyTop], and is the same type whatever the layout. A [Cell] is a handle on one index
-// of a grid, passed by value. [Layout] is the mapping between indices and the world, [Array] the
-// storage under a grid, [Region] an immutable set of indices, [Point] an index of a square grid
-// with its lattice queries, and [Movement] the choice between four and eight neighbors.
+//   - [Grid] is built by [NewRect], [NewIsometric], [NewHexFlatTop] or [NewHexPointyTop] and is
+//     the same type on every layout. A [Cell] is a handle on one index of a grid, passed by
+//     value.
+//   - [HexLayout] places hexagonal cells on an unbounded plane with no grid around them, for a
+//     map whose data lives elsewhere.
+//   - [Region] is the immutable sorted set of indices every area query returns. A search returns
+//     a [Field] or a path.
+//   - [Point] is an index of a square grid with its lattice queries, and [Movement] the choice
+//     between its four and eight neighbors.
 //
 // # Indices
 //
-// An index is a geom.Point[int] of column and row on every layout. On a hexagonal grid it is
-// the offset coordinate; axial coordinates never appear in the API.
+// An index is a geom.Point[int] of column and row on every layout, the offset coordinate on a
+// hexagonal grid, and on a [HexLayout] the coordinate in the system it is built with. A hex.Hex
+// never appears in the API. Directions, neighbors and rings are ordered by increasing angle:
+// clockwise as drawn, with Y pointing down in the world, and negative turns go the other way.
+//
+// # Placement
+//
+// The origin of a grid is the top-left corner of its bounds on every layout. A point on an
+// edge goes to the same side in every cell: on a square to the cell after it, to the right or
+// below, so the corner of the bounds is in the first cell; on a diamond a vertex to the cell it
+// is the top of; on a hexagon where [hex.FractionalHex.Round] puts it. The boxes of neighbors
+// meet in the same numbers, and together they are the bounds of the grid.
 //
 // # Rules
 //
 // Outside the grid answers, it does not panic: [Grid.Contains] is false, a [Cell] has a nil
-// value, [Grid.Set] does nothing, and a search from or to such an index finds nothing.
+// value and stores nothing, Neighbors, Range, Ring and Spiral from it are empty, and a search
+// from or to it finds nothing. [Grid.Distance] and [Grid.Line] alone measure between any two
+// indices.
 //
-// A nil callback means no constraint. A nil passable admits every cell and a nil cost charges
-// one per step, on every method that takes them.
+// A nil callback means no constraint: a nil passable admits every cell, a nil cost charges one
+// per step, and a nil blocked blocks nothing.
 //
-// Range, distance and neighbors agree: [Grid.Range] holds only cells within that many steps of
+// Range, distance and neighbors agree: [Grid.Range] holds only cells within radius by
 // [Grid.Distance], and a neighbor is a cell at distance one.
 //
 // Sight is reciprocal: two cells see each other or neither does, and neither end blocks. A cell
@@ -32,16 +50,46 @@
 //
 // A path holds both its ends and steps between neighbors; a search that finds none returns nil.
 //
-// Every Bounds is a geom.Box, the axis-aligned extent, and the size of a cell is its size as
-// drawn.
+// A [Region] never changes: every operation returns a region, and one that would equal a side
+// is that side.
+//
+// Every Bounds is a geom.Box, the axis-aligned extent. The cell size is the box of a cell as
+// drawn; the cell scale a constructor takes is the size of a square or a diamond and the
+// circumradius per axis of a hexagon.
+//
+// # Allocations
+//
+// A slice or region result is allocated once, at its final size, and each has an Append form
+// that allocates nothing once the caller's slice has room. A traversal has a Seq form; that of
+// a range gathers the range before it yields any of it, since a cell is known to be in sight
+// only once every cell around it was asked about. A search allocates its scratch once per call,
+// sized by the grid.
+//
+// # Supported range
+//
+// A cell is placed to the precision a float64 has where the grid is, and the package is tested
+// for grids within a million units of the world origin, with cells from a hundredth of a unit
+// to a thousand: there the center of a cell maps back to its index and an edge that is a
+// number a float holds goes to the same side in every cell. Further out a step from one cell
+// to the next is rounded more and more coarsely, and a point near an edge can land in the
+// cell beside it; no method tests for that. A point too far for an index to count gives a
+// platform-dependent one.
 //
 // # Panics
 //
-// A degenerate value gets an answer; an argument with no meaning gets a panic:
+// A degenerate value gets an answer; an argument with no meaning gets a panic, whose value is
+// an error:
 //
-//   - [Array.Get] and [Array.Set] for an index outside the array, as a slice does.
-//   - Every method of [Movement] but IsNone and String, every method of [Point] that takes a
-//     movement, and the constructors of a square grid, for a movement outside the constants.
-//   - [Grid.IndexAt], [Grid.CellAt] and [Layout.FromPoint] for a point with a NaN or infinite
-//     coordinate, through geom.Cast.
+//   - [Movement.DistanceTo], [Point.DistanceTo], [Point.Line] with its Append and Seq forms, and
+//     [NewRect] and [NewIsometric], for a movement outside the constants: no index is reached
+//     from another under it. Every other method answers as for no neighbors.
+//   - [Grid.IndexAt], [Grid.CellAt] and [HexLayout.IndexAt] for a point with a NaN or infinite
+//     coordinate, and the iterator of [Grid.DrawOrder] for such bounds on a rectangular or
+//     hexagonal grid: no cell is at it.
+//   - Every constructor, [Grid.Resize] and [HexLayout.Resize] for a cell scale that is not
+//     positive and finite on both axes: no cell can be drawn at it.
+//   - The constructors of a grid, [Grid.MoveTo] and [HexLayout.MoveTo] for an origin with a NaN
+//     or infinite coordinate: no cell can be drawn from it.
+//   - [NewHexFlatTopLayout] and [NewHexPointyTopLayout] for a coordinate system outside the
+//     seven: no index can be read in it.
 package grid
