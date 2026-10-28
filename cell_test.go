@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/gravitton/assert"
+	"github.com/gravitton/container"
 	geom "github.com/gravitton/geometry"
 	"github.com/gravitton/geometry/geomtest"
 )
@@ -73,7 +74,7 @@ func TestCell_Center(t *testing.T) {
 		corner, cellSize := geom.Pt(-816.19, 732.64), geom.Sz(8.48, 89.09)
 		g := testGrids(geom.Sz(64, 64), cellSize, corner)["rectangular"]
 
-		for index := range Arr[int](g.Size()).Keys() {
+		for index := range container.Arr[int](g.Size()).Keys() {
 			center := geom.Pt(
 				corner.X+float64(float64(2*index.X+1)*float64(cellSize.Width*0.5)),
 				corner.Y+float64(float64(2*index.Y+1)*float64(cellSize.Height*0.5)),
@@ -170,14 +171,14 @@ func TestCell_Polygon(t *testing.T) {
 	})
 	t.Run("is centered on the cell", func(t *testing.T) {
 		for name, g := range grids {
-			for index := range Arr[int](g.Size()).Keys() {
+			for index := range container.Arr[int](g.Size()).Keys() {
 				geomtest.AssertPoint(t, g.Cell(index).Polygon().Center, g.Cell(index).Center(), name+" "+index.String()+": ")
 			}
 		}
 	})
 	t.Run("fills the bounds of the cell", func(t *testing.T) {
 		for name, g := range grids {
-			for index := range Arr[int](g.Size()).Keys() {
+			for index := range container.Arr[int](g.Size()).Keys() {
 				geomtest.AssertBox(t, g.Cell(index).Polygon().Bounds(), g.Cell(index).Bounds(), name+" "+index.String()+": ")
 			}
 		}
