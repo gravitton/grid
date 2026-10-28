@@ -9,8 +9,22 @@ import (
 	"testing"
 
 	"github.com/gravitton/assert"
+	"github.com/gravitton/container"
 	geom "github.com/gravitton/geometry"
 	"github.com/gravitton/geometry/geomtest"
+)
+
+var (
+	sinkRegion    Region
+	sinkPoints    []geom.Point[int]
+	sinkPoint     geom.Point[int]
+	sinkCenter    geom.Point[float64]
+	sinkBox       geom.Box[float64]
+	sinkSize      geom.Size[float64]
+	sinkBool      bool
+	sinkString    string
+	sinkHexLayout *HexLayout
+	sinkPolygon   geom.RegularPolygon[float64]
 )
 
 // layoutGrids returns one grid of each layout, 6 by 5.
@@ -390,7 +404,7 @@ func TestGrid_Range(t *testing.T) {
 		}
 	})
 	t.Run("the farthest cell is in a range of any radius beyond it, from every cell of a small grid", func(t *testing.T) {
-		for size := range Arr[int](geom.Sz(7, 7)).Keys() {
+		for size := range container.Arr[int](geom.Sz(7, 7)).Keys() {
 			size := geom.Sz(size.X+1, size.Y+1)
 			small := testGrids(size, geom.Sz(32.0, 20.0), geom.Pt(0.0, 0.0))
 			small["diagonal"] = NewRect[int](size, geom.Sz(32.0, 32.0), withDiagonalMovement)
@@ -548,15 +562,16 @@ func TestGrid_Range(t *testing.T) {
 			}), 1.0, name+": ")
 		}
 	})
-	t.Run("allocates three times more where a cell is refused, for the cells refused and the sight past them", func(t *testing.T) {
+	t.Run("allocates twice more where a cell is refused, for the marks and the sight past them, and once more on a hexagonal grid for its sweep", func(t *testing.T) {
 		open := func(cell Cell[int]) bool {
 			return cell.Index() != geom.Pt(5, 6)
 		}
+		allocs := map[string]float64{"cardinal": 3, "diagonal": 3, "flat-top": 4, "pointy-top": 4}
 
 		for name, g := range grids {
 			assert.Equal(t, testing.AllocsPerRun(10, func() {
 				sinkRegion = g.Range(center, 4, open)
-			}), 4.0, name+": ")
+			}), allocs[name], name+": ")
 		}
 	})
 }
@@ -779,6 +794,255 @@ func TestGrid_RangeSeq(t *testing.T) {
 	}
 }
 
+func TestGrid_Ring(t *testing.T) {
+	grids, center := rangeGrids()
+
+	t.Run("cardinal walks the diamond, by increasing angle", func(t *testing.T) {
+		assert.Equal(t, grids["cardinal"].Ring(center, 1), grids["cardinal"].Neighbors(center))
+	})
+	t.Run("a radius of zero is the index alone", func(t *testing.T) {
+		for name, g := range grids {
+			assert.Equal(t, g.Ring(center, 0), []geom.Point[int]{center}, name+": ")
+		}
+	})
+	t.Run("is exactly the cells at the distance of the radius", func(t *testing.T) {
+		for name, g := range grids {
+			for _, index := range []geom.Point[int]{center, geom.Pt(0, 0), geom.Pt(10, 3)} {
+				for radius := range 6 {
+					var expected []geom.Point[int]
+					for other := range g.All() {
+						if g.Distance(index, other.Index()) == radius {
+							expected = append(expected, other.Index())
+						}
+					}
+
+					ring := g.Ring(index, radius)
+
+					assert.Length(t, ring, len(expected), name+" at "+index.String()+": ")
+					assert.True(t, Reg(ring).Equal(Reg(expected)), name+" at "+index.String()+": ")
+				}
+			}
+		}
+	})
+	t.Run("a radius no cell is at has none", func(t *testing.T) {
+		for name, g := range grids {
+			assert.Nil(t, g.Ring(center, 40), name+": ")
+			assert.Nil(t, g.Ring(center, math.MaxInt), name+": ")
+		}
+	})
+	t.Run("a negative radius has none", func(t *testing.T) {
+		for name, g := range grids {
+			assert.Nil(t, g.Ring(center, -1), name+": ")
+		}
+	})
+	t.Run("an index outside the grid has none, even beside it", func(t *testing.T) {
+		for name, g := range grids {
+			assert.Nil(t, g.Ring(geom.Pt(-1, 5), 2), name+": ")
+		}
+	})
+	t.Run("allocates once, at the count of the ring", func(t *testing.T) {
+		for name, g := range grids {
+			assert.Equal(t, cap(g.Ring(geom.Pt(0, 0), 3)), len(g.Ring(center, 3)), name+": ")
+			assert.Equal(t, testing.AllocsPerRun(10, func() {
+				sinkPoints = g.Ring(center, 3)
+			}), 1.0, name+": ")
+		}
+	})
+}
+
+func BenchmarkGrid_Ring(b *testing.B) {
+	grids, center := rangeGrids()
+
+	for _, name := range []string{"cardinal", "diagonal", "flat-top", "pointy-top"} {
+		b.Run(name, func(b *testing.B) {
+			g := grids[name]
+
+			for b.Loop() {
+				sinkPoints = g.Ring(center, 4)
+			}
+		})
+	}
+}
+
+func ExampleGrid_Ring() {
+	g := NewHexFlatTop[bool](geom.Sz(5, 5), HexFlatTopCellSize(32))
+
+	index := geom.Pt(1, 1)
+
+	fmt.Println(g.Ring(index, 1))
+	fmt.Println(g.Ring(index, 2))
+	fmt.Println(g.Spiral(index, 1))
+	fmt.Println(g.Line(geom.Pt(0, 0), geom.Pt(4, 2)))
+	// Output:
+	// [(2,2) (1,2) (0,2) (0,1) (1,0) (2,1)]
+	// [(3,2) (2,3) (1,3) (0,3) (0,0) (2,0) (3,0) (3,1)]
+	// [(1,1) (2,2) (1,2) (0,2) (0,1) (1,0) (2,1)]
+	// [(0,0) (1,0) (2,1) (3,1) (4,2)]
+}
+
+func TestGrid_AppendRing(t *testing.T) {
+	grids, center := rangeGrids()
+
+	for name, g := range grids {
+		t.Run(name, func(t *testing.T) {
+			t.Run("appends what Ring returns", func(t *testing.T) {
+				assert.Equal(t, g.AppendRing([]geom.Point[int]{geom.Pt(9, 9)}, geom.Pt(1, 1), 3), append([]geom.Point[int]{geom.Pt(9, 9)}, g.Ring(geom.Pt(1, 1), 3)...))
+			})
+			t.Run("appends nothing where Ring has none", func(t *testing.T) {
+				assert.Length(t, g.AppendRing(nil, center, -1), 0)
+				assert.Length(t, g.AppendRing(nil, center, 40), 0)
+				assert.Length(t, g.AppendRing(nil, geom.Pt(-1, 5), 2), 0)
+			})
+			t.Run("allocates nothing with room", func(t *testing.T) {
+				buffer := make([]geom.Point[int], 0, 64)
+
+				assert.Equal(t, testing.AllocsPerRun(10, func() {
+					sinkPoints = g.AppendRing(buffer, center, 3)
+				}), 0.0)
+			})
+		})
+	}
+}
+
+func TestGrid_RingSeq(t *testing.T) {
+	grids, center := rangeGrids()
+
+	for name, g := range grids {
+		t.Run(name, func(t *testing.T) {
+			t.Run("yields what Ring returns", func(t *testing.T) {
+				assert.Equal(t, slices.Collect(g.RingSeq(geom.Pt(1, 1), 3)), g.Ring(geom.Pt(1, 1), 3))
+			})
+			t.Run("yields nothing where Ring has none", func(t *testing.T) {
+				assert.Length(t, slices.Collect(g.RingSeq(center, -1)), 0)
+			})
+			t.Run("stops at the break", func(t *testing.T) {
+				count := 0
+				for range g.RingSeq(center, 3) {
+					count++
+
+					break
+				}
+
+				assert.Equal(t, count, 1)
+			})
+		})
+	}
+}
+
+func TestGrid_Spiral(t *testing.T) {
+	grids, center := rangeGrids()
+
+	t.Run("starts at the index", func(t *testing.T) {
+		for name, g := range grids {
+			assert.Equal(t, g.Spiral(center, 3)[0], center, name+": ")
+		}
+	})
+	t.Run("is the rings in turn, outward", func(t *testing.T) {
+		for name, g := range grids {
+			for _, index := range []geom.Point[int]{center, geom.Pt(0, 0), geom.Pt(10, 3)} {
+				var expected []geom.Point[int]
+				for radius := range 5 {
+					expected = g.AppendRing(expected, index, radius)
+				}
+
+				assert.Equal(t, g.Spiral(index, 4), expected, name+" at "+index.String()+": ")
+			}
+		}
+	})
+	t.Run("holds the cells of the range", func(t *testing.T) {
+		for name, g := range grids {
+			for _, index := range []geom.Point[int]{center, geom.Pt(0, 0), geom.Pt(10, 3)} {
+				assert.True(t, Reg(g.Spiral(index, 4)).Equal(g.Range(index, 4, nil)), name+" at "+index.String()+": ")
+			}
+		}
+	})
+	t.Run("a radius beyond the grid is the whole grid", func(t *testing.T) {
+		for name, g := range grids {
+			assert.Length(t, g.Spiral(center, math.MaxInt), g.Width()*g.Height(), name+": ")
+		}
+	})
+	t.Run("a negative radius has none", func(t *testing.T) {
+		for name, g := range grids {
+			assert.Nil(t, g.Spiral(center, -1), name+": ")
+		}
+	})
+	t.Run("an index outside the grid has none, even beside it", func(t *testing.T) {
+		for name, g := range grids {
+			assert.Nil(t, g.Spiral(geom.Pt(-1, 5), 2), name+": ")
+		}
+	})
+	t.Run("allocates once, at the count of the range", func(t *testing.T) {
+		for name, g := range grids {
+			assert.Equal(t, cap(g.Spiral(geom.Pt(0, 0), 3)), len(g.Spiral(center, 3)), name+": ")
+			assert.Equal(t, testing.AllocsPerRun(10, func() {
+				sinkPoints = g.Spiral(center, 3)
+			}), 1.0, name+": ")
+		}
+	})
+}
+
+func BenchmarkGrid_Spiral(b *testing.B) {
+	grids, center := rangeGrids()
+
+	for _, name := range []string{"cardinal", "diagonal", "flat-top", "pointy-top"} {
+		b.Run(name, func(b *testing.B) {
+			g := grids[name]
+
+			for b.Loop() {
+				sinkPoints = g.Spiral(center, 4)
+			}
+		})
+	}
+}
+
+func TestGrid_AppendSpiral(t *testing.T) {
+	grids, center := rangeGrids()
+
+	for name, g := range grids {
+		t.Run(name, func(t *testing.T) {
+			t.Run("appends what Spiral returns", func(t *testing.T) {
+				assert.Equal(t, g.AppendSpiral([]geom.Point[int]{geom.Pt(9, 9)}, geom.Pt(1, 1), 3), append([]geom.Point[int]{geom.Pt(9, 9)}, g.Spiral(geom.Pt(1, 1), 3)...))
+			})
+			t.Run("appends nothing where Spiral has none", func(t *testing.T) {
+				assert.Length(t, g.AppendSpiral(nil, center, -1), 0)
+				assert.Length(t, g.AppendSpiral(nil, geom.Pt(-1, 5), 2), 0)
+			})
+			t.Run("allocates nothing with room", func(t *testing.T) {
+				buffer := make([]geom.Point[int], 0, 64)
+
+				assert.Equal(t, testing.AllocsPerRun(10, func() {
+					sinkPoints = g.AppendSpiral(buffer, center, 3)
+				}), 0.0)
+			})
+		})
+	}
+}
+
+func TestGrid_SpiralSeq(t *testing.T) {
+	grids, center := rangeGrids()
+
+	for name, g := range grids {
+		t.Run(name, func(t *testing.T) {
+			t.Run("yields what Spiral returns", func(t *testing.T) {
+				assert.Equal(t, slices.Collect(g.SpiralSeq(geom.Pt(1, 1), 3)), g.Spiral(geom.Pt(1, 1), 3))
+			})
+			t.Run("yields nothing where Spiral has none", func(t *testing.T) {
+				assert.Length(t, slices.Collect(g.SpiralSeq(center, -1)), 0)
+			})
+			t.Run("stops at the break", func(t *testing.T) {
+				count := 0
+				for range g.SpiralSeq(center, 3) {
+					count++
+
+					break
+				}
+
+				assert.Equal(t, count, 1)
+			})
+		})
+	}
+}
+
 func TestGrid_Distance(t *testing.T) {
 	grids, center := rangeGrids()
 
@@ -818,6 +1082,119 @@ func TestGrid_Distance(t *testing.T) {
 	t.Run("measures between indices outside the grid too", func(t *testing.T) {
 		assert.Equal(t, grids["cardinal"].Distance(geom.Pt(-2, 0), geom.Pt(20, 0)), 22)
 	})
+}
+
+func TestGrid_Line(t *testing.T) {
+	grids, center := rangeGrids()
+
+	t.Run("a line to itself is the index alone", func(t *testing.T) {
+		for name, g := range grids {
+			assert.Equal(t, g.Line(center, center), []geom.Point[int]{center}, name+": ")
+		}
+	})
+	t.Run("steps from one end to the other by neighbors", func(t *testing.T) {
+		for name, g := range grids {
+			for from := range g.All() {
+				for _, to := range []geom.Point[int]{center, geom.Pt(0, 0), geom.Pt(10, 3)} {
+					line := g.Line(from.Index(), to)
+
+					assert.Length(t, line, g.Distance(from.Index(), to)+1, name+" from "+from.Index().String()+": ")
+					assert.Equal(t, line[0], from.Index(), name+" from "+from.Index().String()+": ")
+					assert.Equal(t, line[len(line)-1], to, name+" from "+from.Index().String()+": ")
+					for i := 1; i < len(line); i++ {
+						assert.Equal(t, g.Distance(line[i-1], line[i]), 1, name+" from "+from.Index().String()+": ")
+					}
+				}
+			}
+		}
+	})
+	t.Run("stays inside a square grid", func(t *testing.T) {
+		for _, name := range []string{"cardinal", "diagonal"} {
+			g := grids[name]
+			for from := range g.All() {
+				for _, index := range g.Line(from.Index(), geom.Pt(10, 3)) {
+					assert.True(t, g.Contains(index), name+" from "+from.Index().String()+": ")
+				}
+			}
+		}
+	})
+	t.Run("is measured outside the grid too", func(t *testing.T) {
+		for name, g := range grids {
+			assert.Length(t, g.Line(geom.Pt(-3, -3), geom.Pt(-3, 0)), g.Distance(geom.Pt(-3, -3), geom.Pt(-3, 0))+1, name+": ")
+		}
+	})
+	t.Run("keeps its steps along a zigzag edge of a hexagonal grid", func(t *testing.T) {
+		for name, g := range hexGrids() {
+			for from := range g.All() {
+				for to := range g.All() {
+					assert.Length(t, g.Line(from.Index(), to.Index()), g.Distance(from.Index(), to.Index())+1, name+": ")
+				}
+			}
+		}
+	})
+	t.Run("allocates once, at the count of its steps", func(t *testing.T) {
+		for name, g := range grids {
+			assert.Equal(t, cap(g.Line(geom.Pt(0, 0), geom.Pt(10, 3))), len(g.Line(geom.Pt(0, 0), geom.Pt(10, 3))), name+": ")
+			assert.Equal(t, testing.AllocsPerRun(10, func() {
+				sinkPoints = g.Line(geom.Pt(0, 0), geom.Pt(10, 3))
+			}), 1.0, name+": ")
+		}
+	})
+}
+
+func BenchmarkGrid_Line(b *testing.B) {
+	grids, _ := rangeGrids()
+
+	for _, name := range []string{"cardinal", "diagonal", "flat-top", "pointy-top"} {
+		b.Run(name, func(b *testing.B) {
+			g := grids[name]
+
+			for b.Loop() {
+				sinkPoints = g.Line(geom.Pt(0, 0), geom.Pt(10, 3))
+			}
+		})
+	}
+}
+
+func TestGrid_AppendLine(t *testing.T) {
+	grids, _ := rangeGrids()
+
+	for name, g := range grids {
+		t.Run(name, func(t *testing.T) {
+			t.Run("appends what Line returns", func(t *testing.T) {
+				assert.Equal(t, g.AppendLine([]geom.Point[int]{geom.Pt(9, 9)}, geom.Pt(1, 1), geom.Pt(10, 3)), append([]geom.Point[int]{geom.Pt(9, 9)}, g.Line(geom.Pt(1, 1), geom.Pt(10, 3))...))
+			})
+			t.Run("allocates nothing with room", func(t *testing.T) {
+				buffer := make([]geom.Point[int], 0, 64)
+
+				assert.Equal(t, testing.AllocsPerRun(10, func() {
+					sinkPoints = g.AppendLine(buffer, geom.Pt(0, 0), geom.Pt(10, 3))
+				}), 0.0)
+			})
+		})
+	}
+}
+
+func TestGrid_LineSeq(t *testing.T) {
+	grids, _ := rangeGrids()
+
+	for name, g := range grids {
+		t.Run(name, func(t *testing.T) {
+			t.Run("yields what Line returns", func(t *testing.T) {
+				assert.Equal(t, slices.Collect(g.LineSeq(geom.Pt(1, 1), geom.Pt(10, 3))), g.Line(geom.Pt(1, 1), geom.Pt(10, 3)))
+			})
+			t.Run("stops at the break", func(t *testing.T) {
+				count := 0
+				for range g.LineSeq(geom.Pt(1, 1), geom.Pt(10, 3)) {
+					count++
+
+					break
+				}
+
+				assert.Equal(t, count, 1)
+			})
+		})
+	}
 }
 
 func TestGrid_Contains(t *testing.T) {
