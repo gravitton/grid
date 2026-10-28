@@ -7,46 +7,45 @@ import (
 	geom "github.com/gravitton/geometry"
 )
 
-// Point is an index of a square grid, with the lattice queries [geom.Point] does not have:
-// the neighbors, ranges, rings and lines around it and the sight from it. It is to a square
-// grid what hex.Hex is to a hexagonal one. A method whose answer depends on which cells are
-// adjacent takes the [Movement], and panics for one outside the constants.
+// Point is an index of a square grid, with the lattice queries [geom.Point] does not have: the
+// neighbors, ranges, rings and lines around it and the sight from it. A method whose answer
+// depends on which cells are adjacent takes the [Movement].
 type Point geom.Point[int]
 
-// Pt returns the Point at column x and row y.
+// Pt is shorthand for Point{x, y}.
 func Pt(x, y int) Point {
 	return Point{X: x, Y: y}
 }
 
-// RangeLen returns the number of indices Point.Range and Point.Spiral return for n steps under
-// the movement, to size a buffer with, and zero for a negative n.
-func RangeLen(n int, movement Movement) int {
-	count := movement.neighborCount()
-	if n < 0 {
+// RangeLen returns the length of Range and Spiral for the radius under the movement
+// (1+2r(r+1) cardinal, (2r+1)² diagonal), one for a movement outside the constants and zero
+// for a negative radius.
+func RangeLen(radius int, movement Movement) int {
+	count := movement.neighborsLen()
+	if radius < 0 {
 		return 0
 	}
 
-	return 1 + count*n*(n+1)/2
+	return 1 + count*radius*(radius+1)/2
 }
 
-// RingLen returns the number of indices Point.Ring returns for n steps under the movement, to
-// size a buffer with: zero for a negative n and one for a zero n.
-func RingLen(n int, movement Movement) int {
-	count := movement.neighborCount()
+// RingLen returns the length of Ring for the radius under the movement (4r cardinal, 8r
+// diagonal), one for a zero radius and zero for a negative one.
+func RingLen(radius int, movement Movement) int {
+	count := movement.neighborsLen()
 
 	switch {
-	case n < 0:
+	case radius < 0:
 		return 0
-	case n == 0:
+	case radius == 0:
 		return 1
 	default:
-		return count * n
+		return count * radius
 	}
 }
 
-// Turn returns the point turned around the origin by steps quarter turns of increasing angle,
-// the sense of geom.Direction.Turn: clockwise as drawn on a screen with Y pointing down.
-// Negative steps turn the other way.
+// Turn returns the point turned about the origin by steps quarter-turns of increasing angle;
+// negative steps go the other way.
 func (p Point) Turn(steps int) Point {
 	switch ((steps % 4) + 4) % 4 {
 	case 1:
@@ -60,20 +59,20 @@ func (p Point) Turn(steps int) Point {
 	}
 }
 
-// TurnAround returns the point turned around center by steps quarter turns, as Turn turns it
-// around the origin.
+// TurnAround returns the point turned about center by steps quarter-turns of increasing angle;
+// negative steps go the other way.
 func (p Point) TurnAround(center geom.Point[int], steps int) Point {
 	turned := Point{X: p.X - center.X, Y: p.Y - center.Y}.Turn(steps)
 
 	return Point{X: turned.X + center.X, Y: turned.Y + center.Y}
 }
 
-// ReflectX returns the point mirrored across the x-axis, its row negated.
+// ReflectX returns the point reflected across the x-axis, its row negated.
 func (p Point) ReflectX() Point {
 	return Point{X: p.X, Y: -p.Y}
 }
 
-// ReflectY returns the point mirrored across the y-axis, its column negated.
+// ReflectY returns the point reflected across the y-axis, its column negated.
 func (p Point) ReflectY() Point {
 	return Point{X: -p.X, Y: p.Y}
 }
@@ -84,39 +83,48 @@ func (p Point) Neighbor(direction geom.Direction) geom.Point[int] {
 	return p.Point().Add(direction.Offset[int]())
 }
 
-// Neighbors returns the indices adjacent to p under the movement, by increasing angle from
-// geom.DirectionRight.
+// Neighbors returns the indices adjacent to p under the movement, by increasing angle from the
+// one to the right, and nil for a movement outside the constants.
 func (p Point) Neighbors(movement Movement) []geom.Point[int] {
-	return p.AppendNeighbors(make([]geom.Point[int], 0, movement.neighborCount()), movement)
+	count := movement.neighborsLen()
+	if count == 0 {
+		return nil
+	}
+
+	return p.AppendNeighbors(make([]geom.Point[int], 0, count), movement)
 }
 
-// AppendNeighbors appends the indices Neighbors returns to dst and returns the extended slice.
+// AppendNeighbors appends the indices of Neighbors to dst and returns the extended slice.
 func (p Point) AppendNeighbors(dst []geom.Point[int], movement Movement) []geom.Point[int] {
-	count := movement.neighborCount()
-	directions := geom.Directions()
-
-	for i := 0; i < len(directions); i += len(directions) / count {
-		dst = append(dst, p.Neighbor(directions[i]))
+	switch movement {
+	case MovementCardinal:
+		for _, offset := range geom.CardinalOffsets[int]() {
+			dst = append(dst, p.Point().Add(offset))
+		}
+	case MovementDiagonal:
+		for _, offset := range geom.DirectionOffsets[int]() {
+			dst = append(dst, p.Point().Add(offset))
+		}
 	}
 
 	return dst
 }
 
-// Range returns every index at most n steps from p under the movement, p included, ordered by
-// x and then by y: a diamond for MovementCardinal, a square for MovementDiagonal. It returns
-// nil for a negative n.
-func (p Point) Range(n int, movement Movement) []geom.Point[int] {
-	size := RangeLen(n, movement)
-	if n < 0 {
+// Range returns the indices within radius of p under the movement, p included, in the order of
+// a region: a diamond for MovementCardinal, a square for MovementDiagonal and p alone for a
+// movement outside the constants. It returns nil for a negative radius.
+func (p Point) Range(radius int, movement Movement) []geom.Point[int] {
+	size := RangeLen(radius, movement)
+	if radius < 0 {
 		return nil
 	}
 
-	return p.AppendRange(make([]geom.Point[int], 0, size), n, movement)
+	return p.AppendRange(make([]geom.Point[int], 0, size), radius, movement)
 }
 
-// AppendRange appends the indices Range returns to dst and returns the extended slice.
-func (p Point) AppendRange(dst []geom.Point[int], n int, movement Movement) []geom.Point[int] {
-	p.within(n, movement.neighborCount() == 4, func(index geom.Point[int]) bool {
+// AppendRange appends the indices of Range to dst and returns the extended slice.
+func (p Point) AppendRange(dst []geom.Point[int], radius int, movement Movement) []geom.Point[int] {
+	p.within(radius, movement, func(index geom.Point[int]) bool {
 		dst = append(dst, index)
 
 		return true
@@ -125,19 +133,23 @@ func (p Point) AppendRange(dst []geom.Point[int], n int, movement Movement) []ge
 	return dst
 }
 
-// RangeSeq returns an iterator over the indices Range returns, in its order.
-func (p Point) RangeSeq(n int, movement Movement) iter.Seq[geom.Point[int]] {
+// RangeSeq returns an iterator over the indices of Range, in the same order.
+func (p Point) RangeSeq(radius int, movement Movement) iter.Seq[geom.Point[int]] {
 	return func(yield func(geom.Point[int]) bool) {
-		p.within(n, movement.neighborCount() == 4, yield)
+		p.within(radius, movement, yield)
 	}
 }
 
-// within yields the indices at most n steps from p, column by column, each column as far up
-// and down as the movement reaches, and reports whether it yielded them all.
-func (p Point) within(n int, cardinal bool, yield func(geom.Point[int]) bool) bool {
-	for dx := -n; dx <= n; dx++ {
-		reach := n
-		if cardinal {
+// within yields the indices within radius of p column by column, each as far up and down as
+// the movement reaches, and reports whether it yielded them all.
+func (p Point) within(radius int, movement Movement, yield func(geom.Point[int]) bool) bool {
+	if movement.IsNone() {
+		return radius < 0 || yield(p.Point())
+	}
+
+	for dx := -radius; dx <= radius; dx++ {
+		reach := radius
+		if movement == MovementCardinal {
 			reach -= geom.Abs(dx)
 		}
 
@@ -151,21 +163,21 @@ func (p Point) within(n int, cardinal bool, yield func(geom.Point[int]) bool) bo
 	return true
 }
 
-// Ring returns the indices exactly n steps from p under the movement, by increasing angle from
-// the one n steps to the right, so Ring(1) is Neighbors. It returns nil for a negative n and p
-// alone for a zero n.
-func (p Point) Ring(n int, movement Movement) []geom.Point[int] {
-	size := RingLen(n, movement)
-	if n < 0 {
+// Ring returns the indices at exactly radius steps from p under the movement, by increasing
+// angle from the one to the right, so the ring of radius one is Neighbors. It returns nil for a
+// negative radius and p alone for a zero one.
+func (p Point) Ring(radius int, movement Movement) []geom.Point[int] {
+	size := RingLen(radius, movement)
+	if radius < 0 {
 		return nil
 	}
 
-	return p.AppendRing(make([]geom.Point[int], 0, size), n, movement)
+	return p.AppendRing(make([]geom.Point[int], 0, size), radius, movement)
 }
 
-// AppendRing appends the indices Ring returns to dst and returns the extended slice.
-func (p Point) AppendRing(dst []geom.Point[int], n int, movement Movement) []geom.Point[int] {
-	p.ring(n, movement.neighborCount(), func(index geom.Point[int]) bool {
+// AppendRing appends the indices of Ring to dst and returns the extended slice.
+func (p Point) AppendRing(dst []geom.Point[int], radius int, movement Movement) []geom.Point[int] {
+	p.ring(radius, movement, func(index geom.Point[int]) bool {
 		dst = append(dst, index)
 
 		return true
@@ -174,32 +186,38 @@ func (p Point) AppendRing(dst []geom.Point[int], n int, movement Movement) []geo
 	return dst
 }
 
-// RingSeq returns an iterator over the indices Ring returns, in its order.
-func (p Point) RingSeq(n int, movement Movement) iter.Seq[geom.Point[int]] {
+// RingSeq returns an iterator over the indices of Ring, in the same order.
+func (p Point) RingSeq(radius int, movement Movement) iter.Seq[geom.Point[int]] {
 	return func(yield func(geom.Point[int]) bool) {
-		p.ring(n, movement.neighborCount(), yield)
+		p.ring(radius, movement, yield)
 	}
 }
 
-// ring yields the indices n steps from p for a movement of count neighbors, walking from each
-// neighbor direction scaled by n toward the next, and reports whether it yielded them all.
-func (p Point) ring(n int, count int, yield func(geom.Point[int]) bool) bool {
-	if n < 0 {
+// ring yields the indices at radius steps from p, walking from each neighbor step scaled by
+// radius toward the next, and reports whether it yielded them all.
+func (p Point) ring(radius int, movement Movement, yield func(geom.Point[int]) bool) bool {
+	if radius < 0 {
 		return true
 	}
-	if n == 0 {
+	if radius == 0 {
 		return yield(p.Point())
 	}
 
-	directions := geom.Directions()
-	stride := len(directions) / count
+	cardinals, all := geom.CardinalOffsets[int](), geom.DirectionOffsets[int]()
 
-	for i := 0; i < len(directions); i += stride {
-		corner := directions[i].Offset[int]()
-		next := directions[(i+stride)%len(directions)].Offset[int]()
+	var offsets []geom.Vector[int]
+	switch movement {
+	case MovementCardinal:
+		offsets = cardinals[:]
+	case MovementDiagonal:
+		offsets = all[:]
+	}
 
-		for j := range n {
-			if !yield(geom.Pt(p.X+corner.X*n+(next.X-corner.X)*j, p.Y+corner.Y*n+(next.Y-corner.Y)*j)) {
+	for i, corner := range offsets {
+		next := offsets[(i+1)%len(offsets)]
+
+		for j := range radius {
+			if !yield(geom.Pt(p.X+corner.X*radius+(next.X-corner.X)*j, p.Y+corner.Y*radius+(next.Y-corner.Y)*j)) {
 				return false
 			}
 		}
@@ -208,20 +226,20 @@ func (p Point) ring(n int, count int, yield func(geom.Point[int]) bool) bool {
 	return true
 }
 
-// Spiral returns the indices Range returns, ordered outward ring by ring from p, each ring as
-// Ring orders it. It returns nil for a negative n.
-func (p Point) Spiral(n int, movement Movement) []geom.Point[int] {
-	size := RangeLen(n, movement)
-	if n < 0 {
+// Spiral returns the indices of Range ring by ring outward from p, each in the order of Ring.
+// It returns nil for a negative radius.
+func (p Point) Spiral(radius int, movement Movement) []geom.Point[int] {
+	size := RangeLen(radius, movement)
+	if radius < 0 {
 		return nil
 	}
 
-	return p.AppendSpiral(make([]geom.Point[int], 0, size), n, movement)
+	return p.AppendSpiral(make([]geom.Point[int], 0, size), radius, movement)
 }
 
-// AppendSpiral appends the indices Spiral returns to dst and returns the extended slice.
-func (p Point) AppendSpiral(dst []geom.Point[int], n int, movement Movement) []geom.Point[int] {
-	p.spiral(n, movement.neighborCount(), func(index geom.Point[int]) bool {
+// AppendSpiral appends the indices of Spiral to dst and returns the extended slice.
+func (p Point) AppendSpiral(dst []geom.Point[int], radius int, movement Movement) []geom.Point[int] {
+	p.spiral(radius, movement, func(index geom.Point[int]) bool {
 		dst = append(dst, index)
 
 		return true
@@ -230,18 +248,18 @@ func (p Point) AppendSpiral(dst []geom.Point[int], n int, movement Movement) []g
 	return dst
 }
 
-// SpiralSeq returns an iterator over the indices Spiral returns, in its order, so a caller
-// looking for the nearest match stops at it.
-func (p Point) SpiralSeq(n int, movement Movement) iter.Seq[geom.Point[int]] {
+// SpiralSeq returns an iterator over the indices of Spiral, in the same order.
+func (p Point) SpiralSeq(radius int, movement Movement) iter.Seq[geom.Point[int]] {
 	return func(yield func(geom.Point[int]) bool) {
-		p.spiral(n, movement.neighborCount(), yield)
+		p.spiral(radius, movement, yield)
 	}
 }
 
-// spiral yields the rings of radius zero to n in turn and reports whether it yielded them all.
-func (p Point) spiral(n int, count int, yield func(geom.Point[int]) bool) bool {
-	for radius := 0; radius <= n; radius++ {
-		if !p.ring(radius, count, yield) {
+// spiral yields the rings from zero to radius steps in turn and reports whether it yielded them
+// all.
+func (p Point) spiral(radius int, movement Movement, yield func(geom.Point[int]) bool) bool {
+	for distance := 0; distance <= radius; distance++ {
+		if !p.ring(distance, movement, yield) {
 			return false
 		}
 	}
@@ -250,22 +268,22 @@ func (p Point) spiral(n int, count int, yield func(geom.Point[int]) bool) bool {
 }
 
 // DistanceTo returns the number of steps from p to the index under the movement: the Manhattan
-// distance for MovementCardinal, the Chebyshev distance for MovementDiagonal.
+// distance for MovementCardinal, the Chebyshev distance for MovementDiagonal. It panics for a
+// movement outside the constants.
 func (p Point) DistanceTo(to geom.Point[int], movement Movement) int {
 	return movement.DistanceTo(p.Point(), to)
 }
 
 // DirectionTo returns the direction of the movement nearest to the one from p to target, and
-// geom.DirectionNone for p itself. Under MovementCardinal a target on a diagonal answers the
-// horizontal direction.
+// geom.DirectionNone for p itself and for a movement outside the constants. Under
+// MovementCardinal a target on a diagonal answers the horizontal direction.
 func (p Point) DirectionTo(target geom.Point[int], movement Movement) geom.Direction {
-	cardinal := movement.neighborCount() == 4
 	dx, dy := target.X-p.X, target.Y-p.Y
 
 	switch {
-	case dx == 0 && dy == 0:
+	case dx == 0 && dy == 0, movement.IsNone():
 		return geom.DirectionNone
-	case !cardinal:
+	case movement == MovementDiagonal:
 		return geom.DirectionFromAngle(math.Atan2(float64(dy), float64(dx)))
 	case geom.Abs(dx) >= geom.Abs(dy) && dx > 0:
 		return geom.DirectionRight
@@ -278,16 +296,17 @@ func (p Point) DirectionTo(target geom.Point[int], movement Movement) geom.Direc
 	}
 }
 
-// Line returns the indices from p to target, both included, each a neighbor of the one before
-// it under the movement, so its length is the distance plus one. It is the traversal, not the
-// sight rule: HasLineOfSight decides what a blocker hides.
+// Line returns the indices of the straight line from p to target, both included, each a
+// neighbor of the one before under the movement. It is the traversal, not the sight rule: a
+// blocker off the line can still block sight. It panics for a movement outside the constants.
 func (p Point) Line(target geom.Point[int], movement Movement) []geom.Point[int] {
 	return p.AppendLine(make([]geom.Point[int], 0, p.DistanceTo(target, movement)+1), target, movement)
 }
 
-// AppendLine appends the indices Line returns to dst and returns the extended slice.
+// AppendLine appends the indices of Line to dst and returns the extended slice. It panics for a
+// movement outside the constants.
 func (p Point) AppendLine(dst []geom.Point[int], target geom.Point[int], movement Movement) []geom.Point[int] {
-	p.line(target, movement.neighborCount() == 4, func(index geom.Point[int]) bool {
+	p.line(target, movement, func(index geom.Point[int]) bool {
 		dst = append(dst, index)
 
 		return true
@@ -296,17 +315,22 @@ func (p Point) AppendLine(dst []geom.Point[int], target geom.Point[int], movemen
 	return dst
 }
 
-// LineSeq returns an iterator over the indices Line returns, in its order.
+// LineSeq returns an iterator over the indices of Line, in the same order. It panics, once
+// ranged, for a movement outside the constants.
 func (p Point) LineSeq(target geom.Point[int], movement Movement) iter.Seq[geom.Point[int]] {
 	return func(yield func(geom.Point[int]) bool) {
-		p.line(target, movement.neighborCount() == 4, yield)
+		p.line(target, movement, yield)
 	}
 }
 
 // line yields the indices from p to target and reports whether it yielded them all. Under a
-// cardinal movement every step goes along one axis, the one further behind the line, i and j
-// counting the steps taken along each; under a diagonal one it is the Bresenham walk.
-func (p Point) line(target geom.Point[int], cardinal bool, yield func(geom.Point[int]) bool) bool {
+// cardinal movement each step goes along the axis further behind the line, i and j counting the
+// steps along each; under a diagonal one it is the Bresenham walk.
+func (p Point) line(target geom.Point[int], movement Movement, yield func(geom.Point[int]) bool) bool {
+	if movement.IsNone() {
+		panic(movement.unknown())
+	}
+
 	x, y := p.X, p.Y
 	dx, dy := geom.Abs(target.X-x), geom.Abs(target.Y-y)
 	sx, sy := geom.Sign(target.X-x), geom.Sign(target.Y-y)
@@ -315,7 +339,7 @@ func (p Point) line(target geom.Point[int], cardinal bool, yield func(geom.Point
 		return false
 	}
 
-	if cardinal {
+	if movement == MovementCardinal {
 		for i, j := 0, 0; i < dx || j < dy; {
 			if (1+2*i)*dy < (1+2*j)*dx {
 				x += sx
@@ -352,10 +376,9 @@ func (p Point) line(target geom.Point[int], cardinal bool, yield func(geom.Point
 	return true
 }
 
-// HasLineOfSight reports whether p sees target past the blocking indices. The line between the
-// two is walked from the lower of them, so the answer is the same from either end, and neither
-// end blocks. Where the line passes the corner between two cells it is stopped only when both
-// block, so a diagonal run of blockers is opaque and a single one is not.
+// HasLineOfSight reports whether p sees target past the blocking indices. Where the line passes
+// the corner between two cells it is stopped only when both block, so a diagonal run of
+// blockers is opaque and a single one is not.
 func (p Point) HasLineOfSight(target geom.Point[int], blocking []geom.Point[int]) bool {
 	if len(blocking) == 0 {
 		return true
@@ -364,8 +387,8 @@ func (p Point) HasLineOfSight(target geom.Point[int], blocking []geom.Point[int]
 	return p.hasLineOfSight(target, blockers{set: newPointSet(blocking)})
 }
 
-// HasLineOfSightFunc is HasLineOfSight asking blocked about each index the line passes, for a
-// caller whose blockers are a lookup in a map or a grid. A nil blocked blocks nothing.
+// HasLineOfSightFunc reports whether p sees target past the indices blocked reports, asking it
+// only about the indices the line passes.
 func (p Point) HasLineOfSightFunc(target geom.Point[int], blocked func(geom.Point[int]) bool) bool {
 	if blocked == nil {
 		return true
@@ -374,14 +397,18 @@ func (p Point) HasLineOfSightFunc(target geom.Point[int], blocked func(geom.Poin
 	return p.hasLineOfSight(target, blockers{blocked: blocked})
 }
 
-// FieldOfView returns the candidates p has line of sight to past the blocking indices, in the
-// order given. The indices adjacent to p, corners included, are always in sight.
+// FieldOfView returns the candidates HasLineOfSight sees from p past the blocking indices, in
+// the order given, and nil for no candidates. A candidate adjacent to p, across a corner too, is
+// always in sight.
 func (p Point) FieldOfView(candidates []geom.Point[int], blocking []geom.Point[int]) []geom.Point[int] {
+	if len(candidates) == 0 {
+		return nil
+	}
+
 	return p.AppendFieldOfView(make([]geom.Point[int], 0, len(candidates)), candidates, blocking)
 }
 
-// AppendFieldOfView appends the indices FieldOfView returns to dst and returns the extended
-// slice.
+// AppendFieldOfView appends the indices of FieldOfView to dst and returns the extended slice.
 func (p Point) AppendFieldOfView(dst []geom.Point[int], candidates []geom.Point[int], blocking []geom.Point[int]) []geom.Point[int] {
 	p.fieldOfView(candidates, blockers{set: newPointSet(blocking)}, func(index geom.Point[int]) bool {
 		dst = append(dst, index)
@@ -392,7 +419,7 @@ func (p Point) AppendFieldOfView(dst []geom.Point[int], candidates []geom.Point[
 	return dst
 }
 
-// FieldOfViewSeq returns an iterator over the indices FieldOfView returns, in its order.
+// FieldOfViewSeq returns an iterator over the indices of FieldOfView, in the same order.
 func (p Point) FieldOfViewSeq(candidates []geom.Point[int], blocking []geom.Point[int]) iter.Seq[geom.Point[int]] {
 	blocks := blockers{set: newPointSet(blocking)}
 
@@ -401,14 +428,19 @@ func (p Point) FieldOfViewSeq(candidates []geom.Point[int], blocking []geom.Poin
 	}
 }
 
-// FieldOfViewFunc is FieldOfView asking blocked about each index a line passes. A nil blocked
-// blocks nothing.
+// FieldOfViewFunc returns the candidates HasLineOfSightFunc sees from p past the indices
+// blocked reports, in the order given, and nil for no candidates. A candidate adjacent to p,
+// across a corner too, is always in sight.
 func (p Point) FieldOfViewFunc(candidates []geom.Point[int], blocked func(geom.Point[int]) bool) []geom.Point[int] {
+	if len(candidates) == 0 {
+		return nil
+	}
+
 	return p.AppendFieldOfViewFunc(make([]geom.Point[int], 0, len(candidates)), candidates, blocked)
 }
 
-// AppendFieldOfViewFunc appends the indices FieldOfViewFunc returns to dst and returns the
-// extended slice.
+// AppendFieldOfViewFunc appends the indices of FieldOfViewFunc to dst and returns the extended
+// slice.
 func (p Point) AppendFieldOfViewFunc(dst []geom.Point[int], candidates []geom.Point[int], blocked func(geom.Point[int]) bool) []geom.Point[int] {
 	p.fieldOfView(candidates, blockers{blocked: blocked}, func(index geom.Point[int]) bool {
 		dst = append(dst, index)
@@ -419,7 +451,7 @@ func (p Point) AppendFieldOfViewFunc(dst []geom.Point[int], candidates []geom.Po
 	return dst
 }
 
-// FieldOfViewFuncSeq returns an iterator over the indices FieldOfViewFunc returns, in its
+// FieldOfViewFuncSeq returns an iterator over the indices of FieldOfViewFunc, in the same
 // order.
 func (p Point) FieldOfViewFuncSeq(candidates []geom.Point[int], blocked func(geom.Point[int]) bool) iter.Seq[geom.Point[int]] {
 	return func(yield func(geom.Point[int]) bool) {
@@ -433,7 +465,7 @@ func (p Point) fieldOfView(candidates []geom.Point[int], blocks blockers, yield 
 	none := blocks.isEmpty()
 
 	for _, candidate := range candidates {
-		if !none && p.Point().ChebyshevDistanceTo(candidate) > 1 && !p.hasLineOfSight(candidate, blocks) {
+		if !none && !p.sees(candidate, blocks) {
 			continue
 		}
 
@@ -443,6 +475,12 @@ func (p Point) fieldOfView(candidates []geom.Point[int], blocks blockers, yield 
 	}
 
 	return true
+}
+
+// sees reports whether the candidate is in the field of view of p: adjacent to it, corners
+// included, or in line of sight past the blockers.
+func (p Point) sees(candidate geom.Point[int], blocks blockers) bool {
+	return p.Point().ChebyshevDistanceTo(candidate) <= 1 || p.hasLineOfSight(candidate, blocks)
 }
 
 // hasLineOfSight is the sight rule every form shares, asking the blockers about the cells the
@@ -459,19 +497,14 @@ func (p Point) hasLineOfSight(target geom.Point[int], blocks blockers) bool {
 	x0, y0 := from.XY()
 	x1, y1 := to.XY()
 
+	// the walk starts at the lower endpoint, so it never steps back along x
 	dx := x1 - x0
-	if dx < 0 {
-		dx = -dx
-	}
 	dy := y1 - y0
 	if dy < 0 {
 		dy = -dy
 	}
 
-	sx, sy := 1, 1
-	if x0 > x1 {
-		sx = -1
-	}
+	sy := 1
 	if y0 > y1 {
 		sy = -1
 	}
@@ -488,13 +521,13 @@ func (p Point) hasLineOfSight(target geom.Point[int], blocks blockers) bool {
 		stepY := e2 < dx
 
 		// crossing a corner: opaque only when both flanking cells block
-		if stepX && stepY && blocks.has(geom.Pt(x+sx, y)) && blocks.has(geom.Pt(x, y+sy)) {
+		if stepX && stepY && blocks.has(geom.Pt(x+1, y)) && blocks.has(geom.Pt(x, y+sy)) {
 			return false
 		}
 
 		if stepX {
 			err -= dy
-			x += sx
+			x++
 		}
 		if stepY {
 			err += dx
@@ -510,7 +543,7 @@ func (p Point) hasLineOfSight(target geom.Point[int], blocks blockers) bool {
 	}
 }
 
-// Point returns the index as the geom.Point it is.
+// Point returns p as the geom.Point it is.
 func (p Point) Point() geom.Point[int] {
 	return geom.Point[int](p)
 }
@@ -537,11 +570,10 @@ func (b blockers) isEmpty() bool {
 	return b.blocked == nil && len(b.set) == 0
 }
 
-// pointSet indexes grid coordinates for constant-time membership tests.
+// pointSet is a set of indices read without a call.
 type pointSet map[geom.Point[int]]struct{}
 
-// newPointSet indexes the given points. It returns nil for an empty input;
-// reads from a nil set are valid and never match.
+// newPointSet returns the set of the points, and nil, which holds nothing, for none.
 func newPointSet(points []geom.Point[int]) pointSet {
 	if len(points) == 0 {
 		return nil

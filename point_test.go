@@ -23,10 +23,9 @@ func TestRangeLen(t *testing.T) {
 			}
 		}
 	})
-	t.Run("panics for a movement outside the constants", func(t *testing.T) {
-		assert.PanicsWith(t, func() {
-			RangeLen(1, MovementNone)
-		}, "grid: unknown movement -1")
+	t.Run("counts the index alone outside the constants", func(t *testing.T) {
+		assert.Equal(t, RangeLen(3, MovementNone), 1)
+		assert.Equal(t, RangeLen(-1, MovementNone), 0)
 	})
 }
 
@@ -38,10 +37,9 @@ func TestRingLen(t *testing.T) {
 			}
 		}
 	})
-	t.Run("panics for a movement outside the constants", func(t *testing.T) {
-		assert.PanicsWith(t, func() {
-			RingLen(1, MovementNone)
-		}, "grid: unknown movement -1")
+	t.Run("counts nothing past the index itself outside the constants", func(t *testing.T) {
+		assert.Equal(t, RingLen(0, MovementNone), 1)
+		assert.Equal(t, RingLen(3, MovementNone), 0)
 	})
 }
 
@@ -121,6 +119,10 @@ func TestPoint_Neighbors(t *testing.T) {
 	t.Run("diagonal is all eight", func(t *testing.T) {
 		assert.Length(t, Pt(3, -2).Neighbors(MovementDiagonal), 8)
 	})
+	t.Run("has none outside the constants", func(t *testing.T) {
+		assert.Nil(t, testPoint.Neighbors(MovementNone))
+		assert.Length(t, testPoint.AppendNeighbors(nil, Movement(99)), 0)
+	})
 }
 
 func TestPoint_AppendNeighbors(t *testing.T) {
@@ -171,10 +173,9 @@ func TestPoint_Range(t *testing.T) {
 			}), 1.0, movement.String()+": ")
 		}
 	})
-	t.Run("panics for a movement outside the constants", func(t *testing.T) {
-		assert.PanicsWith(t, func() {
-			center.Range(1, MovementNone)
-		}, "grid: unknown movement -1")
+	t.Run("is the index alone outside the constants", func(t *testing.T) {
+		assert.Equal(t, center.Range(3, MovementNone), []geom.Point[int]{center.Point()})
+		assert.Nil(t, center.Range(-1, MovementNone))
 	})
 }
 
@@ -267,10 +268,9 @@ func TestPoint_Ring(t *testing.T) {
 			})
 		})
 	}
-	t.Run("panics for a movement outside the constants", func(t *testing.T) {
-		assert.PanicsWith(t, func() {
-			testPoint.Ring(-1, MovementNone)
-		}, "grid: unknown movement -1")
+	t.Run("is the index alone at radius zero outside the constants, and empty beyond", func(t *testing.T) {
+		assert.Equal(t, testPoint.Ring(0, MovementNone), []geom.Point[int]{testPoint.Point()})
+		assert.Length(t, testPoint.Ring(3, MovementNone), 0)
 	})
 }
 
@@ -341,6 +341,9 @@ func TestPoint_Spiral(t *testing.T) {
 			})
 		})
 	}
+	t.Run("is the index alone outside the constants", func(t *testing.T) {
+		assert.Equal(t, testPoint.Spiral(3, MovementNone), []geom.Point[int]{testPoint.Point()})
+	})
 }
 
 func TestPoint_AppendSpiral(t *testing.T) {
@@ -407,6 +410,9 @@ func TestPoint_DirectionTo(t *testing.T) {
 		assert.Equal(t, Pt(0, 0).DirectionTo(geom.Pt(3, 3), MovementCardinal), geom.DirectionRight)
 		assert.Equal(t, Pt(0, 0).DirectionTo(geom.Pt(-3, 3), MovementCardinal), geom.DirectionLeft)
 	})
+	t.Run("has no direction outside the constants", func(t *testing.T) {
+		assert.Equal(t, testPoint.DirectionTo(geom.Pt(0, 0), MovementNone), geom.DirectionNone)
+	})
 }
 
 func TestPoint_Line(t *testing.T) {
@@ -445,6 +451,14 @@ func TestPoint_Line(t *testing.T) {
 			})
 		})
 	}
+	t.Run("panics for a movement outside the constants, which draws no line", func(t *testing.T) {
+		assert.PanicsWith(t, func() {
+			testPoint.Line(geom.Pt(0, 0), MovementNone)
+		}, "grid: unknown movement -1")
+		assert.PanicsWith(t, func() {
+			testPoint.AppendLine(nil, geom.Pt(0, 0), Movement(99))
+		}, "grid: unknown movement 99")
+	})
 }
 
 func TestPoint_AppendLine(t *testing.T) {
@@ -613,9 +627,9 @@ func TestPoint_FieldOfView(t *testing.T) {
 		assert.Equal(t, len(center.FieldOfView(candidates, nil)), len(candidates))
 		assert.Equal(t, len(center.FieldOfView(candidates, []geom.Point[int]{})), len(candidates))
 	})
-	t.Run("empty candidates", func(t *testing.T) {
-		assert.Equal(t, len(center.FieldOfView(nil, nil)), 0)
-		assert.Equal(t, len(center.FieldOfView([]geom.Point[int]{}, nil)), 0)
+	t.Run("no candidates is nil", func(t *testing.T) {
+		assert.Nil(t, center.FieldOfView(nil, nil))
+		assert.Nil(t, center.FieldOfView([]geom.Point[int]{}, nil))
 	})
 	t.Run("adjacent always visible", func(t *testing.T) {
 		allNeighbors := []geom.Point[int]{
@@ -670,6 +684,10 @@ func TestPoint_FieldOfViewFunc(t *testing.T) {
 		candidates := Pt(0, 0).Range(3, MovementDiagonal)
 
 		assert.Equal(t, Pt(0, 0).FieldOfViewFunc(candidates, nil), candidates)
+	})
+	t.Run("no candidates is nil", func(t *testing.T) {
+		assert.Nil(t, Pt(0, 0).FieldOfViewFunc(nil, nil))
+		assert.Nil(t, Pt(0, 0).FieldOfViewFunc([]geom.Point[int]{}, nil))
 	})
 }
 
