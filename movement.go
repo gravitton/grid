@@ -10,26 +10,24 @@ import (
 type Movement int
 
 const (
-	// MovementCardinal connects the four edge neighbors: right, down, left, up.
+	// MovementCardinal steps to the four neighbors across an edge.
 	MovementCardinal Movement = iota
 
-	// MovementDiagonal connects all eight neighbors, adding the four corner diagonals.
+	// MovementDiagonal steps to all eight neighbors, across a corner too.
 	MovementDiagonal
 
-	// MovementNone is the absence of a movement. It names no neighbors, so Directions and
-	// Offsets are nil and Contains is false for every direction. DistanceTo alone has no answer
-	// for it and panics.
+	// MovementNone is the absence of a movement, with no neighbors. DistanceTo alone has no
+	// answer for it and panics.
 	MovementNone Movement = -1
 )
 
-// Movements lists both movements in order. It returns a fresh array, so a caller cannot alter
-// the list.
+// Movements returns both movements in order.
 func Movements() [2]Movement {
 	return [2]Movement{MovementCardinal, MovementDiagonal}
 }
 
-// ParseMovement returns the movement with the given name, as String prints it, and an error
-// for any other string. "None" parses to MovementNone.
+// ParseMovement returns the movement with the name String prints, and an error for any other
+// string.
 func ParseMovement(name string) (Movement, error) {
 	if name == MovementNone.String() {
 		return MovementNone, nil
@@ -44,8 +42,8 @@ func ParseMovement(name string) (Movement, error) {
 	return MovementNone, fmt.Errorf("grid: unknown movement %q", name)
 }
 
-// Directions returns the neighbor directions of the movement, ordered by increasing angle
-// from [geom.DirectionRight], and nil for a movement outside the constants.
+// Directions returns the directions of the neighbors of the movement, by increasing angle from
+// right, and nil for a movement outside the constants.
 func (m Movement) Directions() []geom.Direction {
 	switch m {
 	case MovementCardinal:
@@ -61,8 +59,8 @@ func (m Movement) Directions() []geom.Direction {
 	}
 }
 
-// Offsets returns the lattice step of every neighbor direction of the movement, in the same
-// order as [Movement.Directions], and nil for a movement outside the constants.
+// Offsets returns the step to each neighbor of the movement, in the order of Directions, and
+// nil for a movement outside the constants.
 func (m Movement) Offsets() []geom.Vector[int] {
 	switch m {
 	case MovementCardinal:
@@ -78,8 +76,8 @@ func (m Movement) Offsets() []geom.Vector[int] {
 	}
 }
 
-// Offset returns the lattice step of the direction, or the zero vector when the direction
-// is not a neighbor direction of the movement.
+// Offset returns the step in the direction, and the zero vector for a direction that is not one
+// of the movement.
 func (m Movement) Offset(direction geom.Direction) geom.Vector[int] {
 	if !m.Contains(direction) {
 		return geom.Vector[int]{}
@@ -101,9 +99,9 @@ func (m Movement) neighborsLen() int {
 	}
 }
 
-// DistanceTo returns the grid distance between two indices.
-// MovementCardinal uses Manhattan distance; MovementDiagonal uses Chebyshev distance.
-// It panics for a movement outside the constants, under which no index is reached from another.
+// DistanceTo returns the number of steps between two indices under the movement: the
+// Manhattan distance for MovementCardinal, the Chebyshev distance for MovementDiagonal. It
+// panics for a movement outside the constants.
 func (m Movement) DistanceTo(from, to geom.Point[int]) int {
 	switch m {
 	case MovementCardinal:
@@ -115,8 +113,7 @@ func (m Movement) DistanceTo(from, to geom.Point[int]) int {
 	}
 }
 
-// Contains reports whether the direction is one of the neighbor directions of the movement.
-// It is false for a movement outside the constants.
+// Contains reports whether the direction is one of Directions.
 func (m Movement) Contains(direction geom.Direction) bool {
 	switch m {
 	case MovementCardinal:
@@ -128,20 +125,19 @@ func (m Movement) Contains(direction geom.Direction) bool {
 	}
 }
 
-// IsNone reports whether the movement is neither MovementCardinal nor MovementDiagonal. A
-// Movement outside the constants is not normalized, so every such value counts as
-// MovementNone.
+// IsNone reports whether the movement is outside the constants, MovementNone or any other
+// value.
 func (m Movement) IsNone() bool {
 	return m != MovementCardinal && m != MovementDiagonal
 }
 
-// unknown returns what a method with no answer for a movement outside the constants panics
+// unknown returns the error a method with no answer for a movement outside the constants panics
 // with.
-func (m Movement) unknown() string {
-	return fmt.Sprintf("grid: unknown movement %d", m)
+func (m Movement) unknown() error {
+	return fmt.Errorf("grid: unknown movement %d", m)
 }
 
-// String returns the name of the movement constant.
+// String returns the name of the movement, "None" for one outside the constants.
 func (m Movement) String() string {
 	switch m {
 	case MovementCardinal:
@@ -153,14 +149,12 @@ func (m Movement) String() string {
 	}
 }
 
-// MarshalText implements encoding.TextMarshaler with the name String prints, so a movement is
-// stored as "Cardinal" in JSON and as a map key rather than as its number.
+// MarshalText implements encoding.TextMarshaler with the name String prints.
 func (m Movement) MarshalText() ([]byte, error) {
 	return []byte(m.String()), nil
 }
 
-// UnmarshalText implements encoding.TextUnmarshaler, the inverse of MarshalText through
-// ParseMovement.
+// UnmarshalText implements encoding.TextUnmarshaler through ParseMovement.
 func (m *Movement) UnmarshalText(text []byte) error {
 	movement, err := ParseMovement(string(text))
 	if err != nil {
