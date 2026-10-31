@@ -6,12 +6,15 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-    name: Go ${{ matrix.go }}
+    runs-on: ${{ matrix.os }}
+    name: Go ${{ matrix.go }} on ${{ matrix.os }}
     strategy:
       matrix:
         go:
           - '1.27'
+        os:
+          - ubuntu-latest
+          - ubuntu-24.04-arm
 
     steps:
       - name: Checkout
@@ -43,6 +46,7 @@ jobs:
         run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
 
       - name: Upload coverage
+        if: matrix.os == 'ubuntu-latest'
         uses: coverallsapp/github-action@v2
         with:
           file: coverage.out

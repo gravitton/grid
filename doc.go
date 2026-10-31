@@ -59,11 +59,15 @@
 //
 // # Allocations
 //
-// A slice or region result is allocated once, at its final size, and each has an Append form
-// that allocates nothing once the caller's slice has room. A traversal has a Seq form; that of
-// a range gathers the range before it yields any of it, since a cell is known to be in sight
-// only once every cell around it was asked about. A search allocates its scratch once per call,
-// sized by the grid.
+// A slice or region result is allocated once, at its final size, and a slice result has an
+// Append form that allocates nothing once the caller's slice has room. A traversal has a Seq
+// form; that of a range gathers the range before it yields any of it, since a cell is known to
+// be in sight only once every cell around it was asked about. A search allocates its scratch
+// once per call, sized by the grid, and its path has the Append form of [Field.PathTo]. What
+// depends on which cells of a region are adjacent builds its result in steps: [Grid.Grow]
+// marks the cells of the grid and gathers what it adds as it goes, [Grid.Shrink] builds a
+// region at every step, and [Grid.IsConnected] and [Grid.Components] mark the indices of the
+// region.
 //
 // # Supported range
 //
@@ -80,7 +84,7 @@
 // A degenerate value gets an answer; an argument with no meaning gets a panic, whose value is
 // an error:
 //
-//   - [Movement.DistanceTo], [Point.DistanceTo], [Point.Line] with its Append and Seq forms, and
+//   - [Movement.Distance], [Point.DistanceTo], [Point.Line] with its Append and Seq forms, and
 //     [NewRect] and [NewIsometric], for a movement outside the constants: no index is reached
 //     from another under it. Every other method answers as for no neighbors.
 //   - [Grid.IndexAt], [Grid.CellAt] and [HexLayout.IndexAt] for a point with a NaN or infinite

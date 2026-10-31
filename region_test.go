@@ -10,7 +10,7 @@ import (
 
 var testRegionEmpty = Region{}
 
-func TestReg(t *testing.T) {
+func TestRegion_Constructor(t *testing.T) {
 	t.Run("indices give a region, sorted and without repeats", func(t *testing.T) {
 		var region Region = Reg([]geom.Point[int]{geom.Pt(1, 2), geom.Pt(-1, 0), geom.Pt(1, 2), geom.Pt(1, -3)})
 

@@ -1,27 +1,13 @@
 package grid
 
 import (
+	"fmt"
 	"slices"
 	"testing"
 
 	"github.com/gravitton/assert"
 	geom "github.com/gravitton/geometry"
 )
-
-// weightedGrid returns a 5x5 grid whose middle column costs twenty-one to enter, with a free
-// cell at its foot, so the cheapest way across is the twelve steps around.
-func weightedGrid() *Grid[int] {
-	g := NewRect[int](geom.Sz(5, 5), geom.Sz(32.0, 32.0))
-	for y := range 4 {
-		g.Cell(geom.Pt(2, y)).Set(20)
-	}
-
-	return g
-}
-
-func stepCost(_, next Cell[int]) float64 {
-	return float64(1 + *next.Value())
-}
 
 func TestField_Start(t *testing.T) {
 	t.Run("is where the search started", func(t *testing.T) {
@@ -156,6 +142,36 @@ func TestField_PathTo(t *testing.T) {
 	})
 }
 
+func BenchmarkField_PathTo(b *testing.B) {
+	benchmarkGrids(b, func(b *testing.B, g *Grid[int]) {
+		field := g.BreadthFirstSearchField(geom.Pt(0, 0), nil)
+
+		for b.Loop() {
+			sinkPoints = field.PathTo(geom.Pt(63, 63))
+		}
+	})
+}
+
+func TestField_AppendPathTo(t *testing.T) {
+	field := walledGrid().BreadthFirstSearchField(testStart, walkable)
+
+	t.Run("appends the indices of PathTo", func(t *testing.T) {
+		prefix := []geom.Point[int]{geom.Pt(-9, -9)}
+
+		assert.Equal(t, field.AppendPathTo(prefix, testGoal), append(prefix, field.PathTo(testGoal)...))
+	})
+	t.Run("to a cell not reached appends nothing", func(t *testing.T) {
+		assert.Length(t, field.AppendPathTo(nil, testWall), 0)
+	})
+	t.Run("allocates nothing with room", func(t *testing.T) {
+		buffer := make([]geom.Point[int], 0, 16)
+
+		assert.Equal(t, testing.AllocsPerRun(10, func() {
+			sinkPoints = field.AppendPathTo(buffer[:0], testGoal)
+		}), 0.0)
+	})
+}
+
 func TestField_Contains(t *testing.T) {
 	field := walledGrid().BreadthFirstSearchField(testStart, walkable)
 
@@ -210,4 +226,27 @@ func TestField_Region(t *testing.T) {
 			sinkRegion = field.Region()
 		}), 1.0)
 	})
+}
+
+func ExampleField() {
+	g := NewRect[bool](geom.Sz(5, 3), RectCellScale(32))
+	g.Fill(true)
+	g.Cell(geom.Pt(2, 0)).Set(false)
+	g.Cell(geom.Pt(2, 1)).Set(false)
+
+	walkable := func(cell Cell[bool]) bool {
+		return *cell.Value()
+	}
+
+	field := g.BreadthFirstSearchField(geom.Pt(4, 0), walkable)
+
+	fmt.Println(field.Next(geom.Pt(0, 0)))
+	fmt.Println(field.CostTo(geom.Pt(0, 0)))
+	fmt.Println(field.PathTo(geom.Pt(0, 0)))
+	fmt.Println(field.Contains(geom.Pt(2, 0)), field.Region().Len())
+	// Output:
+	// (0,1) true
+	// 8 true
+	// [(4,0) (4,1) (4,2) (3,2) (2,2) (1,2) (0,2) (0,1) (0,0)]
+	// false 13
 }

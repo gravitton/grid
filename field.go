@@ -1,6 +1,8 @@
 package grid
 
 import (
+	"slices"
+
 	"github.com/gravitton/container"
 	geom "github.com/gravitton/geometry"
 )
@@ -12,8 +14,8 @@ type Field struct {
 	size  geom.Size[int]
 	start geom.Point[int]
 
-	// from holds, for the position of every index, one more than the position stepped from, so
-	// zero marks an index the search did not reach and the start holds its own position.
+	// from holds, for the slot of every index, one more than the slot stepped from, so
+	// zero marks an index the search did not reach and the start holds its own slot.
 	from []int32
 
 	// costs holds the cost of reaching every index, and is nil for a search that counts steps.
@@ -35,27 +37,9 @@ func newField(size geom.Size[int], start geom.Point[int], weighted bool) Field {
 		f.costs = make([]float64, len(f.from))
 	}
 
-	f.from[f.position(start)] = f.position(start) + 1
+	f.from[f.slot(start)] = f.slot(start) + 1
 
 	return f
-}
-
-// improve records that index is reached from the position at the given cost, where the search
-// had not reached it or had paid more, and reports whether it did.
-func (f *Field) improve(index geom.Point[int], from int32, cost float64) bool {
-	position := f.position(index)
-
-	switch {
-	case f.from[position] == 0:
-		f.reached++
-	case cost >= f.costs[position]:
-		return false
-	}
-
-	f.from[position] = from + 1
-	f.costs[position] = cost
-
-	return true
 }
 
 // Start returns the index the search started from, and the zero index for the empty field.
@@ -75,7 +59,7 @@ func (f Field) Next(index geom.Point[int]) (geom.Point[int], bool) {
 		return geom.Point[int]{}, false
 	}
 
-	return f.index(f.from[f.position(index)] - 1), true
+	return f.index(f.from[f.slot(index)] - 1), true
 }
 
 // CostTo returns what the search paid to reach the index, the number of steps where it did not
@@ -85,7 +69,7 @@ func (f Field) CostTo(index geom.Point[int]) (float64, bool) {
 		return 0, false
 	}
 	if f.costs != nil {
-		return f.costs[f.position(index)], true
+		return f.costs[f.slot(index)], true
 	}
 
 	return float64(f.steps(index)), true
@@ -98,34 +82,34 @@ func (f Field) PathTo(index geom.Point[int]) []geom.Point[int] {
 		return nil
 	}
 
-	path := make([]geom.Point[int], f.steps(index)+1)
-	for i := len(path) - 1; i > 0; i-- {
-		path[i] = index
-		index = f.index(f.from[f.position(index)] - 1)
-	}
-	path[0] = index
+	return f.AppendPathTo(make([]geom.Point[int], 0, f.steps(index)+1), index)
+}
 
-	return path
+// AppendPathTo appends the indices of PathTo to dst and returns the extended slice.
+func (f Field) AppendPathTo(dst []geom.Point[int], index geom.Point[int]) []geom.Point[int] {
+	if !f.Contains(index) {
+		return dst
+	}
+
+	start, length := len(dst), f.steps(index)+1
+	dst = slices.Grow(dst, length)[:start+length]
+	for i := len(dst) - 1; i > start; i-- {
+		dst[i] = index
+		index = f.index(f.from[f.slot(index)] - 1)
+	}
+	dst[start] = index
+
+	return dst
 }
 
 // steps returns the number of steps from the start to an index the search reached.
 func (f Field) steps(index geom.Point[int]) int {
 	steps := 0
-	for position := f.position(index); position != f.position(f.start); position = f.from[position] - 1 {
+	for slot := f.slot(index); slot != f.slot(f.start); slot = f.from[slot] - 1 {
 		steps++
 	}
 
 	return steps
-}
-
-// position returns the place of an index inside the grid in the slices of the field.
-func (f Field) position(index geom.Point[int]) int32 {
-	return int32(index.X + index.Y*f.size.Width)
-}
-
-// index returns the index at a position, the inverse of position.
-func (f Field) index(position int32) geom.Point[int] {
-	return geom.Pt(int(position)%f.size.Width, int(position)/f.size.Width)
 }
 
 // Contains reports whether the search reached the index.
@@ -134,7 +118,7 @@ func (f Field) Contains(index geom.Point[int]) bool {
 		return false
 	}
 
-	return f.from[f.position(index)] != 0
+	return f.from[f.slot(index)] != 0
 }
 
 // IsEmpty reports whether the search reached nothing, not even its start.
@@ -151,11 +135,39 @@ func (f Field) Region() Region {
 	points := make([]geom.Point[int], 0, f.reached)
 	for x := range f.size.Width {
 		for y := range f.size.Height {
-			if index := geom.Pt(x, y); f.from[f.position(index)] != 0 {
+			if index := geom.Pt(x, y); f.from[f.slot(index)] != 0 {
 				points = append(points, index)
 			}
 		}
 	}
 
 	return container.SetFrom(points)
+}
+
+// improve records that index is reached from the slot at the given cost, where the search
+// had not reached it or had paid more, and reports whether it did.
+func (f *Field) improve(index geom.Point[int], from int32, cost float64) bool {
+	slot := f.slot(index)
+
+	switch {
+	case f.from[slot] == 0:
+		f.reached++
+	case cost >= f.costs[slot]:
+		return false
+	}
+
+	f.from[slot] = from + 1
+	f.costs[slot] = cost
+
+	return true
+}
+
+// slot returns the place of an index inside the grid in the slices of the field.
+func (f Field) slot(index geom.Point[int]) int32 {
+	return int32(index.X + index.Y*f.size.Width)
+}
+
+// index returns the index at a slot, the inverse of slot.
+func (f Field) index(slot int32) geom.Point[int] {
+	return geom.Pt(int(slot)%f.size.Width, int(slot)/f.size.Width)
 }

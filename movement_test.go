@@ -156,50 +156,50 @@ func TestMovement_Offset(t *testing.T) {
 	})
 }
 
-func TestMovement_DistanceTo(t *testing.T) {
+func TestMovement_Distance(t *testing.T) {
 	origin := geom.Pt(0, 0)
 	targets := []geom.Point[int]{geom.Pt(3, 4), geom.Pt(-2, 3), geom.Pt(2, 2), geom.Pt(0, -5), geom.Pt(0, 0)}
 
 	t.Run("cardinal is the Manhattan distance", func(t *testing.T) {
-		assert.Equal(t, MovementCardinal.DistanceTo(origin, geom.Pt(3, 4)), 7)
-		assert.Equal(t, MovementCardinal.DistanceTo(origin, geom.Pt(-2, 3)), 5)
+		assert.Equal(t, MovementCardinal.Distance(origin, geom.Pt(3, 4)), 7)
+		assert.Equal(t, MovementCardinal.Distance(origin, geom.Pt(-2, 3)), 5)
 	})
 	t.Run("diagonal is the Chebyshev distance", func(t *testing.T) {
-		assert.Equal(t, MovementDiagonal.DistanceTo(origin, geom.Pt(3, 4)), 4)
-		assert.Equal(t, MovementDiagonal.DistanceTo(origin, geom.Pt(2, 2)), 2)
+		assert.Equal(t, MovementDiagonal.Distance(origin, geom.Pt(3, 4)), 4)
+		assert.Equal(t, MovementDiagonal.Distance(origin, geom.Pt(2, 2)), 2)
 	})
 	t.Run("is symmetric", func(t *testing.T) {
 		for _, movement := range Movements() {
 			for _, target := range targets {
-				assert.Equal(t, movement.DistanceTo(target, testPoint.Point()), movement.DistanceTo(testPoint.Point(), target), fmt.Sprintf("%s %v: ", movement, target))
+				assert.Equal(t, movement.Distance(target, testPoint.Point()), movement.Distance(testPoint.Point(), target), fmt.Sprintf("%s %v: ", movement, target))
 			}
 		}
 	})
 	t.Run("an index is at distance zero from itself alone", func(t *testing.T) {
 		for _, movement := range Movements() {
 			for _, target := range targets {
-				assert.Equal(t, movement.DistanceTo(origin, target) == 0, target == origin, fmt.Sprintf("%s %v: ", movement, target))
+				assert.Equal(t, movement.Distance(origin, target) == 0, target == origin, fmt.Sprintf("%s %v: ", movement, target))
 			}
 		}
 	})
 	t.Run("every offset of the movement is one step away", func(t *testing.T) {
 		for _, movement := range Movements() {
 			for _, offset := range movement.Offsets() {
-				assert.Equal(t, movement.DistanceTo(testPoint.Point(), testPoint.Point().Add(offset)), 1, fmt.Sprintf("%s %v: ", movement, offset))
+				assert.Equal(t, movement.Distance(testPoint.Point(), testPoint.Point().Add(offset)), 1, fmt.Sprintf("%s %v: ", movement, offset))
 			}
 		}
 	})
 	t.Run("a diagonal step is two cardinal ones", func(t *testing.T) {
 		for _, direction := range geom.DiagonalDirections() {
-			assert.Equal(t, MovementCardinal.DistanceTo(origin, origin.Add(direction.Offset[int]())), 2, direction.String()+": ")
+			assert.Equal(t, MovementCardinal.Distance(origin, origin.Add(direction.Offset[int]())), 2, direction.String()+": ")
 		}
 	})
 	t.Run("panics outside the constants, where no index is reached from another", func(t *testing.T) {
 		assert.PanicsWith(t, func() {
-			Movement(99).DistanceTo(geom.Pt(0, 0), geom.Pt(1, 1))
+			Movement(99).Distance(geom.Pt(0, 0), geom.Pt(1, 1))
 		}, "grid: unknown movement 99")
 		assert.PanicsWith(t, func() {
-			MovementNone.DistanceTo(geom.Pt(0, 0), geom.Pt(1, 1))
+			MovementNone.Distance(geom.Pt(0, 0), geom.Pt(1, 1))
 		}, "grid: unknown movement -1")
 	})
 }
@@ -299,7 +299,7 @@ func ExampleMovement() {
 	fmt.Println(MovementDiagonal.Offsets())
 	fmt.Println(MovementCardinal.Offset(geom.DirectionUp), MovementCardinal.Offset(geom.DirectionUpRight))
 	fmt.Println(MovementCardinal.Contains(geom.DirectionUpRight))
-	fmt.Println(MovementDiagonal.DistanceTo(geom.Pt(0, 0), geom.Pt(3, 5)), MovementCardinal.DistanceTo(geom.Pt(0, 0), geom.Pt(3, 5)))
+	fmt.Println(MovementDiagonal.Distance(geom.Pt(0, 0), geom.Pt(3, 5)), MovementCardinal.Distance(geom.Pt(0, 0), geom.Pt(3, 5)))
 
 	fmt.Println(Movements())
 	fmt.Println(ParseMovement("Diagonal"))

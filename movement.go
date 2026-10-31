@@ -16,8 +16,8 @@ const (
 	// MovementDiagonal steps to all eight neighbors, across a corner too.
 	MovementDiagonal
 
-	// MovementNone is the absence of a movement, with no neighbors. DistanceTo alone has no
-	// answer for it and panics.
+	// MovementNone is the absence of a movement, with no neighbors. Of its methods, Distance
+	// alone has no answer for it and panics.
 	MovementNone Movement = -1
 )
 
@@ -99,10 +99,10 @@ func (m Movement) neighborsLen() int {
 	}
 }
 
-// DistanceTo returns the number of steps between two indices under the movement: the
+// Distance returns the number of steps between two indices under the movement: the
 // Manhattan distance for MovementCardinal, the Chebyshev distance for MovementDiagonal. It
 // panics for a movement outside the constants.
-func (m Movement) DistanceTo(from, to geom.Point[int]) int {
+func (m Movement) Distance(from, to geom.Point[int]) int {
 	switch m {
 	case MovementCardinal:
 		return from.ManhattanDistanceTo(to)

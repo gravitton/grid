@@ -55,7 +55,7 @@ type Tile struct {
 	Cost     float64
 }
 
-g := grid.NewRect[Tile](geom.Sz(100, 100), grid.RectCellSize(32))
+g := grid.NewRect[Tile](geom.Sz(100, 100), grid.RectCellScale(32))
 g.Fill(Tile{Walkable: true, Cost: 1})
 g.CellAt(cursor).Set(Tile{}) // a wall under the cursor
 
@@ -71,38 +71,38 @@ path := g.Path(geom.Pt(0, 0), geom.Pt(10, 10), walkable, nil) // the indices fro
 ```go
 size := geom.Sz(100, 100)
 
-grid.NewRect[Tile](size, grid.RectCellSize(32))                           // squares, 4 neighbors
-grid.NewIsometric[Tile](size, grid.IsometricPixelPerfectRectCellSize(64)) // 2:1 diamonds
-grid.NewHexFlatTop[Tile](size, grid.HexFlatTopCellSize(64))               // odd columns shifted down
-grid.NewHexPointyTop[Tile](size, grid.HexPointyTopCellSize(64))           // odd rows shifted right
+grid.NewRect[Tile](size, grid.RectCellScale(32))                 // squares, 4 neighbors
+grid.NewIsometric[Tile](size, grid.IsometricPixelCellScale(64))  // 2:1 diamonds
+grid.NewHexFlatTop[Tile](size, grid.HexFlatTopCellScale(64))     // odd columns shifted down
+grid.NewHexPointyTop[Tile](size, grid.HexPointyTopCellScale(64)) // odd rows shifted right
 ```
 
 Options are set in a callback, on [`RectOptions`][link-go-dev-reference] for the square grids and
 `HexOptions` for the hexagonal ones:
 
 ```go
-grid.NewRect[Tile](size, grid.RectCellSize(32), func(options *grid.RectOptions) {
+grid.NewRect[Tile](size, grid.RectCellScale(32), func(options *grid.RectOptions) {
 	options.Movement = grid.MovementDiagonal // 8 neighbors
 	options.Origin = geom.Pt(100.0, 50.0)    // the top-left corner of the grid in the world
 })
 
-grid.NewHexFlatTop[Tile](size, grid.HexFlatTopCellSize(64), func(options *grid.HexOptions) {
+grid.NewHexFlatTop[Tile](size, grid.HexFlatTopCellScale(64), func(options *grid.HexOptions) {
 	options.EvenOffset = true // even columns shifted instead
 })
 ```
 
-A rectangular grid takes the size of a cell, a hexagonal one its circumradius per axis. The
-helpers give either from the width a tile is drawn at:
+A constructor takes the cell scale: the size of a square or a diamond, the circumradius per axis
+of a hexagon. The helpers give it from the width a tile is drawn at:
 
-| Helper                                      | Tile, `w` wide                 |
-|---------------------------------------------|--------------------------------|
-| `RectCellSize`                              | Square, `w` tall               |
-| `IsometricRectCellSize`                     | Diamond at 30°, `w·0.577` tall |
-| `IsometricPixelPerfectRectCellSize`         | Diamond, `w/2` tall            |
-| `HexFlatTopCellSize`                        | Regular hex, `w·√3/2` tall     |
-| `HexPointyTopCellSize`                      | Regular hex, `w·2/√3` tall     |
-| `HexFlatTopIsometricPixelPerfectCellSize`   | Squashed hex, `w·3/4` tall     |
-| `HexPointyTopIsometricPixelPerfectCellSize` | Squashed hex, `w` tall         |
+| Helper                       | Tile, `w` wide                 |
+|------------------------------|--------------------------------|
+| `RectCellScale`              | Square, `w` tall               |
+| `IsometricCellScale`         | Diamond at 30°, `w·0.577` tall |
+| `IsometricPixelCellScale`    | Diamond, `w/2` tall            |
+| `HexFlatTopCellScale`        | Regular hex, `w·√3/2` tall     |
+| `HexPointyTopCellScale`      | Regular hex, `w·2/√3` tall     |
+| `HexFlatTopPixelCellScale`   | Squashed hex, `w·3/4` tall     |
+| `HexPointyTopPixelCellScale` | Squashed hex, `w` tall         |
 
 Every constructor returns the same `*Grid[T]`, so everything below holds for all four layouts.
 
@@ -143,8 +143,8 @@ g.Bounds()      // the geom.Box around the whole grid
 g.CellSize()    // the size of one tile as drawn
 g.CellSpacing() // the step between two tiles, smaller than the tile where they interlock
 
-g.MoveTo(geom.Pt(100.0, 50.0)) // the top-left corner of the bounds, to scroll the grid
-g.Resize(RectCellSize(48))      // the size of a tile, to zoom it
+g.MoveTo(geom.Pt(100.0, 50.0))   // the top-left corner of the bounds, to scroll the grid
+g.Resize(grid.RectCellScale(48)) // the scale of a tile, to zoom it
 ```
 
 A `HexLayout` places hexagonal cells with no grid around them, for a map whose data lives
@@ -152,7 +152,7 @@ elsewhere, on an unbounded plane. Its indices are in the coordinate system it is
 axial or any other of `hex`:
 
 ```go
-layout := grid.NewHexFlatTopLayout(grid.HexFlatTopCellSize(32), hex.Axial)
+layout := grid.NewHexFlatTopLayout(grid.HexFlatTopCellScale(32), hex.Axial)
 layout.MoveTo(geom.Pt(400.0, 300.0)) // the center of index zero
 
 layout.Polygon(h.Point())              // where to draw a hex
@@ -176,12 +176,12 @@ cell.PathTo(to, walkable, cost)  // the same, from a cell
 A nil callback means no constraint: every cell is passable, every step costs one. `Path` is A*;
 the searches are also there by name:
 
-| Method                                      | Algorithm         | Weighted | Shortest |
-|---------------------------------------------|-------------------|----------|----------|
-| `AStar(from, to, passable, cost)`           | A*                | yes      | yes      |
-| `UniformCostSearch(from, to, passable, cost)`| Dijkstra          | yes      | yes      |
-| `BreadthFirstSearch(from, to, passable)`    | Breadth-first     | no       | in steps |
-| `GreedyBestFirstSearch(from, to, passable)` | Greedy best-first | no       | no       |
+| Method                                           | Algorithm         | Weighted | Shortest |
+|--------------------------------------------------|-------------------|----------|----------|
+| `AStar(start, goal, passable, cost)`             | A*                | yes      | yes      |
+| `UniformCostSearch(start, goal, passable, cost)` | Dijkstra          | yes      | yes      |
+| `BreadthFirstSearch(start, goal, passable)`      | Breadth-first     | no       | in steps |
+| `GreedyBestFirstSearch(start, goal, passable)`   | Greedy best-first | no       | no       |
 
 The two exhaustive ones also come as a `Field`: every cell the search reached, with the step
 back toward the start and the cost of getting there, for many units heading to one place:
@@ -191,7 +191,7 @@ field := g.UniformCostSearchField(goal, walkable, cost) // also BreadthFirstSear
 
 next, ok := field.Next(unit) // one step closer to the goal; false at the goal and where it is not reached
 field.CostTo(unit)           // what the way costs, and whether there is one
-field.PathTo(unit)           // the whole path, from the goal to the unit
+field.PathTo(unit)           // the whole path, from the goal to the unit; also AppendPathTo
 field.Region()               // every cell reached
 ```
 
@@ -210,11 +210,10 @@ cell.Range(3, walkable)     // the same, from a cell
 ```
 
 A cell that is not passable is left out and hides what lies behind it, and a range from a cell
-that is not passable itself, or from an index outside the grid, is empty. On a square grid the
-sightline is a Bresenham walk from a canonical end, so two cells always see each other or
-neither does. Where it crosses a corner it is blocked only when both cells flanking the corner
-block: a diagonal wall is opaque, a single pillar is not. A hexagonal grid uses the rule of
-[`gravitton/hexagon`][link-hexagon].
+that is not passable itself, or from an index outside the grid, is empty. Two cells always see
+each other or neither does. On a square grid a sightline across a corner is blocked only when
+both cells beside the corner block: a diagonal wall is opaque, a single pillar is not. A
+hexagonal grid uses the rule of [`gravitton/hexagon`][link-hexagon].
 
 ### Points
 
@@ -280,15 +279,14 @@ for cell := range g.DrawOrder(viewport) { // a zero box walks the whole grid
 
 `DrawOrder` yields the tiles back to front, in the order the layout needs:
 
-| Layout         | Order                                |
-|----------------|--------------------------------------|
-| Rectangular    | Row by row, top to bottom            |
-| Isometric      | By depth, `column + row` ascending   |
-| Hex flat-top   | Two passes, even columns before odd  |
-| Hex pointy-top | Row by row                           |
+| Layout         | Order                                      |
+|----------------|--------------------------------------------|
+| Rectangular    | Row by row, top to bottom                  |
+| Isometric      | By depth, `column + row` ascending         |
+| Hex flat-top   | Row by row, the columns drawn higher first |
+| Hex pointy-top | Row by row                                 |
 
-One row and column beyond the bounds are included on every side so a tile half in view is not
-culled, which is why a cell may lie outside the grid.
+A tile partly in view is included, so a cell may lie outside the grid.
 
 ### Regions
 
@@ -358,7 +356,7 @@ grid.MovementCardinal.Directions()                             // Right, Down, L
 grid.MovementDiagonal.Offsets()                                // the 8 steps as vectors, by increasing angle
 grid.MovementCardinal.Offset(geom.DirectionUp)                 // Vector{0, -1}, the zero vector for a direction it lacks
 grid.MovementCardinal.Contains(geom.DirectionUpRight)          // false
-grid.MovementDiagonal.DistanceTo(geom.Pt(0, 0), geom.Pt(3, 5)) // 5, Chebyshev; MovementCardinal gives 8
+grid.MovementDiagonal.Distance(geom.Pt(0, 0), geom.Pt(3, 5))   // 5, Chebyshev; MovementCardinal gives 8
 
 grid.Movements()                    // both, as a fresh array
 grid.ParseMovement("Diagonal")      // the name back to the constant, "None" to MovementNone
@@ -383,11 +381,9 @@ The MIT License (MIT). Please see [License File][link-licence] for more informat
 [ico-go-dev-reference]:     https://img.shields.io/badge/go.dev-reference-blue?style=flat-square
 [ico-coverage]:             https://img.shields.io/coverallsCoverage/github/gravitton/grid?style=flat-square
 
-[link-author]:              https://github.com/gravitton
 [link-release]:             https://github.com/gravitton/grid/releases
 [link-contributors]:        https://github.com/gravitton/grid/contributors
 [link-licence]:             ./LICENSE.md
-[link-changelog]:           ./CHANGELOG.md
 [link-workflow]:            https://github.com/gravitton/grid/actions
 [link-go-dev-reference]:    https://pkg.go.dev/github.com/gravitton/grid
 [link-geometry]:            https://github.com/gravitton/geometry

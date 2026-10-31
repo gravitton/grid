@@ -1,6 +1,7 @@
 package grid
 
 import (
+	"fmt"
 	"slices"
 	"strconv"
 	"testing"
@@ -179,6 +180,16 @@ func TestPoint_Range(t *testing.T) {
 	})
 }
 
+func BenchmarkPoint_Range(b *testing.B) {
+	for _, movement := range Movements() {
+		b.Run(movement.String(), func(b *testing.B) {
+			for b.Loop() {
+				sinkPoints = testPoint.Range(8, movement)
+			}
+		})
+	}
+}
+
 func TestPoint_AppendRange(t *testing.T) {
 	buffer := make([]geom.Point[int], 0, 64)
 
@@ -346,6 +357,16 @@ func TestPoint_Spiral(t *testing.T) {
 	})
 }
 
+func BenchmarkPoint_Spiral(b *testing.B) {
+	for _, movement := range Movements() {
+		b.Run(movement.String(), func(b *testing.B) {
+			for b.Loop() {
+				sinkPoints = testPoint.Spiral(8, movement)
+			}
+		})
+	}
+}
+
 func TestPoint_AppendSpiral(t *testing.T) {
 	for _, movement := range Movements() {
 		assert.Equal(t, testPoint.AppendSpiral([]geom.Point[int]{testPoint.Point()}, 3, movement), append([]geom.Point[int]{testPoint.Point()}, testPoint.Spiral(3, movement)...), movement.String()+": ")
@@ -461,6 +482,16 @@ func TestPoint_Line(t *testing.T) {
 	})
 }
 
+func BenchmarkPoint_Line(b *testing.B) {
+	for _, movement := range Movements() {
+		b.Run(movement.String(), func(b *testing.B) {
+			for b.Loop() {
+				sinkPoints = testPoint.Line(geom.Pt(40, 17), movement)
+			}
+		})
+	}
+}
+
 func TestPoint_AppendLine(t *testing.T) {
 	for _, movement := range Movements() {
 		assert.Equal(t, testPoint.AppendLine([]geom.Point[int]{testPoint.Point()}, geom.Pt(-4, 7), movement), append([]geom.Point[int]{testPoint.Point()}, testPoint.Line(geom.Pt(-4, 7), movement)...), movement.String()+": ")
@@ -568,6 +599,42 @@ func TestPoint_HasLineOfSight(t *testing.T) {
 	})
 }
 
+func BenchmarkPoint_HasLineOfSight(b *testing.B) {
+	blocking := []geom.Point[int]{geom.Pt(10, 5), geom.Pt(20, 12), geom.Pt(-4, 3)}
+
+	for b.Loop() {
+		sinkBool = Pt(0, 0).HasLineOfSight(geom.Pt(30, 17), blocking)
+	}
+}
+
+func FuzzPoint_HasLineOfSight(f *testing.F) {
+	f.Add(int8(0), int8(0), int8(4), int8(2), uint8(3))
+	f.Add(int8(-3), int8(2), int8(5), int8(-6), uint8(17))
+	f.Add(int8(1), int8(1), int8(1), int8(1), uint8(0))
+
+	f.Fuzz(func(t *testing.T, x0, y0, x1, y1 int8, seed uint8) {
+		from, to := Pt(int(x0)%12, int(y0)%12), geom.Pt(int(x1)%12, int(y1)%12)
+		blocked := func(index geom.Point[int]) bool {
+			return (index.X*7+index.Y*13+int(seed))%5 == 0
+		}
+		var blocking []geom.Point[int]
+		for _, index := range Pt(0, 0).Range(12, MovementDiagonal) {
+			if blocked(index) {
+				blocking = append(blocking, index)
+			}
+		}
+
+		seen := from.HasLineOfSight(to, blocking)
+
+		assert.Equal(t, Point(to).HasLineOfSight(from.Point(), blocking), seen)
+		assert.Equal(t, from.HasLineOfSightFunc(to, blocked), seen)
+		assert.True(t, from.HasLineOfSight(to, nil))
+		if from.Point().ChebyshevDistanceTo(to) <= 1 {
+			assert.Equal(t, from.FieldOfView([]geom.Point[int]{to}, blocking), []geom.Point[int]{to})
+		}
+	})
+}
+
 func TestPoint_HasLineOfSightFunc(t *testing.T) {
 	blocking := []geom.Point[int]{geom.Pt(1, 1), geom.Pt(-2, 1), geom.Pt(0, -2), geom.Pt(3, 0), geom.Pt(2, -1)}
 	blocked := func(index geom.Point[int]) bool {
@@ -652,6 +719,15 @@ func TestPoint_FieldOfView(t *testing.T) {
 	})
 }
 
+func BenchmarkPoint_FieldOfView(b *testing.B) {
+	candidates := Pt(0, 0).Range(8, MovementDiagonal)
+	blocking := []geom.Point[int]{geom.Pt(1, 1), geom.Pt(-2, 1), geom.Pt(0, -2), geom.Pt(3, 0)}
+
+	for b.Loop() {
+		sinkPoints = Pt(0, 0).FieldOfView(candidates, blocking)
+	}
+}
+
 func TestPoint_AppendFieldOfView(t *testing.T) {
 	testFieldOfView(t, func(p Point, candidates, blocking []geom.Point[int]) []geom.Point[int] {
 		return p.AppendFieldOfView([]geom.Point[int]{p.Point()}, candidates, blocking)[1:]
@@ -709,4 +785,20 @@ func TestPoint_FieldOfViewFuncSeq(t *testing.T) {
 
 func TestPoint_Point(t *testing.T) {
 	assert.Equal(t, Pt(3, -2).Point(), geom.Pt(3, -2))
+}
+
+func ExamplePoint() {
+	p := Pt(5, 5)
+
+	fmt.Println(p.Neighbor(geom.DirectionUp), p.DistanceTo(geom.Pt(8, 1), MovementCardinal))
+	fmt.Println(p.Ring(1, MovementCardinal))
+	fmt.Println(p.Line(geom.Pt(8, 6), MovementDiagonal))
+	fmt.Println(p.HasLineOfSight(geom.Pt(8, 5), []geom.Point[int]{geom.Pt(6, 5)}))
+	fmt.Println(p.Turn(1), p.ReflectX())
+	// Output:
+	// (5,4) 7
+	// [(6,5) (5,6) (4,5) (5,4)]
+	// [(5,5) (6,5) (7,6) (8,6)]
+	// false
+	// {-5 5} {5 -5}
 }

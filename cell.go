@@ -66,7 +66,8 @@ func (c Cell[T]) Neighbors() []geom.Point[int] {
 	return c.grid.Neighbors(c.index)
 }
 
-// AppendNeighbors appends the indices of Neighbors to dst and returns the extended slice.
+// AppendNeighbors appends the indices of Grid.AppendNeighbors from the cell to dst and returns
+// the extended slice.
 func (c Cell[T]) AppendNeighbors(dst []geom.Point[int]) []geom.Point[int] {
 	return c.grid.AppendNeighbors(dst, c.index)
 }
@@ -82,19 +83,19 @@ func (c Cell[T]) AppendRange(dst []geom.Point[int], radius int, passable func(Ce
 	return c.grid.AppendRange(dst, c.index, radius, passable)
 }
 
-// RangeSeq returns an iterator over the indices of AppendRange.
+// RangeSeq returns an iterator over the indices of Grid.RangeSeq from the cell.
 func (c Cell[T]) RangeSeq(radius int, passable func(Cell[T]) bool) iter.Seq[geom.Point[int]] {
 	return c.grid.RangeSeq(c.index, radius, passable)
 }
 
 // DistanceTo returns the number of steps of Grid.Distance from the cell to the index.
-func (c Cell[T]) DistanceTo(to geom.Point[int]) int {
-	return c.grid.Distance(c.index, to)
+func (c Cell[T]) DistanceTo(index geom.Point[int]) int {
+	return c.grid.Distance(c.index, index)
 }
 
 // PathTo returns the path of Grid.Path from the cell to the index.
-func (c Cell[T]) PathTo(to geom.Point[int], passable func(Cell[T]) bool, cost func(current, next Cell[T]) float64) []geom.Point[int] {
-	return c.grid.Path(c.index, to, passable, cost)
+func (c Cell[T]) PathTo(index geom.Point[int], passable func(Cell[T]) bool, cost func(current, next Cell[T]) float64) []geom.Point[int] {
+	return c.grid.Path(c.index, index, passable, cost)
 }
 
 // IsValid reports whether the cell is one of the grid, which Grid.Contains reports of its

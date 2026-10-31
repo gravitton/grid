@@ -16,6 +16,7 @@ import (
 
 var (
 	sinkRegion    Region
+	sinkRegions   []Region
 	sinkPoints    []geom.Point[int]
 	sinkPoint     geom.Point[int]
 	sinkCenter    geom.Point[float64]
@@ -25,6 +26,12 @@ var (
 	sinkString    string
 	sinkHexLayout *HexLayout
 	sinkPolygon   geom.RegularPolygon[float64]
+)
+
+var (
+	testStart = geom.Pt(0, 0)
+	testGoal  = geom.Pt(4, 4)
+	testWall  = geom.Pt(2, 2)
 )
 
 // layoutGrids returns one grid of each layout, 6 by 5.
@@ -37,9 +44,9 @@ func layoutGrids() map[string]*Grid[int] {
 	}
 }
 
-// testGrids returns one grid of each kind and offset, of the given size in cells, at the given
-// origin.
-func testGrids(size geom.Size[int], cellSize geom.Size[float64], origin geom.Point[float64]) map[string]*Grid[int] {
+// kindGrids returns one grid of each kind and offset, of the given size in cells and cell
+// scale, at the given origin.
+func kindGrids(size geom.Size[int], cellScale geom.Size[float64], origin geom.Point[float64]) map[string]*Grid[int] {
 	rect := func(options *RectOptions) {
 		options.Origin = origin
 	}
@@ -52,25 +59,340 @@ func testGrids(size geom.Size[int], cellSize geom.Size[float64], origin geom.Poi
 	}
 
 	return map[string]*Grid[int]{
-		"rectangular":     NewRect[int](size, cellSize, rect),
-		"isometric":       NewIsometric[int](size, cellSize, rect),
-		"flat-top":        NewHexFlatTop[int](size, cellSize, odd),
-		"flat-top even":   NewHexFlatTop[int](size, cellSize, even),
-		"pointy-top":      NewHexPointyTop[int](size, cellSize, odd),
-		"pointy-top even": NewHexPointyTop[int](size, cellSize, even),
+		"rectangular":     NewRect[int](size, cellScale, rect),
+		"isometric":       NewIsometric[int](size, cellScale, rect),
+		"flat-top":        NewHexFlatTop[int](size, cellScale, odd),
+		"flat-top even":   NewHexFlatTop[int](size, cellScale, even),
+		"pointy-top":      NewHexPointyTop[int](size, cellScale, odd),
+		"pointy-top even": NewHexPointyTop[int](size, cellScale, even),
 	}
 }
 
-// benchmarkGrids runs the benchmark on each of the testGrids at 64 by 64 cells, in the order of
+// benchmarkGrids runs the benchmark on each of the kindGrids at 64 by 64 cells, in the order of
 // their names.
 func benchmarkGrids(b *testing.B, run func(b *testing.B, g *Grid[int])) {
-	grids := testGrids(geom.Sz(64, 64), geom.Sz(32.0, 20.0), geom.Pt(100.0, 50.0))
+	grids := kindGrids(geom.Sz(64, 64), geom.Sz(32.0, 20.0), geom.Pt(100.0, 50.0))
 
 	for _, name := range slices.Sorted(maps.Keys(grids)) {
 		b.Run(name, func(b *testing.B) {
 			run(b, grids[name])
 		})
 	}
+}
+
+func withDiagonalMovement(options *RectOptions) {
+	options.Movement = MovementDiagonal
+}
+
+// hexGrids returns one hexagonal grid of each offset coordinate system, 9 by 9.
+func hexGrids() map[string]*Grid[int] {
+	even := func(options *HexOptions) {
+		options.EvenOffset = true
+	}
+
+	return map[string]*Grid[int]{
+		"flat-top":        NewHexFlatTop[int](geom.Sz(9, 9), geom.SzU(16.0)),
+		"flat-top even":   NewHexFlatTop[int](geom.Sz(9, 9), geom.SzU(16.0), even),
+		"pointy-top":      NewHexPointyTop[int](geom.Sz(9, 9), geom.SzU(16.0)),
+		"pointy-top even": NewHexPointyTop[int](geom.Sz(9, 9), geom.SzU(16.0), even),
+	}
+}
+
+// ruleGrids returns one grid of each neighbor rule, of the given size in cells.
+func ruleGrids(size geom.Size[int]) map[string]*Grid[int] {
+	return map[string]*Grid[int]{
+		"cardinal":   NewRect[int](size, geom.Sz(32.0, 32.0)),
+		"diagonal":   NewRect[int](size, geom.Sz(32.0, 32.0), withDiagonalMovement),
+		"flat-top":   NewHexFlatTop[int](size, geom.Sz(32.0, 32.0)),
+		"pointy-top": NewHexPointyTop[int](size, geom.Sz(32.0, 32.0)),
+	}
+}
+
+// fuzzGrid returns a grid of the kind, the width and the height a fuzz target was given: one
+// of the two movements of a rectangular grid, an isometric grid, or a hexagonal one of either
+// orientation and offset, of one to ten cells a side.
+func fuzzGrid(kind, width, height uint8) *Grid[int] {
+	size, cell := geom.Sz(1+int(width%10), 1+int(height%10)), geom.Sz(32.0, 32.0)
+	even := func(options *HexOptions) {
+		options.EvenOffset = true
+	}
+
+	switch kind % 7 {
+	case 0:
+		return NewRect[int](size, cell)
+	case 1:
+		return NewRect[int](size, cell, withDiagonalMovement)
+	case 2:
+		return NewIsometric[int](size, cell)
+	case 3:
+		return NewHexFlatTop[int](size, cell)
+	case 4:
+		return NewHexFlatTop[int](size, cell, even)
+	case 5:
+		return NewHexPointyTop[int](size, cell)
+	default:
+		return NewHexPointyTop[int](size, cell, even)
+	}
+}
+
+// fuzzIndex returns an index in or just around the grid from the two bytes a fuzz target was
+// given.
+func fuzzIndex(g *Grid[int], x, y uint8) geom.Point[int] {
+	return geom.Pt(int(x)%(g.Width()+4)-2, int(y)%(g.Height()+4)-2)
+}
+
+// walledGrid returns a 5x5 grid with one wall in the middle.
+func walledGrid() *Grid[int] {
+	g := NewRect[int](geom.Sz(5, 5), geom.Sz(32.0, 32.0))
+	g.Cell(testWall).Set(1)
+
+	return g
+}
+
+// sealedGrid returns a 5x5 grid with a wall across it, parting the start from the goal.
+func sealedGrid() *Grid[int] {
+	g := NewRect[int](geom.Sz(5, 5), geom.Sz(32.0, 32.0))
+	for y := range 5 {
+		g.Cell(geom.Pt(2, y)).Set(1)
+	}
+
+	return g
+}
+
+func walkable(cell Cell[int]) bool {
+	return *cell.Value() == 0
+}
+
+// weightedGrid returns a 5x5 grid whose middle column costs twenty-one to enter, with a free
+// cell at its foot, so the cheapest way across is the twelve steps around.
+func weightedGrid() *Grid[int] {
+	g := NewRect[int](geom.Sz(5, 5), geom.Sz(32.0, 32.0))
+	for y := range 4 {
+		g.Cell(geom.Pt(2, y)).Set(20)
+	}
+
+	return g
+}
+
+func stepCost(_, next Cell[int]) float64 {
+	return float64(1 + *next.Value())
+}
+
+// testNewRect runs the sections the two square constructors share.
+func testNewRect(t *testing.T, construct func(opts ...func(*RectOptions)) *Grid[int]) {
+	g := construct()
+	inner := geom.Pt(2, 2)
+
+	t.Run("has the given size", func(t *testing.T) {
+		assert.Equal(t, g.Size(), geom.Sz(10, 5))
+	})
+	t.Run("connects four neighbors by default", func(t *testing.T) {
+		assert.Length(t, g.Cell(inner).Neighbors(), 4)
+	})
+	t.Run("every center maps back to its index", func(t *testing.T) {
+		for cell := range g.All() {
+			assert.Equal(t, g.IndexAt(cell.Center()), cell.Index(), cell.Index().String()+": ")
+		}
+	})
+	t.Run("Movement chooses the neighbors", func(t *testing.T) {
+		diagonal := construct(withDiagonalMovement)
+
+		assert.Length(t, diagonal.Cell(inner).Neighbors(), 8)
+	})
+	t.Run("Origin moves every cell", func(t *testing.T) {
+		moved := construct(func(options *RectOptions) {
+			options.Origin = geom.Pt(100.0, 50.0)
+		})
+
+		for cell := range g.All() {
+			geomtest.AssertPoint(t, moved.Cell(cell.Index()).Center(), cell.Center().Add(geom.Vec(100.0, 50.0)), cell.Index().String()+": ")
+		}
+	})
+	t.Run("every callback is applied, in order", func(t *testing.T) {
+		cardinal := construct(withDiagonalMovement, func(options *RectOptions) {
+			options.Movement = MovementCardinal
+		})
+
+		assert.Length(t, cardinal.Cell(inner).Neighbors(), 4)
+	})
+	for _, movement := range []Movement{MovementNone, Movement(7)} {
+		number := strconv.Itoa(int(movement))
+
+		t.Run("panics for the movement "+number, func(t *testing.T) {
+			assert.PanicsWith(t, func() {
+				construct(func(options *RectOptions) {
+					options.Movement = movement
+				})
+			}, "grid: unknown movement "+number)
+		})
+	}
+}
+
+func TestNewRect(t *testing.T) {
+	construct := func(opts ...func(*RectOptions)) *Grid[int] {
+		return NewRect[int](geom.Sz(10, 5), geom.Sz(32.0, 32.0), opts...)
+	}
+
+	testNewRect(t, construct)
+	t.Run("sits with its top-left corner at the world origin by default", func(t *testing.T) {
+		geomtest.AssertPoint(t, construct().Bounds().Min, geom.Pt(0.0, 0.0))
+	})
+	t.Run("Origin places the top-left corner", func(t *testing.T) {
+		moved := construct(func(options *RectOptions) {
+			options.Origin = geom.Pt(100.0, 50.0)
+		})
+
+		geomtest.AssertPoint(t, moved.Bounds().Min, geom.Pt(100.0, 50.0))
+		geomtest.AssertPoint(t, moved.Cell(geom.Pt(0, 0)).Center(), geom.Pt(116.0, 66.0))
+		assert.Equal(t, moved.IndexAt(geom.Pt(116.0, 66.0)), geom.Pt(0, 0))
+	})
+}
+
+func TestNewIsometric(t *testing.T) {
+	construct := func(opts ...func(*RectOptions)) *Grid[int] {
+		return NewIsometric[int](geom.Sz(10, 5), geom.Sz(64.0, 32.0), opts...)
+	}
+
+	testNewRect(t, construct)
+	t.Run("draws a row down and to the left of the one before", func(t *testing.T) {
+		g := construct()
+
+		geomtest.AssertPoint(t, g.Cell(geom.Pt(0, 1)).Center(), g.Cell(geom.Pt(0, 0)).Center().Add(geom.Vec(-32.0, 16.0)))
+	})
+	t.Run("the first cell is as far right as the rows reach left", func(t *testing.T) {
+		g := construct()
+
+		geomtest.AssertPoint(t, g.Cell(geom.Pt(0, 0)).Center(), geom.Pt(160.0, 16.0))
+		geomtest.AssertNumber(t, g.Cell(geom.Pt(0, 4)).Bounds().Min.X, 0.0)
+	})
+}
+
+// testNewHex runs the sections the two hexagonal constructors share.
+func testNewHex(t *testing.T, construct func(opts ...func(*HexOptions)) *Grid[int]) {
+	g := construct()
+	second := geom.Pt(1, 1)
+
+	t.Run("has the given size", func(t *testing.T) {
+		assert.Equal(t, g.Size(), geom.Sz(4, 3))
+	})
+	t.Run("connects six neighbors", func(t *testing.T) {
+		assert.Length(t, g.Cell(second).Neighbors(), 6)
+	})
+	t.Run("sits with its top-left corner at the world origin by default", func(t *testing.T) {
+		geomtest.AssertPoint(t, g.Bounds().Min, geom.Pt(0.0, 0.0))
+	})
+	t.Run("every center maps back to its index", func(t *testing.T) {
+		for cell := range g.All() {
+			assert.Equal(t, g.IndexAt(cell.Center()), cell.Index(), cell.Index().String()+": ")
+		}
+	})
+	t.Run("EvenOffset shifts the other rows or columns", func(t *testing.T) {
+		even := construct(func(options *HexOptions) {
+			options.EvenOffset = true
+		})
+
+		assert.NotEqual(t, even.Cell(second).Center(), g.Cell(second).Center())
+		for cell := range even.All() {
+			assert.Equal(t, even.IndexAt(cell.Center()), cell.Index(), cell.Index().String()+": ")
+		}
+	})
+	t.Run("Origin moves every cell", func(t *testing.T) {
+		moved := construct(func(options *HexOptions) {
+			options.Origin = geom.Pt(100.0, 50.0)
+		})
+
+		geomtest.AssertPoint(t, moved.Bounds().Min, geom.Pt(100.0, 50.0))
+		geomtest.AssertPoint(t, moved.Cell(second).Center(), g.Cell(second).Center().Add(geom.Vec(100.0, 50.0)))
+	})
+}
+
+func TestNewHexFlatTop(t *testing.T) {
+	testNewHex(t, func(opts ...func(*HexOptions)) *Grid[int] {
+		return NewHexFlatTop[int](geom.Sz(4, 3), geom.SzU(16.0), opts...)
+	})
+}
+
+func TestNewHexPointyTop(t *testing.T) {
+	testNewHex(t, func(opts ...func(*HexOptions)) *Grid[int] {
+		return NewHexPointyTop[int](geom.Sz(4, 3), geom.SzU(16.0), opts...)
+	})
+}
+
+func TestRectCellScale(t *testing.T) {
+	size := RectCellScale(64)
+
+	t.Run("is the size the constructor takes", func(t *testing.T) {
+		geomtest.AssertSize(t, size, geom.Sz(64.0, 64.0))
+	})
+	t.Run("gives a tile of the width", func(t *testing.T) {
+		geomtest.AssertSize(t, NewRect[int](geom.SzU(1), size).CellSize(), geom.Sz(64.0, 64.0))
+	})
+}
+
+func TestIsometricCellScale(t *testing.T) {
+	size := IsometricCellScale(64)
+
+	t.Run("is the size the constructor takes", func(t *testing.T) {
+		geomtest.AssertSize(t, size, geom.Sz(64.0, 36.9504172))
+	})
+	t.Run("gives a tile of the width", func(t *testing.T) {
+		geomtest.AssertSize(t, NewIsometric[int](geom.SzU(1), size).CellSize(), geom.Sz(64.0, 36.9504172))
+	})
+}
+
+func TestIsometricPixelCellScale(t *testing.T) {
+	size := IsometricPixelCellScale(64)
+
+	t.Run("is the size the constructor takes", func(t *testing.T) {
+		geomtest.AssertSize(t, size, geom.Sz(64.0, 32.0))
+	})
+	t.Run("gives a tile of the width", func(t *testing.T) {
+		geomtest.AssertSize(t, NewIsometric[int](geom.SzU(1), size).CellSize(), geom.Sz(64.0, 32.0))
+	})
+}
+
+func TestHexFlatTopCellScale(t *testing.T) {
+	size := HexFlatTopCellScale(64)
+
+	t.Run("is the size the constructor takes", func(t *testing.T) {
+		geomtest.AssertSize(t, size, geom.Sz(32.0, 32.0))
+	})
+	t.Run("gives a tile of the width", func(t *testing.T) {
+		geomtest.AssertSize(t, NewHexFlatTop[int](geom.SzU(1), size).CellSize(), geom.Sz(64.0, 55.4256258))
+	})
+}
+
+func TestHexPointyTopCellScale(t *testing.T) {
+	size := HexPointyTopCellScale(64)
+
+	t.Run("is the size the constructor takes", func(t *testing.T) {
+		geomtest.AssertSize(t, size, geom.Sz(36.9504172, 36.9504172))
+	})
+	t.Run("gives a tile of the width", func(t *testing.T) {
+		geomtest.AssertSize(t, NewHexPointyTop[int](geom.SzU(1), size).CellSize(), geom.Sz(64.0, 73.9008346))
+	})
+}
+
+func TestHexFlatTopPixelCellScale(t *testing.T) {
+	size := HexFlatTopPixelCellScale(64)
+
+	t.Run("is the size the constructor takes", func(t *testing.T) {
+		geomtest.AssertSize(t, size, geom.Sz(32.0, 27.7128129))
+	})
+	t.Run("gives a tile of the width", func(t *testing.T) {
+		geomtest.AssertSize(t, NewHexFlatTop[int](geom.SzU(1), size).CellSize(), geom.Sz(64.0, 48.0))
+	})
+}
+
+func TestHexPointyTopPixelCellScale(t *testing.T) {
+	size := HexPointyTopPixelCellScale(64)
+
+	t.Run("is the size the constructor takes", func(t *testing.T) {
+		geomtest.AssertSize(t, size, geom.Sz(36.9504172, 32.0))
+	})
+	t.Run("gives a tile of the width", func(t *testing.T) {
+		geomtest.AssertSize(t, NewHexPointyTop[int](geom.SzU(1), size).CellSize(), geom.Sz(64.0, 64.0))
+	})
 }
 
 func TestGrid_Size(t *testing.T) {
@@ -89,6 +411,151 @@ func TestGrid_Height(t *testing.T) {
 	g := NewRect[int](geom.Sz(10, 5), geom.Sz(32.0, 32.0))
 
 	assert.Equal(t, g.Height(), 5)
+}
+
+// testCellBox returns the box around the cell at the index, measured from its center.
+func testCellBox(g *Grid[int], index geom.Point[int]) geom.Box[float64] {
+	center := g.Cell(index).Center()
+	half := g.CellSize().Scale(0.5).Vector()
+
+	return geom.BoxFromMinMax(center.Add(half.Negate()), center.Add(half))
+}
+
+func TestGrid_Bounds(t *testing.T) {
+	origin := geom.Pt(100.0, 50.0)
+
+	t.Run("a rectangular grid spans its columns and rows of cells", func(t *testing.T) {
+		g := NewRect[int](geom.Sz(4, 3), geom.Sz(64.0, 32.0))
+
+		geomtest.AssertBox(t, g.Bounds(), geom.Box[float64]{Min: geom.Pt(0.0, 0.0), Max: geom.Pt(256.0, 96.0)})
+	})
+	t.Run("an isometric grid spans its diamonds", func(t *testing.T) {
+		g := NewIsometric[int](geom.Sz(4, 3), geom.Sz(64.0, 32.0))
+
+		geomtest.AssertBox(t, g.Bounds(), geom.Box[float64]{Min: geom.Pt(0.0, 0.0), Max: geom.Pt(224.0, 112.0)})
+	})
+	t.Run("is the box around every cell", func(t *testing.T) {
+		sizes := []geom.Size[int]{geom.Sz(1, 1), geom.Sz(1, 4), geom.Sz(4, 1), geom.Sz(2, 2), geom.Sz(2, 3), geom.Sz(3, 2), geom.Sz(6, 5)}
+
+		for _, size := range sizes {
+			for name, g := range kindGrids(size, geom.Sz(32.0, 20.0), origin) {
+				around := testCellBox(g, geom.Pt(0, 0))
+				for index := range container.Arr[int](size).Keys() {
+					around = around.Union(testCellBox(g, index))
+				}
+
+				geomtest.AssertBox(t, g.Bounds(), around, name+" "+size.String()+": ")
+			}
+		}
+	})
+	t.Run("starts at the origin", func(t *testing.T) {
+		for name, g := range kindGrids(geom.Sz(6, 5), geom.Sz(32.0, 20.0), origin) {
+			assert.Equal(t, g.Bounds().Min, origin, name+": ")
+		}
+	})
+	t.Run("a grid of no cells has an empty box at the origin", func(t *testing.T) {
+		for name, g := range kindGrids(geom.Sz(0, 0), geom.Sz(32.0, 20.0), origin) {
+			assert.Equal(t, g.Bounds(), geom.Box[float64]{Min: origin, Max: origin}, name+": ")
+		}
+	})
+	t.Run("allocates nothing", func(t *testing.T) {
+		for name, g := range kindGrids(geom.Sz(6, 5), geom.Sz(32.0, 20.0), origin) {
+			allocs := testing.AllocsPerRun(100, func() {
+				sinkBox = g.Bounds()
+			})
+
+			assert.Equal(t, allocs, 0.0, name+": ")
+		}
+	})
+}
+
+func TestGrid_CellSize(t *testing.T) {
+	grids := kindGrids(geom.Sz(6, 5), geom.Sz(10.0, 20.0), geom.Pt(0.0, 0.0))
+
+	t.Run("a square is the size it was given", func(t *testing.T) {
+		geomtest.AssertSize(t, grids["rectangular"].CellSize(), geom.Sz(10.0, 20.0))
+	})
+	t.Run("a diamond is the size it was given", func(t *testing.T) {
+		geomtest.AssertSize(t, grids["isometric"].CellSize(), geom.Sz(10.0, 20.0))
+	})
+	t.Run("a flat-top hexagon is two radii wide", func(t *testing.T) {
+		geomtest.AssertSize(t, grids["flat-top"].CellSize(), geom.Sz(20.0, geom.Sqrt3*20))
+	})
+	t.Run("a pointy-top hexagon is two radii tall", func(t *testing.T) {
+		geomtest.AssertSize(t, grids["pointy-top"].CellSize(), geom.Sz(geom.Sqrt3*10, 40.0))
+	})
+	t.Run("allocates nothing", func(t *testing.T) {
+		for name, g := range kindGrids(geom.Sz(6, 5), geom.Sz(32.0, 20.0), geom.Pt(100.0, 50.0)) {
+			allocs := testing.AllocsPerRun(100, func() {
+				sinkSize = g.CellSize()
+			})
+
+			assert.Equal(t, allocs, 0.0, name+": ")
+		}
+	})
+}
+
+func BenchmarkGrid_CellSize(b *testing.B) {
+	g := NewHexFlatTop[int](geom.Sz(64, 64), geom.Sz(32.0, 20.0))
+
+	for range b.N {
+		sinkSize = g.CellSize()
+	}
+}
+
+func TestGrid_CellSpacing(t *testing.T) {
+	grids := kindGrids(geom.Sz(6, 5), geom.Sz(10.0, 20.0), geom.Pt(0.0, 0.0))
+
+	t.Run("squares do not interlock", func(t *testing.T) {
+		geomtest.AssertSize(t, grids["rectangular"].CellSpacing(), geom.Sz(10.0, 20.0))
+	})
+	t.Run("diamonds interlock along both axes", func(t *testing.T) {
+		geomtest.AssertSize(t, grids["isometric"].CellSpacing(), geom.Sz(5.0, 10.0))
+	})
+	t.Run("flat-top hexagons interlock along x", func(t *testing.T) {
+		geomtest.AssertSize(t, grids["flat-top"].CellSpacing(), geom.Sz(15.0, geom.Sqrt3*20))
+	})
+	t.Run("pointy-top hexagons interlock along y", func(t *testing.T) {
+		geomtest.AssertSize(t, grids["pointy-top"].CellSpacing(), geom.Sz(geom.Sqrt3*10, 30.0))
+	})
+	t.Run("neighbors along an axis are one spacing apart", func(t *testing.T) {
+		for name, g := range grids {
+			across := g.Cell(geom.Pt(3, 2)).Center().Subtract(g.Cell(geom.Pt(2, 2)).Center())
+			down := g.Cell(geom.Pt(2, 3)).Center().Subtract(g.Cell(geom.Pt(2, 2)).Center())
+
+			geomtest.AssertNumber(t, math.Abs(across.X), g.CellSpacing().Width, name+": ")
+			geomtest.AssertNumber(t, math.Abs(down.Y), g.CellSpacing().Height, name+": ")
+		}
+	})
+	t.Run("allocates nothing", func(t *testing.T) {
+		for name, g := range kindGrids(geom.Sz(6, 5), geom.Sz(32.0, 20.0), geom.Pt(100.0, 50.0)) {
+			allocs := testing.AllocsPerRun(100, func() {
+				sinkSize = g.CellSpacing()
+			})
+
+			assert.Equal(t, allocs, 0.0, name+": ")
+		}
+	})
+}
+
+func BenchmarkGrid_CellSpacing(b *testing.B) {
+	g := NewHexFlatTop[int](geom.Sz(64, 64), geom.Sz(32.0, 20.0))
+
+	for range b.N {
+		sinkSize = g.CellSpacing()
+	}
+}
+
+func TestGrid_CellWidth(t *testing.T) {
+	for name, g := range layoutGrids() {
+		assert.Equal(t, g.CellWidth(), g.CellSize().Width, name+": ")
+	}
+}
+
+func TestGrid_CellHeight(t *testing.T) {
+	for name, g := range layoutGrids() {
+		assert.Equal(t, g.CellHeight(), g.CellSize().Height, name+": ")
+	}
 }
 
 func TestGrid_Cell(t *testing.T) {
@@ -115,7 +582,7 @@ func ExampleGrid_Cell() {
 		Cost     float64
 	}
 
-	g := NewRect[tile](geom.Sz(100, 100), RectCellSize(32))
+	g := NewRect[tile](geom.Sz(100, 100), RectCellScale(32))
 	index := geom.Pt(3, 4)
 
 	cell := g.Cell(index)
@@ -136,6 +603,247 @@ func ExampleGrid_Cell() {
 	// [(4,4) (3,5) (2,4) (3,3)]
 	// 7
 	// Cell(-1,0) false true
+}
+
+func TestGrid_CellAt(t *testing.T) {
+	t.Run("is the cell of IndexAt", func(t *testing.T) {
+		for name, g := range layoutGrids() {
+			for _, point := range []geom.Point[float64]{geom.Pt(64.0, 96.0), geom.Pt(10.5, 3.25), geom.Pt(-40.0, 900.0)} {
+				assert.Equal(t, g.CellAt(point).Index(), g.IndexAt(point), name+" at "+point.String()+": ")
+			}
+		}
+	})
+	t.Run("writes through to the grid", func(t *testing.T) {
+		g := NewRect[int](geom.Sz(5, 5), geom.Sz(32.0, 32.0))
+		g.CellAt(geom.Pt(64.0, 96.0)).Set(7)
+
+		assert.Equal(t, *g.Cell(geom.Pt(2, 3)).Value(), 7)
+	})
+}
+
+// testNearest returns the index whose center is nearest the point among the cells around the
+// given one, in the measure that makes a cell of the named layout the points nearest its
+// center, and whether it is nearer than every other by more than rounding.
+func testNearest(name string, g *Grid[int], around geom.Point[int], point geom.Point[float64]) (geom.Point[int], bool) {
+	half := g.CellSize().Scale(0.5)
+	nearest, best, second := around, math.Inf(1), math.Inf(1)
+
+	for index := range container.Arr[int](geom.Sz(7, 7)).Keys() {
+		index = around.AddXY(index.X-3, index.Y-3)
+
+		offset := point.Subtract(g.Cell(index).Center()).DivideXY(half.XY())
+		x, y := math.Abs(offset.X), math.Abs(offset.Y)
+
+		var distance float64
+		switch name {
+		case "rectangular":
+			distance = max(x, y)
+		case "isometric":
+			distance = x + y
+		case "flat-top", "flat-top even":
+			distance = math.Hypot(x, y*geom.Sqrt3/2)
+		default:
+			distance = math.Hypot(x*geom.Sqrt3/2, y)
+		}
+
+		if distance < best {
+			nearest, best, second = index, distance, best
+		} else if distance < second {
+			second = distance
+		}
+	}
+
+	return nearest, second-best > 1e-6
+}
+
+func TestGrid_IndexAt(t *testing.T) {
+	origin := geom.Pt(100.0, 50.0)
+	grids := kindGrids(geom.Sz(6, 5), geom.Sz(32.0, 20.0), origin)
+
+	t.Run("a point inside a square is its cell", func(t *testing.T) {
+		g := NewRect[int](geom.Sz(4, 3), geom.Sz(64.0, 32.0))
+
+		assert.Equal(t, g.IndexAt(geom.Pt(1.0, 1.0)), geom.Pt(0, 0))
+		assert.Equal(t, g.IndexAt(geom.Pt(63.0, 31.0)), geom.Pt(0, 0))
+		assert.Equal(t, g.IndexAt(geom.Pt(130.0, 70.0)), geom.Pt(2, 2))
+	})
+	t.Run("the corner of the bounds is the first square wherever the grid is", func(t *testing.T) {
+		for _, corner := range []geom.Point[float64]{origin, geom.Pt(0.1, -7.3), geom.Pt(-816.19, 732.64), geom.Pt(1e6/3, -1e-3)} {
+			for _, cellScale := range []geom.Size[float64]{geom.Sz(32.0, 20.0), geom.Sz(49.0, 82.0), geom.Sz(8.48, 89.09)} {
+				g := kindGrids(geom.Sz(6, 5), cellScale, corner)["rectangular"]
+
+				assert.Equal(t, g.IndexAt(corner), geom.Pt(0, 0), corner.String()+" "+cellScale.String()+": ")
+			}
+		}
+	})
+	t.Run("an edge shared by two squares belongs to the one after it", func(t *testing.T) {
+		corner := geom.Pt(7.0, -448.0)
+		g := kindGrids(geom.Sz(6, 5), geom.Sz(49.0, 82.0), corner)["rectangular"]
+
+		for index := range container.Arr[int](geom.Sz(9, 9)).Keys() {
+			index = index.AddXY(-4, -4)
+			edge := corner.AddXY(float64(index.X)*49, float64(index.Y)*82)
+
+			assert.Equal(t, g.IndexAt(edge), index, index.String()+": ")
+		}
+	})
+	t.Run("a vertex of a diamond goes to the same side on every diamond", func(t *testing.T) {
+		g := kindGrids(geom.Sz(6, 5), geom.Sz(82.0, 49.0), geom.Pt(7.0, -448.0))["isometric"]
+		vertices := map[string]geom.Vector[float64]{
+			"top":    geom.Vec(0.0, -24.5),
+			"right":  geom.Vec(41.0, 0.0),
+			"bottom": geom.Vec(0.0, 24.5),
+			"left":   geom.Vec(-41.0, 0.0),
+		}
+		owners := map[string]geom.Vector[int]{
+			"top":    geom.Vec(0, 0),
+			"right":  geom.Vec(1, 0),
+			"bottom": geom.Vec(1, 1),
+			"left":   geom.Vec(0, 1),
+		}
+
+		for name, vertex := range vertices {
+			for index := range container.Arr[int](geom.Sz(9, 9)).Keys() {
+				index = index.AddXY(-4, -4)
+
+				assert.Equal(t, g.IndexAt(g.Cell(index).Center().Add(vertex)), index.Add(owners[name]), name+" of "+index.String()+": ")
+			}
+		}
+	})
+	t.Run("a point outside the grid gives an index outside it", func(t *testing.T) {
+		g := NewRect[int](geom.Sz(5, 5), geom.Sz(32.0, 32.0))
+
+		assert.False(t, g.Contains(g.IndexAt(geom.Pt(-10.0, 40.0))))
+		assert.False(t, g.Contains(g.IndexAt(geom.Pt(40.0, 500.0))))
+	})
+	t.Run("the center of a cell gives its index, beyond the grid too", func(t *testing.T) {
+		for name, g := range grids {
+			for index := range container.Arr[int](geom.Sz(12, 12)).Keys() {
+				index = index.AddXY(-4, -4)
+
+				assert.Equal(t, g.IndexAt(g.Cell(index).Center()), index, name+" "+index.String()+": ")
+			}
+		}
+	})
+	t.Run("round-trips on cells too small to tell from nothing", func(t *testing.T) {
+		for name, g := range kindGrids(geom.Sz(6, 5), geom.Sz(1e-7, 3e-9), geom.Pt(0.0, 0.0)) {
+			for index := range container.Arr[int](g.Size()).Keys() {
+				assert.Equal(t, g.IndexAt(g.Cell(index).Center()), index, name+" "+index.String()+": ")
+			}
+		}
+	})
+	t.Run("a point is in the cell whose center is nearest", func(t *testing.T) {
+		for name, g := range kindGrids(geom.Sz(6, 5), geom.Sz(8.48, 89.09), geom.Pt(-816.19, 732.64)) {
+			around := geom.Pt(2, 3)
+			center := g.Cell(around).Center()
+
+			for step := range container.Arr[int](geom.Sz(41, 41)).Keys() {
+				point := center.Add(g.CellSize().Vector().MultiplyXY(float64(step.X-20)/13, float64(step.Y-20)/13))
+
+				if nearest, clear := testNearest(name, g, around, point); clear {
+					assert.Equal(t, g.IndexAt(point), nearest, name+" "+point.String()+": ")
+				}
+			}
+		}
+	})
+	t.Run("a point just inside a vertex is the cell of the polygon", func(t *testing.T) {
+		for name, g := range grids {
+			for index := range container.Arr[int](g.Size()).Keys() {
+				center := g.Cell(index).Center()
+				for vertex := range g.Cell(index).Polygon().Vertices() {
+					assert.Equal(t, g.IndexAt(center.Lerp(vertex, 0.99)), index, name+" "+index.String()+": ")
+				}
+			}
+		}
+	})
+	for name, point := range map[string]geom.Point[float64]{
+		"NaN":      geom.Pt(math.NaN(), 50.0),
+		"infinite": geom.Pt(100.0, math.Inf(1)),
+	} {
+		t.Run("panics for a "+name+" point on every layout, as geom.Cast does", func(t *testing.T) {
+			for _, g := range grids {
+				assert.PanicsWith(t, func() {
+					g.IndexAt(point)
+				}, "geom: cast of a non-finite value to an integer")
+			}
+		})
+	}
+	t.Run("allocates nothing", func(t *testing.T) {
+		for name, g := range grids {
+			allocs := testing.AllocsPerRun(100, func() {
+				sinkPoint = g.IndexAt(geom.Pt(170.0, 95.0))
+			})
+
+			assert.Equal(t, allocs, 0.0, name+": ")
+		}
+	})
+}
+
+func BenchmarkGrid_IndexAt(b *testing.B) {
+	benchmarkGrids(b, func(b *testing.B, g *Grid[int]) {
+		for i := range b.N {
+			sinkPoint = g.IndexAt(geom.Pt(float64(i&1023), 77.0))
+		}
+	})
+}
+
+func FuzzGrid_IndexAt(f *testing.F) {
+	f.Add(0, 0, 64.0, 32.0, 0.0, 0.0, 0.0, 0.0)
+	f.Add(3, -2, 20.0, 20.0, 100.0, 100.0, 0.3, -0.8)
+	f.Add(-7, 11, 0.5, 300.0, -1000.0, 250.5, -1.0, 0.49)
+
+	f.Fuzz(func(t *testing.T, column, row int, width, height, x, y, across, down float64) {
+		if max(column, -column, row, -row) > 1000 {
+			t.Skip()
+		}
+		if !(width >= 0.01 && width <= 1000 && height >= 0.01 && height <= 1000) {
+			t.Skip()
+		}
+		if !(math.Abs(x) <= 1e6 && math.Abs(y) <= 1e6) {
+			t.Skip()
+		}
+
+		if !(math.Abs(across) <= 1 && math.Abs(down) <= 1) {
+			t.Skip()
+		}
+
+		index := geom.Pt(column, row)
+		for name, g := range kindGrids(geom.Sz(6, 5), geom.Sz(width, height), geom.Pt(x, y)) {
+			assert.Equal(t, g.IndexAt(g.Cell(index).Center()), index, name+": ")
+
+			point := g.Cell(index).Center().Add(g.CellSize().Vector().MultiplyXY(across, down))
+			if nearest, clear := testNearest(name, g, index, point); clear {
+				assert.Equal(t, g.IndexAt(point), nearest, name+" nearest: ")
+			}
+		}
+
+		assert.Equal(t, NewRect[int](geom.Sz(6, 5), geom.Sz(width, height), func(options *RectOptions) {
+			options.Origin = geom.Pt(x, y)
+		}).IndexAt(geom.Pt(x, y)), geom.Pt(0, 0), "the corner of the bounds: ")
+
+		corner := geom.Pt(math.Trunc(x), math.Trunc(y))
+		whole := geom.Sz(math.Ceil(width), math.Ceil(height))
+		grids := kindGrids(geom.Sz(6, 5), whole, corner)
+		edge := corner.AddXY(float64(column)*whole.Width, float64(row)*whole.Height)
+		top := grids["isometric"].Cell(index).Center().AddXY(0, -whole.Height/2)
+
+		assert.Equal(t, grids["rectangular"].IndexAt(edge), index, "an edge of a square: ")
+		assert.Equal(t, grids["isometric"].IndexAt(top), index, "the top of a diamond: ")
+	})
+}
+
+func ExampleGrid_IndexAt() {
+	g := NewRect[int](geom.Sz(100, 100), RectCellScale(32))
+
+	cell := g.CellAt(geom.Pt(499.0, 123.4))
+
+	fmt.Println(g.IndexAt(geom.Pt(499.0, 123.4)))
+	fmt.Println(cell, cell.Center(), cell.Bounds())
+	fmt.Println(g.Contains(g.IndexAt(geom.Pt(-5.0, 20.0))))
+	// Output:
+	// (15,3)
+	// Cell(15,3) (496.00,112.00) (480.00,96.00)-(512.00,128.00)
+	// false
 }
 
 func TestGrid_Fill(t *testing.T) {
@@ -218,51 +926,365 @@ func BenchmarkGrid_All(b *testing.B) {
 	}
 }
 
-// fuzzGrid returns a grid of the kind, the width and the height a fuzz target was given: one
-// of the two movements of a rectangular grid, an isometric grid, or a hexagonal one of either
-// orientation and offset, of one to ten cells a side.
-func fuzzGrid(kind, width, height uint8) *Grid[int] {
-	size, cell := geom.Sz(1+int(width%10), 1+int(height%10)), geom.Sz(32.0, 32.0)
-	even := func(options *HexOptions) {
-		options.EvenOffset = true
-	}
+func TestGrid_DrawOrder(t *testing.T) {
+	whole := geom.Box[float64]{}
 
-	switch kind % 7 {
-	case 0:
-		return NewRect[int](size, cell)
-	case 1:
-		return NewRect[int](size, cell, withDiagonalMovement)
-	case 2:
-		return NewIsometric[int](size, cell)
-	case 3:
-		return NewHexFlatTop[int](size, cell)
-	case 4:
-		return NewHexFlatTop[int](size, cell, even)
-	case 5:
-		return NewHexPointyTop[int](size, cell)
-	default:
-		return NewHexPointyTop[int](size, cell, even)
-	}
+	t.Run("a zero bounds walks the whole grid and one cell beyond it", func(t *testing.T) {
+		g := NewRect[int](geom.Sz(3, 4), geom.Sz(32.0, 32.0))
+
+		total, inside := 0, 0
+		for cell := range g.DrawOrder(whole) {
+			total++
+			if cell.IsValid() {
+				inside++
+			}
+		}
+
+		assert.Equal(t, inside, 12)
+		assert.Equal(t, total, 20)
+	})
+	t.Run("a cell beyond the grid has no value", func(t *testing.T) {
+		g := NewRect[int](geom.Sz(3, 4), geom.Sz(32.0, 32.0))
+
+		for cell := range g.DrawOrder(whole) {
+			if !cell.IsValid() {
+				assert.Nil(t, cell.Value())
+			}
+		}
+	})
+	t.Run("stops at the break", func(t *testing.T) {
+		g := NewRect[int](geom.Sz(5, 5), geom.Sz(32.0, 32.0))
+
+		count := 0
+		for range g.DrawOrder(whole) {
+			count++
+			if count == 3 {
+				break
+			}
+		}
+
+		assert.Equal(t, count, 3)
+	})
+	t.Run("stops at the break wherever it comes, on every layout", func(t *testing.T) {
+		for name, g := range kindGrids(geom.Sz(3, 3), geom.Sz(32.0, 20.0), geom.Pt(0.0, 0.0)) {
+			total := 0
+			for range g.DrawOrder(whole) {
+				total++
+			}
+
+			for stop := 1; stop <= total; stop++ {
+				count := 0
+				for range g.DrawOrder(whole) {
+					count++
+					if count == stop {
+						break
+					}
+				}
+
+				assert.Equal(t, count, stop, name+": ")
+			}
+		}
+	})
+	t.Run("a bounds keeps to the cells in view", func(t *testing.T) {
+		g := NewRect[int](geom.Sz(10, 10), geom.Sz(32.0, 32.0))
+		viewport := geom.BoxFromMinMax(geom.Pt(-32.0, -32.0), geom.Pt(32.0, 32.0))
+
+		inside := 0
+		for cell := range g.DrawOrder(viewport) {
+			if cell.IsValid() {
+				inside++
+			}
+		}
+
+		assert.Equal(t, inside, 4)
+	})
+	t.Run("isometric depth never decreases", func(t *testing.T) {
+		g := NewIsometric[int](geom.Sz(4, 4), geom.Sz(64.0, 32.0))
+
+		previous := -1000
+		for cell := range g.DrawOrder(whole) {
+			if !cell.IsValid() {
+				continue
+			}
+
+			depth := cell.Index().X + cell.Index().Y
+			assert.GreaterOrEqual(t, depth, previous)
+			previous = depth
+		}
+	})
+	t.Run("a hexagonal grid yields every cell", func(t *testing.T) {
+		grids := map[string]*Grid[int]{
+			"flat-top":   NewHexFlatTop[int](geom.Sz(4, 4), geom.SzU(16.0)),
+			"pointy-top": NewHexPointyTop[int](geom.Sz(4, 4), geom.SzU(16.0)),
+		}
+
+		for name, g := range grids {
+			inside := 0
+			for cell := range g.DrawOrder(whole) {
+				if cell.IsValid() {
+					inside++
+				}
+			}
+
+			assert.Equal(t, inside, 16, name+": ")
+		}
+	})
 }
 
-// fuzzIndex returns an index in or just around the grid from the two bytes a fuzz target was
-// given.
-func fuzzIndex(g *Grid[int], x, y uint8) geom.Point[int] {
-	return geom.Pt(int(x)%(g.Width()+4)-2, int(y)%(g.Height()+4)-2)
+func BenchmarkGrid_DrawOrder(b *testing.B) {
+	benchmarkGrids(b, func(b *testing.B, g *Grid[int]) {
+		view := geom.BoxFromMinMax(g.Bounds().Center(), g.Bounds().Center().Add(geom.Vec(640.0, 480.0)))
+
+		for b.Loop() {
+			for cell := range g.DrawOrder(view) {
+				sinkPoint = cell.Index()
+			}
+		}
+	})
 }
 
-// rangeGrids returns one grid of each neighbor rule, 11 by 11, with a center well inside.
-func rangeGrids() (map[string]*Grid[int], geom.Point[int]) {
-	return map[string]*Grid[int]{
-		"cardinal":   NewRect[int](geom.Sz(11, 11), geom.Sz(32.0, 32.0)),
-		"diagonal":   NewRect[int](geom.Sz(11, 11), geom.Sz(32.0, 32.0), withDiagonalMovement),
-		"flat-top":   NewHexFlatTop[int](geom.Sz(11, 11), geom.Sz(32.0, 32.0)),
-		"pointy-top": NewHexPointyTop[int](geom.Sz(11, 11), geom.Sz(32.0, 32.0)),
-	}, geom.Pt(5, 5)
+func ExampleGrid_DrawOrder() {
+	g := NewIsometric[int](geom.Sz(2, 2), IsometricPixelCellScale(64))
+
+	for cell := range g.DrawOrder(geom.Box[float64]{}) {
+		if !cell.IsValid() {
+			continue
+		}
+
+		fmt.Print(cell.Index(), " ")
+	}
+	// Output:
+	// (0,0) (0,1) (1,0) (1,1)
+}
+
+func TestGrid_MoveTo(t *testing.T) {
+	origin := geom.Pt(100.0, 50.0)
+	start := geom.Pt(7.0, 9.0)
+	moved := func() (map[string]*Grid[int], map[string]*Grid[int]) {
+		before := kindGrids(geom.Sz(6, 5), geom.Sz(32.0, 20.0), start)
+		after := kindGrids(geom.Sz(6, 5), geom.Sz(32.0, 20.0), start)
+		for _, g := range after {
+			g.MoveTo(origin)
+		}
+
+		return before, after
+	}
+
+	t.Run("places the corner of the bounds at the origin", func(t *testing.T) {
+		_, after := moved()
+
+		for name, g := range after {
+			assert.Equal(t, g.Bounds().Min, origin, name+": ")
+		}
+	})
+	t.Run("keeps the extent", func(t *testing.T) {
+		before, after := moved()
+
+		for name, g := range after {
+			geomtest.AssertSize(t, g.Bounds().Size(), before[name].Bounds().Size(), name+": ")
+		}
+	})
+	t.Run("shifts every cell by what the corner moved", func(t *testing.T) {
+		before, after := moved()
+
+		for name, g := range after {
+			for cell := range g.All() {
+				geomtest.AssertPoint(t, cell.Center(), before[name].Cell(cell.Index()).Center().Add(origin.Subtract(start)), name+" "+cell.Index().String()+": ")
+			}
+		}
+	})
+	t.Run("is the grid built at that origin", func(t *testing.T) {
+		_, after := moved()
+
+		for name, built := range kindGrids(geom.Sz(6, 5), geom.Sz(32.0, 20.0), origin) {
+			assert.Equal(t, after[name].Bounds(), built.Bounds(), name+": ")
+			assert.Equal(t, after[name].Cell(geom.Pt(4, 3)).Center(), built.Cell(geom.Pt(4, 3)).Center(), name+": ")
+		}
+	})
+	t.Run("changes nothing applied twice", func(t *testing.T) {
+		_, after := moved()
+
+		for name, g := range after {
+			center := g.Cell(geom.Pt(2, 3)).Center()
+			g.MoveTo(origin)
+
+			assert.Equal(t, g.Cell(geom.Pt(2, 3)).Center(), center, name+": ")
+		}
+	})
+	t.Run("keeps the values", func(t *testing.T) {
+		g := NewRect[int](geom.Sz(3, 3), geom.Sz(32.0, 32.0))
+		g.Fill(5)
+		g.MoveTo(origin)
+
+		assert.Equal(t, *g.CellAt(geom.Pt(116.0, 66.0)).Value(), 5)
+	})
+	t.Run("leaves a clone where it is", func(t *testing.T) {
+		g := NewRect[int](geom.Sz(3, 3), geom.Sz(32.0, 32.0))
+		clone := g.Clone()
+		g.MoveTo(origin)
+
+		assert.Equal(t, clone.Bounds().Min, geom.Pt(0.0, 0.0))
+	})
+	t.Run("places a grid of no cells", func(t *testing.T) {
+		for name, g := range kindGrids(geom.Sz(0, 0), geom.Sz(32.0, 20.0), start) {
+			g.MoveTo(origin)
+
+			assert.Equal(t, g.Bounds(), geom.Box[float64]{Min: origin, Max: origin}, name+": ")
+		}
+	})
+	for name, corner := range map[string]geom.Point[float64]{
+		"NaN":      geom.Pt(math.NaN(), 50.0),
+		"infinite": geom.Pt(100.0, math.Inf(-1)),
+	} {
+		t.Run("panics for a "+name+" origin", func(t *testing.T) {
+			before, _ := moved()
+
+			for _, g := range before {
+				assert.PanicsWith(t, func() {
+					g.MoveTo(corner)
+				}, "grid: origin "+corner.String()+" is not finite")
+			}
+		})
+	}
+	t.Run("a failed move leaves the grid where it was", func(t *testing.T) {
+		g := NewRect[int](geom.Sz(6, 5), geom.Sz(32.0, 20.0))
+
+		assert.Panics(t, func() {
+			g.MoveTo(geom.Pt(math.NaN(), 50.0))
+		})
+		assert.Equal(t, g.Bounds().Min, geom.Pt(0.0, 0.0))
+	})
+	t.Run("allocates nothing", func(t *testing.T) {
+		before, _ := moved()
+
+		for name, g := range before {
+			allocs := testing.AllocsPerRun(100, func() {
+				g.MoveTo(origin)
+			})
+
+			assert.Equal(t, allocs, 0.0, name+": ")
+		}
+	})
+}
+
+func BenchmarkGrid_MoveTo(b *testing.B) {
+	benchmarkGrids(b, func(b *testing.B, g *Grid[int]) {
+		for i := range b.N {
+			g.MoveTo(geom.Pt(float64(i&7), 1.0))
+		}
+	})
+}
+
+func ExampleGrid_MoveTo() {
+	g := NewRect[int](geom.Sz(10, 10), RectCellScale(32))
+
+	g.MoveTo(geom.Pt(100.0, 50.0))
+	fmt.Println(g.Bounds(), g.Cell(geom.Pt(0, 0)).Center())
+
+	g.Resize(RectCellScale(48))
+	fmt.Println(g.Bounds(), g.Cell(geom.Pt(0, 0)).Center())
+	// Output:
+	// (100.00,50.00)-(420.00,370.00) (116.00,66.00)
+	// (100.00,50.00)-(580.00,530.00) (124.00,74.00)
+}
+
+func TestGrid_Resize(t *testing.T) {
+	origin := geom.Pt(10.0, 20.0)
+	scale := geom.Sz(20.0, 12.0)
+	grids := func() map[string]*Grid[int] {
+		return kindGrids(geom.Sz(6, 5), geom.Sz(64.0, 32.0), origin)
+	}
+
+	t.Run("replaces the size of a square", func(t *testing.T) {
+		g := grids()["rectangular"]
+		g.Resize(geom.Sz(128.0, 64.0))
+
+		geomtest.AssertSize(t, g.CellSize(), geom.Sz(128.0, 64.0))
+		geomtest.AssertSize(t, g.CellSpacing(), geom.Sz(128.0, 64.0))
+	})
+	t.Run("replaces the circumradius of a hexagon", func(t *testing.T) {
+		g := grids()["flat-top"]
+		g.Resize(geom.Sz(10.0, 10.0))
+
+		geomtest.AssertSize(t, g.CellSize(), geom.Sz(20.0, geom.Sqrt3*10))
+	})
+	t.Run("is the grid built at that size", func(t *testing.T) {
+		built := kindGrids(geom.Sz(6, 5), scale, origin)
+
+		for name, g := range grids() {
+			g.Resize(scale)
+
+			assert.Equal(t, g.Bounds(), built[name].Bounds(), name+": ")
+			assert.Equal(t, g.CellSize(), built[name].CellSize(), name+": ")
+			assert.Equal(t, g.CellSpacing(), built[name].CellSpacing(), name+": ")
+			assert.Equal(t, g.Cell(geom.Pt(4, 3)).Center(), built[name].Cell(geom.Pt(4, 3)).Center(), name+": ")
+			assert.Equal(t, g.Cell(geom.Pt(4, 3)).Polygon(), built[name].Cell(geom.Pt(4, 3)).Polygon(), name+": ")
+		}
+	})
+	t.Run("keeps the origin", func(t *testing.T) {
+		for name, g := range grids() {
+			g.Resize(scale)
+
+			assert.Equal(t, g.Bounds().Min, origin, name+": ")
+		}
+	})
+	t.Run("keeps the values", func(t *testing.T) {
+		g := grids()["rectangular"]
+		g.Fill(5)
+		g.Resize(scale)
+
+		assert.Equal(t, *g.Cell(geom.Pt(2, 3)).Value(), 5)
+	})
+	t.Run("leaves a clone at its size", func(t *testing.T) {
+		g := grids()["rectangular"]
+		clone := g.Clone()
+		g.Resize(scale)
+
+		geomtest.AssertSize(t, clone.CellSize(), geom.Sz(64.0, 32.0))
+	})
+	t.Run("a failed resize leaves the grid as it was", func(t *testing.T) {
+		g := grids()["rectangular"]
+
+		assert.Panics(t, func() {
+			g.Resize(geom.Sz(-1.0, 2.0))
+		})
+		geomtest.AssertSize(t, g.CellSize(), geom.Sz(64.0, 32.0))
+	})
+	for name, bad := range map[string]geom.Size[float64]{
+		"zero":     geom.Sz(0.0, 32.0),
+		"negative": geom.Sz(32.0, -32.0),
+		"NaN":      geom.Sz(math.NaN(), 32.0),
+		"infinite": geom.Sz(32.0, math.Inf(1)),
+	} {
+		t.Run("panics for a "+name+" size", func(t *testing.T) {
+			for _, g := range grids() {
+				assert.PanicsWith(t, func() {
+					g.Resize(bad)
+				}, "grid: cell scale "+bad.String()+" is not positive and finite")
+			}
+		})
+	}
+	t.Run("allocates nothing", func(t *testing.T) {
+		for name, g := range grids() {
+			allocs := testing.AllocsPerRun(100, func() {
+				g.Resize(scale)
+			})
+
+			assert.Equal(t, allocs, 0.0, name+": ")
+		}
+	})
+}
+
+func BenchmarkGrid_Resize(b *testing.B) {
+	benchmarkGrids(b, func(b *testing.B, g *Grid[int]) {
+		for i := range b.N {
+			g.Resize(geom.Sz(float64(i&7+8), 20.0))
+		}
+	})
 }
 
 func TestGrid_Neighbors(t *testing.T) {
-	grids, center := rangeGrids()
+	grids, center := ruleGrids(geom.Sz(11, 11)), geom.Pt(5, 5)
 
 	t.Run("cardinal has four, by increasing angle", func(t *testing.T) {
 		assert.Equal(t, grids["cardinal"].Neighbors(center), []geom.Point[int]{geom.Pt(6, 5), geom.Pt(5, 6), geom.Pt(4, 5), geom.Pt(5, 4)})
@@ -316,7 +1338,7 @@ func TestGrid_Neighbors(t *testing.T) {
 }
 
 func BenchmarkGrid_Neighbors(b *testing.B) {
-	grids, center := rangeGrids()
+	grids, center := ruleGrids(geom.Sz(11, 11)), geom.Pt(5, 5)
 
 	for _, name := range []string{"cardinal", "diagonal", "flat-top", "pointy-top"} {
 		b.Run(name, func(b *testing.B) {
@@ -364,7 +1386,7 @@ func FuzzGrid_Neighbors(f *testing.F) {
 }
 
 func TestGrid_AppendNeighbors(t *testing.T) {
-	grids, center := rangeGrids()
+	grids, center := ruleGrids(geom.Sz(11, 11)), geom.Pt(5, 5)
 
 	for name, g := range grids {
 		t.Run(name, func(t *testing.T) {
@@ -386,7 +1408,7 @@ func TestGrid_AppendNeighbors(t *testing.T) {
 }
 
 func TestGrid_Range(t *testing.T) {
-	grids, center := rangeGrids()
+	grids, center := ruleGrids(geom.Sz(11, 11)), geom.Pt(5, 5)
 
 	t.Run("a negative radius is empty", func(t *testing.T) {
 		assert.True(t, grids["cardinal"].Range(center, -1, nil).IsEmpty())
@@ -406,7 +1428,7 @@ func TestGrid_Range(t *testing.T) {
 	t.Run("the farthest cell is in a range of any radius beyond it, from every cell of a small grid", func(t *testing.T) {
 		for size := range container.Arr[int](geom.Sz(7, 7)).Keys() {
 			size := geom.Sz(size.X+1, size.Y+1)
-			small := testGrids(size, geom.Sz(32.0, 20.0), geom.Pt(0.0, 0.0))
+			small := kindGrids(size, geom.Sz(32.0, 20.0), geom.Pt(0.0, 0.0))
 			small["diagonal"] = NewRect[int](size, geom.Sz(32.0, 32.0), withDiagonalMovement)
 
 			for name, g := range small {
@@ -612,7 +1634,7 @@ func BenchmarkGrid_Range(b *testing.B) {
 }
 
 func ExampleGrid_Range() {
-	g := NewRect[bool](geom.Sz(5, 5), RectCellSize(32))
+	g := NewRect[bool](geom.Sz(5, 5), RectCellScale(32))
 	g.Fill(true)
 	g.Cell(geom.Pt(2, 1)).Set(false)
 
@@ -688,7 +1710,7 @@ func FuzzGrid_Range(f *testing.F) {
 }
 
 func TestGrid_AppendRange(t *testing.T) {
-	grids, center := rangeGrids()
+	grids, center := ruleGrids(geom.Sz(11, 11)), geom.Pt(5, 5)
 	open := func(cell Cell[int]) bool {
 		return cell.Index() != geom.Pt(5, 6)
 	}
@@ -740,7 +1762,7 @@ func TestGrid_AppendRange(t *testing.T) {
 }
 
 func TestGrid_RangeSeq(t *testing.T) {
-	grids, center := rangeGrids()
+	grids, center := ruleGrids(geom.Sz(11, 11)), geom.Pt(5, 5)
 
 	for name, g := range grids {
 		t.Run(name, func(t *testing.T) {
@@ -795,7 +1817,7 @@ func TestGrid_RangeSeq(t *testing.T) {
 }
 
 func TestGrid_Ring(t *testing.T) {
-	grids, center := rangeGrids()
+	grids, center := ruleGrids(geom.Sz(11, 11)), geom.Pt(5, 5)
 
 	t.Run("cardinal walks the diamond, by increasing angle", func(t *testing.T) {
 		assert.Equal(t, grids["cardinal"].Ring(center, 1), grids["cardinal"].Neighbors(center))
@@ -851,7 +1873,7 @@ func TestGrid_Ring(t *testing.T) {
 }
 
 func BenchmarkGrid_Ring(b *testing.B) {
-	grids, center := rangeGrids()
+	grids, center := ruleGrids(geom.Sz(11, 11)), geom.Pt(5, 5)
 
 	for _, name := range []string{"cardinal", "diagonal", "flat-top", "pointy-top"} {
 		b.Run(name, func(b *testing.B) {
@@ -865,7 +1887,7 @@ func BenchmarkGrid_Ring(b *testing.B) {
 }
 
 func ExampleGrid_Ring() {
-	g := NewHexFlatTop[bool](geom.Sz(5, 5), HexFlatTopCellSize(32))
+	g := NewHexFlatTop[bool](geom.Sz(5, 5), HexFlatTopCellScale(32))
 
 	index := geom.Pt(1, 1)
 
@@ -881,7 +1903,7 @@ func ExampleGrid_Ring() {
 }
 
 func TestGrid_AppendRing(t *testing.T) {
-	grids, center := rangeGrids()
+	grids, center := ruleGrids(geom.Sz(11, 11)), geom.Pt(5, 5)
 
 	for name, g := range grids {
 		t.Run(name, func(t *testing.T) {
@@ -905,7 +1927,7 @@ func TestGrid_AppendRing(t *testing.T) {
 }
 
 func TestGrid_RingSeq(t *testing.T) {
-	grids, center := rangeGrids()
+	grids, center := ruleGrids(geom.Sz(11, 11)), geom.Pt(5, 5)
 
 	for name, g := range grids {
 		t.Run(name, func(t *testing.T) {
@@ -930,7 +1952,7 @@ func TestGrid_RingSeq(t *testing.T) {
 }
 
 func TestGrid_Spiral(t *testing.T) {
-	grids, center := rangeGrids()
+	grids, center := ruleGrids(geom.Sz(11, 11)), geom.Pt(5, 5)
 
 	t.Run("starts at the index", func(t *testing.T) {
 		for name, g := range grids {
@@ -982,7 +2004,7 @@ func TestGrid_Spiral(t *testing.T) {
 }
 
 func BenchmarkGrid_Spiral(b *testing.B) {
-	grids, center := rangeGrids()
+	grids, center := ruleGrids(geom.Sz(11, 11)), geom.Pt(5, 5)
 
 	for _, name := range []string{"cardinal", "diagonal", "flat-top", "pointy-top"} {
 		b.Run(name, func(b *testing.B) {
@@ -996,7 +2018,7 @@ func BenchmarkGrid_Spiral(b *testing.B) {
 }
 
 func TestGrid_AppendSpiral(t *testing.T) {
-	grids, center := rangeGrids()
+	grids, center := ruleGrids(geom.Sz(11, 11)), geom.Pt(5, 5)
 
 	for name, g := range grids {
 		t.Run(name, func(t *testing.T) {
@@ -1019,7 +2041,7 @@ func TestGrid_AppendSpiral(t *testing.T) {
 }
 
 func TestGrid_SpiralSeq(t *testing.T) {
-	grids, center := rangeGrids()
+	grids, center := ruleGrids(geom.Sz(11, 11)), geom.Pt(5, 5)
 
 	for name, g := range grids {
 		t.Run(name, func(t *testing.T) {
@@ -1043,8 +2065,302 @@ func TestGrid_SpiralSeq(t *testing.T) {
 	}
 }
 
+func TestGrid_Border(t *testing.T) {
+	center := geom.Pt(4, 4)
+
+	t.Run("a single cell is its own border", func(t *testing.T) {
+		for name, g := range ruleGrids(geom.Sz(9, 9)) {
+			assert.True(t, g.Border(Reg([]geom.Point[int]{center})).Equal(Reg([]geom.Point[int]{center})), name+": ")
+		}
+	})
+	t.Run("the border of a range is its outermost ring", func(t *testing.T) {
+		for name, g := range ruleGrids(geom.Sz(9, 9)) {
+			var ring []geom.Point[int]
+			for index := range g.Range(center, 3, nil).All() {
+				if g.Distance(center, index) == 3 {
+					ring = append(ring, index)
+				}
+			}
+
+			assert.True(t, g.Border(g.Range(center, 3, nil)).Equal(Reg(ring)), name+": ")
+		}
+	})
+	t.Run("a hole has a border of its own", func(t *testing.T) {
+		g := ruleGrids(geom.Sz(9, 9))["cardinal"]
+		ringed := g.Range(center, 2, nil).Difference(Reg([]geom.Point[int]{center}))
+
+		assert.True(t, g.Border(ringed).Contains(geom.Pt(4, 3)))
+		assert.False(t, g.Border(g.Range(center, 2, nil)).Contains(geom.Pt(4, 3)))
+	})
+	t.Run("the edge of the grid is a border", func(t *testing.T) {
+		for name, g := range ruleGrids(geom.Sz(9, 9)) {
+			var whole, edge []geom.Point[int]
+			for cell := range g.All() {
+				whole = append(whole, cell.Index())
+				if index := cell.Index(); index.X == 0 || index.Y == 0 || index.X == 8 || index.Y == 8 {
+					edge = append(edge, index)
+				}
+			}
+
+			assert.True(t, g.Border(Reg(whole)).Equal(Reg(edge)), name+": ")
+		}
+	})
+	t.Run("the empty region has none", func(t *testing.T) {
+		assert.True(t, ruleGrids(geom.Sz(9, 9))["cardinal"].Border(Region{}).IsEmpty())
+	})
+	t.Run("is held by the region", func(t *testing.T) {
+		for name, g := range ruleGrids(geom.Sz(9, 9)) {
+			region := g.Range(center, 3, nil)
+
+			assert.True(t, region.Encloses(g.Border(region)), name+": ")
+		}
+	})
+	t.Run("allocates once", func(t *testing.T) {
+		for name, g := range ruleGrids(geom.Sz(9, 9)) {
+			region := g.Range(center, 3, nil)
+
+			assert.Equal(t, testing.AllocsPerRun(10, func() {
+				sinkRegion = g.Border(region)
+			}), 1.0, name+": ")
+		}
+	})
+}
+
+func BenchmarkGrid_Border(b *testing.B) {
+	benchmarkGrids(b, func(b *testing.B, g *Grid[int]) {
+		region := g.Range(geom.Pt(32, 32), 16, nil)
+
+		for b.Loop() {
+			sinkRegion = g.Border(region)
+		}
+	})
+}
+
+func ExampleGrid_Border() {
+	g := NewRect[int](geom.Sz(5, 5), RectCellScale(32))
+	room := g.Range(geom.Pt(2, 2), 1, nil)
+
+	fmt.Println(g.Border(room).Len(), g.Grow(room, 1).Len(), g.Shrink(room, 1).Elements())
+	fmt.Println(g.IsConnected(room), len(g.Components(Reg([]geom.Point[int]{geom.Pt(0, 0), geom.Pt(4, 4)}))))
+	// Output:
+	// 4 13 [(2,2)]
+	// true 2
+}
+
+func TestGrid_Grow(t *testing.T) {
+	center := geom.Pt(4, 4)
+	single := Reg([]geom.Point[int]{center})
+
+	t.Run("a cell grown is the range around it", func(t *testing.T) {
+		for name, g := range ruleGrids(geom.Sz(9, 9)) {
+			for n := range 4 {
+				assert.True(t, g.Grow(single, n).Equal(g.Range(center, n, nil)), name+": ")
+			}
+		}
+	})
+	t.Run("zero or fewer steps is the region", func(t *testing.T) {
+		g := ruleGrids(geom.Sz(9, 9))["cardinal"]
+
+		assert.True(t, g.Grow(single, 0).Equal(single))
+		assert.True(t, g.Grow(single, -2).Equal(single))
+	})
+	t.Run("stops at the edge of the grid", func(t *testing.T) {
+		for name, g := range ruleGrids(geom.Sz(9, 9)) {
+			for index := range g.Grow(Reg([]geom.Point[int]{geom.Pt(0, 0)}), 3).All() {
+				assert.True(t, g.Contains(index), name+" at "+index.String()+": ")
+			}
+		}
+	})
+	t.Run("fills the whole grid and no more", func(t *testing.T) {
+		for name, g := range ruleGrids(geom.Sz(9, 9)) {
+			assert.Equal(t, g.Grow(single, 100).Len(), 81, name+": ")
+		}
+	})
+	t.Run("keeps an index of the region outside the grid", func(t *testing.T) {
+		outside := Reg([]geom.Point[int]{geom.Pt(-5, -5), center})
+
+		assert.True(t, ruleGrids(geom.Sz(9, 9))["cardinal"].Grow(outside, 1).Contains(geom.Pt(-5, -5)))
+	})
+	t.Run("the empty region stays empty", func(t *testing.T) {
+		assert.True(t, ruleGrids(geom.Sz(9, 9))["cardinal"].Grow(Region{}, 3).IsEmpty())
+	})
+	t.Run("allocates its marks once and its indices as they double", func(t *testing.T) {
+		for name, g := range ruleGrids(geom.Sz(9, 9)) {
+			assert.LessOrEqual(t, testing.AllocsPerRun(10, func() {
+				sinkRegion = g.Grow(single, 3)
+			}), 10.0, name+": ")
+		}
+	})
+}
+
+func BenchmarkGrid_Grow(b *testing.B) {
+	benchmarkGrids(b, func(b *testing.B, g *Grid[int]) {
+		region := g.Range(geom.Pt(32, 32), 8, nil)
+
+		for b.Loop() {
+			sinkRegion = g.Grow(region, 4)
+		}
+	})
+}
+
+func TestGrid_Shrink(t *testing.T) {
+	center := geom.Pt(4, 4)
+
+	t.Run("undoes a grow away from the edge", func(t *testing.T) {
+		for name, g := range ruleGrids(geom.Sz(9, 9)) {
+			region := g.Range(center, 1, nil)
+
+			assert.True(t, g.Shrink(g.Grow(region, 2), 2).Equal(region), name+": ")
+		}
+	})
+	t.Run("a range shrunk is the smaller range", func(t *testing.T) {
+		for name, g := range ruleGrids(geom.Sz(9, 9)) {
+			assert.True(t, g.Shrink(g.Range(center, 3, nil), 2).Equal(g.Range(center, 1, nil)), name+": ")
+		}
+	})
+	t.Run("zero or fewer steps is the region", func(t *testing.T) {
+		g := ruleGrids(geom.Sz(9, 9))["cardinal"]
+		region := g.Range(center, 2, nil)
+
+		assert.True(t, g.Shrink(region, 0).Equal(region))
+		assert.True(t, g.Shrink(region, -1).Equal(region))
+	})
+	t.Run("more steps than the region is deep leaves nothing", func(t *testing.T) {
+		g := ruleGrids(geom.Sz(9, 9))["cardinal"]
+
+		assert.True(t, g.Shrink(g.Range(center, 2, nil), 10).IsEmpty())
+	})
+	t.Run("allocates twice a step", func(t *testing.T) {
+		for name, g := range ruleGrids(geom.Sz(9, 9)) {
+			region := g.Range(center, 3, nil)
+
+			assert.Equal(t, testing.AllocsPerRun(10, func() {
+				sinkRegion = g.Shrink(region, 2)
+			}), 4.0, name+": ")
+		}
+	})
+}
+
+func BenchmarkGrid_Shrink(b *testing.B) {
+	benchmarkGrids(b, func(b *testing.B, g *Grid[int]) {
+		region := g.Range(geom.Pt(32, 32), 16, nil)
+
+		for b.Loop() {
+			sinkRegion = g.Shrink(region, 4)
+		}
+	})
+}
+
+func TestGrid_IsConnected(t *testing.T) {
+	t.Run("the empty region and a single cell are", func(t *testing.T) {
+		g := ruleGrids(geom.Sz(9, 9))["cardinal"]
+
+		assert.True(t, g.IsConnected(Region{}))
+		assert.True(t, g.IsConnected(Reg([]geom.Point[int]{geom.Pt(4, 4)})))
+	})
+	t.Run("a range is", func(t *testing.T) {
+		for name, g := range ruleGrids(geom.Sz(9, 9)) {
+			assert.True(t, g.IsConnected(g.Range(geom.Pt(4, 4), 3, nil)), name+": ")
+		}
+	})
+	t.Run("two cells apart are not", func(t *testing.T) {
+		for name, g := range ruleGrids(geom.Sz(9, 9)) {
+			assert.False(t, g.IsConnected(Reg([]geom.Point[int]{geom.Pt(1, 1), geom.Pt(6, 6)})), name+": ")
+		}
+	})
+	t.Run("cells touching at a corner are connected under diagonal movement alone", func(t *testing.T) {
+		corner := Reg([]geom.Point[int]{geom.Pt(1, 1), geom.Pt(2, 2)})
+
+		assert.False(t, ruleGrids(geom.Sz(9, 9))["cardinal"].IsConnected(corner))
+		assert.True(t, ruleGrids(geom.Sz(9, 9))["diagonal"].IsConnected(corner))
+	})
+	t.Run("allocates twice", func(t *testing.T) {
+		for name, g := range ruleGrids(geom.Sz(9, 9)) {
+			region := g.Range(geom.Pt(4, 4), 4, nil)
+
+			assert.Equal(t, testing.AllocsPerRun(10, func() {
+				sinkBool = g.IsConnected(region)
+			}), 2.0, name+": ")
+		}
+	})
+}
+
+func BenchmarkGrid_IsConnected(b *testing.B) {
+	benchmarkGrids(b, func(b *testing.B, g *Grid[int]) {
+		region := g.Range(geom.Pt(32, 32), 16, nil)
+
+		for b.Loop() {
+			sinkBool = g.IsConnected(region)
+		}
+	})
+}
+
+func TestGrid_Components(t *testing.T) {
+	t.Run("the empty region has none", func(t *testing.T) {
+		assert.Length(t, ruleGrids(geom.Sz(9, 9))["cardinal"].Components(Region{}), 0)
+	})
+	t.Run("a connected region is its one component", func(t *testing.T) {
+		for name, g := range ruleGrids(geom.Sz(9, 9)) {
+			region := g.Range(geom.Pt(4, 4), 2, nil)
+			components := g.Components(region)
+
+			assert.Length(t, components, 1, name+": ")
+			assert.True(t, components[0].Equal(region), name+": ")
+		}
+	})
+	t.Run("parts apart come back in the order of their first index", func(t *testing.T) {
+		for name, g := range ruleGrids(geom.Sz(9, 9)) {
+			left, right := g.Range(geom.Pt(1, 1), 1, nil), g.Range(geom.Pt(6, 6), 1, nil)
+			components := g.Components(left.Union(right))
+
+			assert.Length(t, components, 2, name+": ")
+			assert.True(t, components[0].Equal(left), name+": ")
+			assert.True(t, components[1].Equal(right), name+": ")
+		}
+	})
+	t.Run("every component is connected and together they are the region", func(t *testing.T) {
+		for name, g := range ruleGrids(geom.Sz(9, 9)) {
+			var scattered []geom.Point[int]
+			for cell := range g.All() {
+				if index := cell.Index(); (index.X*5+index.Y*3)%4 != 0 {
+					scattered = append(scattered, index)
+				}
+			}
+			region := Reg(scattered)
+
+			union := Region{}
+			for _, component := range g.Components(region) {
+				assert.True(t, g.IsConnected(component), name+": ")
+				assert.False(t, union.Intersects(component), name+": ")
+				union = union.Union(component)
+			}
+
+			assert.True(t, union.Equal(region), name+": ")
+		}
+	})
+	t.Run("allocates twice, then once a component and once for the list of one", func(t *testing.T) {
+		for name, g := range ruleGrids(geom.Sz(9, 9)) {
+			region := g.Range(geom.Pt(4, 4), 4, nil)
+
+			assert.Equal(t, testing.AllocsPerRun(10, func() {
+				sinkRegions = g.Components(region)
+			}), 4.0, name+": ")
+		}
+	})
+}
+
+func BenchmarkGrid_Components(b *testing.B) {
+	benchmarkGrids(b, func(b *testing.B, g *Grid[int]) {
+		region := g.Range(geom.Pt(16, 16), 8, nil).Union(g.Range(geom.Pt(48, 48), 8, nil))
+
+		for b.Loop() {
+			sinkRegions = g.Components(region)
+		}
+	})
+}
+
 func TestGrid_Distance(t *testing.T) {
-	grids, center := rangeGrids()
+	grids, center := ruleGrids(geom.Sz(11, 11)), geom.Pt(5, 5)
 
 	t.Run("cardinal is the Manhattan distance", func(t *testing.T) {
 		assert.Equal(t, grids["cardinal"].Distance(geom.Pt(0, 0), geom.Pt(3, 4)), 7)
@@ -1085,7 +2401,7 @@ func TestGrid_Distance(t *testing.T) {
 }
 
 func TestGrid_Line(t *testing.T) {
-	grids, center := rangeGrids()
+	grids, center := ruleGrids(geom.Sz(11, 11)), geom.Pt(5, 5)
 
 	t.Run("a line to itself is the index alone", func(t *testing.T) {
 		for name, g := range grids {
@@ -1143,7 +2459,7 @@ func TestGrid_Line(t *testing.T) {
 }
 
 func BenchmarkGrid_Line(b *testing.B) {
-	grids, _ := rangeGrids()
+	grids := ruleGrids(geom.Sz(11, 11))
 
 	for _, name := range []string{"cardinal", "diagonal", "flat-top", "pointy-top"} {
 		b.Run(name, func(b *testing.B) {
@@ -1157,7 +2473,7 @@ func BenchmarkGrid_Line(b *testing.B) {
 }
 
 func TestGrid_AppendLine(t *testing.T) {
-	grids, _ := rangeGrids()
+	grids := ruleGrids(geom.Sz(11, 11))
 
 	for name, g := range grids {
 		t.Run(name, func(t *testing.T) {
@@ -1176,7 +2492,7 @@ func TestGrid_AppendLine(t *testing.T) {
 }
 
 func TestGrid_LineSeq(t *testing.T) {
-	grids, _ := rangeGrids()
+	grids := ruleGrids(geom.Sz(11, 11))
 
 	for name, g := range grids {
 		t.Run(name, func(t *testing.T) {
@@ -1195,6 +2511,378 @@ func TestGrid_LineSeq(t *testing.T) {
 			})
 		})
 	}
+}
+
+// testSearch runs the sections every search shares, from testStart to testGoal.
+func testSearch(t *testing.T, search func(g *Grid[int], passable func(Cell[int]) bool) []geom.Point[int]) {
+	t.Run("nil callbacks admit every cell at unit cost", func(t *testing.T) {
+		path := search(walledGrid(), nil)
+
+		assert.Equal(t, path[0], testStart)
+		assert.Equal(t, path[len(path)-1], testGoal)
+	})
+	t.Run("the path steps between neighbors and around the wall", func(t *testing.T) {
+		g := walledGrid()
+		path := search(g, walkable)
+
+		assert.NotContains(t, path, testWall)
+		for i := 1; i < len(path); i++ {
+			assert.Equal(t, g.Distance(path[i-1], path[i]), 1)
+		}
+	})
+	t.Run("a goal walled off has no path", func(t *testing.T) {
+		assert.Equal(t, search(sealedGrid(), walkable), nil)
+	})
+	t.Run("a start or a goal outside the grid has no path", func(t *testing.T) {
+		g := NewRect[int](geom.Sz(3, 3), geom.Sz(32.0, 32.0))
+
+		assert.Equal(t, search(g, nil), nil)
+	})
+	t.Run("finds its way on every kind of grid", func(t *testing.T) {
+		for name, g := range ruleGrids(geom.Sz(9, 9)) {
+			path := search(g, nil)
+
+			assert.Equal(t, path[0], testStart, name+": ")
+			assert.Equal(t, path[len(path)-1], testGoal, name+": ")
+			for i := 1; i < len(path); i++ {
+				assert.Equal(t, g.Distance(path[i-1], path[i]), 1, name+": ")
+			}
+		}
+	})
+	t.Run("allocates no more on a long path than on a short one, but for its buffers", func(t *testing.T) {
+		small := NewRect[int](geom.Sz(8, 8), geom.Sz(32.0, 32.0))
+		large := NewRect[int](geom.Sz(64, 64), geom.Sz(32.0, 32.0))
+
+		short := testing.AllocsPerRun(5, func() {
+			sinkPoints = search(small, walkable)
+		})
+		long := testing.AllocsPerRun(5, func() {
+			sinkPoints = search(large, walkable)
+		})
+
+		assert.LessOrEqual(t, short, 12.0)
+		assert.LessOrEqual(t, long, 24.0)
+	})
+}
+
+// testSearchField runs the sections every search field shares, from testStart.
+func testSearchField(t *testing.T, field func(g *Grid[int], passable func(Cell[int]) bool) Field) {
+	t.Run("nil callbacks reach every cell", func(t *testing.T) {
+		assert.Equal(t, field(walledGrid(), nil).Len(), 25)
+	})
+	t.Run("holds the start", func(t *testing.T) {
+		reached := field(walledGrid(), walkable)
+
+		assert.Equal(t, reached.Start(), testStart)
+		assert.True(t, reached.Contains(testStart))
+	})
+	t.Run("a wall is never in the field", func(t *testing.T) {
+		reached := field(walledGrid(), walkable)
+
+		assert.False(t, reached.Contains(testWall))
+		assert.Equal(t, reached.Len(), 24)
+	})
+	t.Run("holds only what was reached", func(t *testing.T) {
+		assert.Equal(t, field(sealedGrid(), walkable).Len(), 10)
+	})
+	t.Run("a start that is not passable has an empty field", func(t *testing.T) {
+		blocked := func(Cell[int]) bool {
+			return false
+		}
+
+		assert.True(t, field(walledGrid(), blocked).IsEmpty())
+	})
+	t.Run("the path to every cell is as short as any", func(t *testing.T) {
+		g := walledGrid()
+		reached := field(g, walkable)
+
+		for index := range reached.Region().All() {
+			path := reached.PathTo(index)
+			shortest := g.BreadthFirstSearch(testStart, index, walkable)
+
+			assert.Length(t, path, len(shortest), index.String()+": ")
+			assert.Equal(t, path[0], testStart, index.String()+": ")
+			assert.Equal(t, path[len(path)-1], index, index.String()+": ")
+		}
+	})
+}
+
+// benchmarkSearch runs the search corner to corner on each of the benchmarkGrids.
+func benchmarkSearch(b *testing.B, search func(g *Grid[int], start, goal geom.Point[int]) []geom.Point[int]) {
+	benchmarkGrids(b, func(b *testing.B, g *Grid[int]) {
+		for b.Loop() {
+			sinkPoints = search(g, geom.Pt(0, 0), geom.Pt(63, 63))
+		}
+	})
+}
+
+func TestGrid_BreadthFirstSearchField(t *testing.T) {
+	testSearchField(t, func(g *Grid[int], passable func(Cell[int]) bool) Field {
+		return g.BreadthFirstSearchField(testStart, passable)
+	})
+}
+
+func TestGrid_BreadthFirstSearch(t *testing.T) {
+	testSearch(t, func(g *Grid[int], passable func(Cell[int]) bool) []geom.Point[int] {
+		return g.BreadthFirstSearch(testStart, testGoal, passable)
+	})
+}
+
+func BenchmarkGrid_BreadthFirstSearch(b *testing.B) {
+	benchmarkSearch(b, func(g *Grid[int], start, goal geom.Point[int]) []geom.Point[int] {
+		return g.BreadthFirstSearch(start, goal, nil)
+	})
+}
+
+func TestGrid_Reachable(t *testing.T) {
+	t.Run("is the cells within the steps along passable cells", func(t *testing.T) {
+		for name, g := range ruleGrids(geom.Sz(9, 9)) {
+			for cell := range g.All() {
+				if index := cell.Index(); (index.X*5+index.Y*3)%4 == 0 {
+					cell.Set(1)
+				}
+			}
+			start := geom.Pt(4, 5)
+			field := g.BreadthFirstSearchField(start, walkable)
+
+			for steps := range 6 {
+				var expected []geom.Point[int]
+				for index := range field.Region().All() {
+					if len(field.PathTo(index))-1 <= steps {
+						expected = append(expected, index)
+					}
+				}
+
+				assert.True(t, g.Reachable(start, steps, walkable).Equal(Reg(expected)), name+" at "+strconv.Itoa(steps)+": ")
+			}
+		}
+	})
+	t.Run("goes around what a range sees past", func(t *testing.T) {
+		g := sealedGrid()
+
+		assert.False(t, g.Reachable(testStart, 20, walkable).Contains(testGoal))
+		assert.Equal(t, g.Reachable(testStart, 20, walkable).Len(), 10)
+	})
+	t.Run("no steps is the start alone", func(t *testing.T) {
+		assert.Equal(t, slices.Collect(walledGrid().Reachable(testStart, 0, nil).All()), []geom.Point[int]{testStart})
+	})
+	t.Run("negative steps reach nothing", func(t *testing.T) {
+		assert.True(t, walledGrid().Reachable(testStart, -1, nil).IsEmpty())
+	})
+	t.Run("a start outside the grid reaches nothing", func(t *testing.T) {
+		assert.True(t, walledGrid().Reachable(geom.Pt(-1, 0), 3, nil).IsEmpty())
+	})
+}
+
+func BenchmarkGrid_Reachable(b *testing.B) {
+	benchmarkGrids(b, func(b *testing.B, g *Grid[int]) {
+		for b.Loop() {
+			sinkRegion = g.Reachable(geom.Pt(32, 32), 8, nil)
+		}
+	})
+}
+
+func ExampleGrid_Reachable() {
+	g := NewRect[bool](geom.Sz(5, 5), RectCellScale(32))
+	g.Fill(true)
+	g.Cell(geom.Pt(1, 2)).Set(false)
+
+	walkable := func(cell Cell[bool]) bool {
+		return *cell.Value()
+	}
+
+	reach := g.Reachable(geom.Pt(2, 2), 1, walkable)
+	blast := g.Range(geom.Pt(1, 1), 1, nil)
+
+	fmt.Println(reach.Elements())
+	fmt.Println(reach.Intersection(blast).Elements())
+	fmt.Println(reach.Intersects(blast), reach.Contains(geom.Pt(1, 2)))
+	// Output:
+	// [(2,1) (2,2) (2,3) (3,2)]
+	// [(2,1)]
+	// true false
+}
+
+func TestGrid_UniformCostSearchField(t *testing.T) {
+	testSearchField(t, func(g *Grid[int], passable func(Cell[int]) bool) Field {
+		return g.UniformCostSearchField(testStart, passable, nil)
+	})
+}
+
+func TestGrid_UniformCostSearch(t *testing.T) {
+	t.Run("pays the least, around what is dear", func(t *testing.T) {
+		path := weightedGrid().UniformCostSearch(testStart, geom.Pt(4, 0), nil, stepCost)
+
+		assert.Length(t, path, 13)
+		assert.NotContains(t, path, geom.Pt(2, 0))
+	})
+	testSearch(t, func(g *Grid[int], passable func(Cell[int]) bool) []geom.Point[int] {
+		return g.UniformCostSearch(testStart, testGoal, passable, nil)
+	})
+	t.Run("cost is never asked about a cell that is not passable", func(t *testing.T) {
+		walledGrid().UniformCostSearch(testStart, testGoal, walkable, func(current, next Cell[int]) float64 {
+			assert.NotEqual(t, next.Index(), testWall)
+
+			return 1
+		})
+	})
+}
+
+func BenchmarkGrid_UniformCostSearch(b *testing.B) {
+	benchmarkSearch(b, func(g *Grid[int], start, goal geom.Point[int]) []geom.Point[int] {
+		return g.UniformCostSearch(start, goal, nil, nil)
+	})
+}
+
+func TestGrid_GreedyBestFirstSearch(t *testing.T) {
+	testSearch(t, func(g *Grid[int], passable func(Cell[int]) bool) []geom.Point[int] {
+		return g.GreedyBestFirstSearch(testStart, testGoal, passable)
+	})
+}
+
+func BenchmarkGrid_GreedyBestFirstSearch(b *testing.B) {
+	benchmarkSearch(b, func(g *Grid[int], start, goal geom.Point[int]) []geom.Point[int] {
+		return g.GreedyBestFirstSearch(start, goal, nil)
+	})
+}
+
+func TestGrid_AStar(t *testing.T) {
+	t.Run("pays what uniform cost search pays", func(t *testing.T) {
+		for name, g := range ruleGrids(geom.Sz(9, 9)) {
+			for cell := range g.All() {
+				cell.Set((cell.Index().X*3 + cell.Index().Y*7) % 4)
+			}
+
+			for cell := range g.All() {
+				expected, _ := g.UniformCostSearchField(testStart, nil, stepCost).CostTo(cell.Index())
+				path := g.AStar(testStart, cell.Index(), nil, stepCost)
+
+				paid := 0.0
+				for i := 1; i < len(path); i++ {
+					paid += stepCost(g.Cell(path[i-1]), g.Cell(path[i]))
+				}
+
+				assert.Equal(t, paid, expected, name+" at "+cell.Index().String()+": ")
+			}
+		}
+	})
+	testSearch(t, func(g *Grid[int], passable func(Cell[int]) bool) []geom.Point[int] {
+		return g.AStar(testStart, testGoal, passable, nil)
+	})
+	t.Run("cost is never asked about a cell that is not passable", func(t *testing.T) {
+		walledGrid().AStar(testStart, testGoal, walkable, func(current, next Cell[int]) float64 {
+			assert.NotEqual(t, next.Index(), testWall)
+
+			return 1
+		})
+	})
+}
+
+func BenchmarkGrid_AStar(b *testing.B) {
+	benchmarkSearch(b, func(g *Grid[int], start, goal geom.Point[int]) []geom.Point[int] {
+		return g.AStar(start, goal, nil, nil)
+	})
+}
+
+func FuzzGrid_AStar(f *testing.F) {
+	for kind := range uint8(7) {
+		f.Add(kind, uint8(8), uint8(8), uint8(2), uint8(2), uint8(9), uint8(9), uint8(3))
+		f.Add(kind, uint8(4), uint8(9), uint8(0), uint8(0), uint8(4), uint8(9), uint8(11))
+		f.Add(kind, uint8(0), uint8(0), uint8(2), uint8(2), uint8(2), uint8(2), uint8(0))
+	}
+
+	f.Fuzz(func(t *testing.T, kind, width, height, x0, y0, x1, y1, seed uint8) {
+		g := fuzzGrid(kind, width, height)
+		for cell := range g.All() {
+			cell.Set((cell.Index().X*7 + cell.Index().Y*13 + int(seed)) % 5)
+		}
+		passable := func(cell Cell[int]) bool {
+			return *cell.Value() != 4
+		}
+		cost := func(_, next Cell[int]) float64 {
+			return float64(1 + *next.Value())
+		}
+		start, goal := fuzzIndex(g, x0, y0), fuzzIndex(g, x1, y1)
+
+		path, shortest := g.AStar(start, goal, passable, cost), g.BreadthFirstSearch(start, goal, passable)
+
+		assert.Equal(t, path == nil, shortest == nil)
+		if path == nil {
+			return
+		}
+
+		assert.Equal(t, path[0], start)
+		assert.Equal(t, path[len(path)-1], goal)
+
+		paid := 0.0
+		for i, index := range path {
+			assert.True(t, passable(g.Cell(index)), index.String()+": ")
+			if i > 0 {
+				assert.Equal(t, g.Distance(path[i-1], index), 1, index.String()+": ")
+				paid += cost(g.Cell(path[i-1]), g.Cell(index))
+			}
+		}
+
+		cheapest, _ := g.UniformCostSearchField(start, passable, cost).CostTo(goal)
+		assert.Equal(t, paid, cheapest)
+		assert.Length(t, g.AStar(start, goal, passable, nil), len(shortest))
+		assert.Length(t, g.UniformCostSearch(start, goal, passable, nil), len(shortest))
+	})
+}
+
+func TestGrid_Path(t *testing.T) {
+	t.Run("to the cell itself is that cell alone", func(t *testing.T) {
+		path := walledGrid().Path(testStart, testStart, nil, nil)
+
+		assert.Length(t, path, 1)
+		assert.Equal(t, path[0], testStart)
+	})
+	t.Run("a straight path holds both ends", func(t *testing.T) {
+		path := walledGrid().Path(testStart, geom.Pt(4, 0), nil, nil)
+
+		assert.Length(t, path, 5)
+		assert.Equal(t, path[0], testStart)
+		assert.Equal(t, path[4], geom.Pt(4, 0))
+	})
+	t.Run("goes around a wall", func(t *testing.T) {
+		g := NewRect[int](geom.Sz(5, 3), geom.Sz(32.0, 32.0))
+		g.Cell(geom.Pt(2, 0)).Set(1)
+		g.Cell(geom.Pt(2, 1)).Set(1)
+
+		path := g.Path(testStart, geom.Pt(4, 0), walkable, nil)
+
+		assert.Length(t, path, 9)
+		assert.Equal(t, path[0], testStart)
+		assert.Equal(t, path[len(path)-1], geom.Pt(4, 0))
+	})
+	t.Run("a goal walled off has no path", func(t *testing.T) {
+		assert.Length(t, sealedGrid().Path(testStart, testGoal, walkable, nil), 0)
+	})
+	t.Run("a start outside the grid has no path", func(t *testing.T) {
+		assert.Length(t, walledGrid().Path(geom.Pt(-1, 0), testGoal, nil, nil), 0)
+	})
+}
+
+func ExampleGrid_Path() {
+	g := NewRect[float64](geom.Sz(5, 3), RectCellScale(32))
+	g.Fill(1)
+	g.Cell(geom.Pt(2, 0)).Set(0)
+	g.Cell(geom.Pt(2, 1)).Set(0)
+
+	walkable := func(cell Cell[float64]) bool {
+		return *cell.Value() > 0
+	}
+	cost := func(_, next Cell[float64]) float64 {
+		return *next.Value()
+	}
+
+	fmt.Println(g.Path(geom.Pt(0, 0), geom.Pt(4, 0), walkable, cost))
+	fmt.Println(g.Cell(geom.Pt(0, 0)).PathTo(geom.Pt(4, 0), walkable, cost)[4])
+	fmt.Println(g.Path(geom.Pt(0, 0), geom.Pt(2, 0), walkable, cost) == nil)
+	// Output:
+	// [(0,0) (1,0) (1,1) (1,2) (2,2) (3,2) (4,2) (4,1) (4,0)]
+	// (2,2)
+	// true
 }
 
 func TestGrid_Contains(t *testing.T) {

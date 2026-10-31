@@ -6,589 +6,31 @@ import (
 	"testing"
 
 	"github.com/gravitton/assert"
-	"github.com/gravitton/container"
 	geom "github.com/gravitton/geometry"
 	"github.com/gravitton/geometry/geomtest"
+	hex "github.com/gravitton/hexagon"
 )
 
-// testCellBox returns the box around the cell at the index, measured from its center.
-func testCellBox(g *Grid[int], index geom.Point[int]) geom.Box[float64] {
-	center := g.Cell(index).Center()
-	half := g.CellSize().Scale(0.5).Vector()
-
-	return geom.BoxFromMinMax(center.Add(half.Negate()), center.Add(half))
-}
-
-// testNearest returns the index whose center is nearest the point among the cells around the
-// given one, in the measure that makes a cell of the named layout the points nearest its
-// center, and whether it is nearer than every other by more than rounding.
-func testNearest(name string, g *Grid[int], around geom.Point[int], point geom.Point[float64]) (geom.Point[int], bool) {
-	half := g.CellSize().Scale(0.5)
-	nearest, best, second := around, math.Inf(1), math.Inf(1)
-
-	for index := range container.Arr[int](geom.Sz(7, 7)).Keys() {
-		index = around.AddXY(index.X-3, index.Y-3)
-
-		offset := point.Subtract(g.Cell(index).Center()).DivideXY(half.XY())
-		x, y := math.Abs(offset.X), math.Abs(offset.Y)
-
-		var distance float64
-		switch name {
-		case "rectangular":
-			distance = max(x, y)
-		case "isometric":
-			distance = x + y
-		case "flat-top", "flat-top even":
-			distance = math.Hypot(x, y*geom.Sqrt3/2)
-		default:
-			distance = math.Hypot(x*geom.Sqrt3/2, y)
+func testNewHexLayout(t *testing.T, construct func(cellScale geom.Size[float64], system hex.CoordinateSystem) *HexLayout, orientation geom.Orientation) {
+	t.Run("places the center of index zero at the world origin", func(t *testing.T) {
+		for _, system := range hex.CoordinateSystems() {
+			assert.Equal(t, construct(geom.Sz(32.0, 20.0), system).Center(geom.Pt(0, 0)), geom.Pt(0.0, 0.0), system.String()+": ")
 		}
-
-		if distance < best {
-			nearest, best, second = index, distance, best
-		} else if distance < second {
-			second = distance
-		}
-	}
-
-	return nearest, second-best > 1e-6
-}
-
-func TestGrid_Bounds(t *testing.T) {
-	origin := geom.Pt(100.0, 50.0)
-
-	t.Run("a rectangular grid spans its columns and rows of cells", func(t *testing.T) {
-		g := NewRect[int](geom.Sz(4, 3), geom.Sz(64.0, 32.0))
-
-		geomtest.AssertBox(t, g.Bounds(), geom.Box[float64]{Min: geom.Pt(0.0, 0.0), Max: geom.Pt(256.0, 96.0)})
 	})
-	t.Run("an isometric grid spans its diamonds", func(t *testing.T) {
-		g := NewIsometric[int](geom.Sz(4, 3), geom.Sz(64.0, 32.0))
+	t.Run("draws a hexagon of the given radius and orientation", func(t *testing.T) {
+		polygon := construct(geom.Sz(32.0, 20.0), hex.Axial).Polygon(geom.Pt(0, 0))
 
-		geomtest.AssertBox(t, g.Bounds(), geom.Box[float64]{Min: geom.Pt(0.0, 0.0), Max: geom.Pt(224.0, 112.0)})
+		geomtest.AssertRegularPolygon(t, polygon, geom.RegularPolygonWithOrientation(geom.Pt(0.0, 0.0), geom.Sz(32.0, 20.0), 6, orientation))
 	})
-	t.Run("is the box around every cell", func(t *testing.T) {
-		sizes := []geom.Size[int]{geom.Sz(1, 1), geom.Sz(1, 4), geom.Sz(4, 1), geom.Sz(2, 2), geom.Sz(2, 3), geom.Sz(3, 2), geom.Sz(6, 5)}
+	t.Run("indexes in the given coordinate system", func(t *testing.T) {
+		axial := construct(geom.Sz(32.0, 20.0), hex.Axial)
 
-		for _, size := range sizes {
-			for name, g := range testGrids(size, geom.Sz(32.0, 20.0), origin) {
-				around := testCellBox(g, geom.Pt(0, 0))
-				for index := range container.Arr[int](size).Keys() {
-					around = around.Union(testCellBox(g, index))
-				}
-
-				geomtest.AssertBox(t, g.Bounds(), around, name+" "+size.String()+": ")
+		for _, system := range hex.CoordinateSystems() {
+			layout := construct(geom.Sz(32.0, 20.0), system)
+			for _, h := range hex.Pt(2, -1).Spiral(2) {
+				assert.Equal(t, layout.Center(system.To(h)), axial.Center(h.Point()), system.String()+" "+h.String()+": ")
 			}
 		}
-	})
-	t.Run("starts at the origin", func(t *testing.T) {
-		for name, g := range testGrids(geom.Sz(6, 5), geom.Sz(32.0, 20.0), origin) {
-			assert.Equal(t, g.Bounds().Min, origin, name+": ")
-		}
-	})
-	t.Run("a grid of no cells has an empty box at the origin", func(t *testing.T) {
-		for name, g := range testGrids(geom.Sz(0, 0), geom.Sz(32.0, 20.0), origin) {
-			assert.Equal(t, g.Bounds(), geom.Box[float64]{Min: origin, Max: origin}, name+": ")
-		}
-	})
-	t.Run("allocates nothing", func(t *testing.T) {
-		for name, g := range testGrids(geom.Sz(6, 5), geom.Sz(32.0, 20.0), origin) {
-			allocs := testing.AllocsPerRun(100, func() {
-				sinkBox = g.Bounds()
-			})
-
-			assert.Equal(t, allocs, 0.0, name+": ")
-		}
-	})
-}
-
-func TestGrid_CellSize(t *testing.T) {
-	grids := testGrids(geom.Sz(6, 5), geom.Sz(10.0, 20.0), geom.Pt(0.0, 0.0))
-
-	t.Run("a square is the size it was given", func(t *testing.T) {
-		geomtest.AssertSize(t, grids["rectangular"].CellSize(), geom.Sz(10.0, 20.0))
-	})
-	t.Run("a diamond is the size it was given", func(t *testing.T) {
-		geomtest.AssertSize(t, grids["isometric"].CellSize(), geom.Sz(10.0, 20.0))
-	})
-	t.Run("a flat-top hexagon is two radii wide", func(t *testing.T) {
-		geomtest.AssertSize(t, grids["flat-top"].CellSize(), geom.Sz(20.0, geom.Sqrt3*20))
-	})
-	t.Run("a pointy-top hexagon is two radii tall", func(t *testing.T) {
-		geomtest.AssertSize(t, grids["pointy-top"].CellSize(), geom.Sz(geom.Sqrt3*10, 40.0))
-	})
-	t.Run("allocates nothing", func(t *testing.T) {
-		for name, g := range testGrids(geom.Sz(6, 5), geom.Sz(32.0, 20.0), geom.Pt(100.0, 50.0)) {
-			allocs := testing.AllocsPerRun(100, func() {
-				sinkSize = g.CellSize()
-			})
-
-			assert.Equal(t, allocs, 0.0, name+": ")
-		}
-	})
-}
-
-func BenchmarkGrid_CellSize(b *testing.B) {
-	g := NewHexFlatTop[int](geom.Sz(64, 64), geom.Sz(32.0, 20.0))
-
-	for range b.N {
-		sinkSize = g.CellSize()
-	}
-}
-
-func TestGrid_CellSpacing(t *testing.T) {
-	grids := testGrids(geom.Sz(6, 5), geom.Sz(10.0, 20.0), geom.Pt(0.0, 0.0))
-
-	t.Run("squares do not interlock", func(t *testing.T) {
-		geomtest.AssertSize(t, grids["rectangular"].CellSpacing(), geom.Sz(10.0, 20.0))
-	})
-	t.Run("diamonds interlock along both axes", func(t *testing.T) {
-		geomtest.AssertSize(t, grids["isometric"].CellSpacing(), geom.Sz(5.0, 10.0))
-	})
-	t.Run("flat-top hexagons interlock along x", func(t *testing.T) {
-		geomtest.AssertSize(t, grids["flat-top"].CellSpacing(), geom.Sz(15.0, geom.Sqrt3*20))
-	})
-	t.Run("pointy-top hexagons interlock along y", func(t *testing.T) {
-		geomtest.AssertSize(t, grids["pointy-top"].CellSpacing(), geom.Sz(geom.Sqrt3*10, 30.0))
-	})
-	t.Run("neighbors along an axis are one spacing apart", func(t *testing.T) {
-		for name, g := range grids {
-			across := g.Cell(geom.Pt(3, 2)).Center().Subtract(g.Cell(geom.Pt(2, 2)).Center())
-			down := g.Cell(geom.Pt(2, 3)).Center().Subtract(g.Cell(geom.Pt(2, 2)).Center())
-
-			geomtest.AssertNumber(t, math.Abs(across.X), g.CellSpacing().Width, name+": ")
-			geomtest.AssertNumber(t, math.Abs(down.Y), g.CellSpacing().Height, name+": ")
-		}
-	})
-	t.Run("allocates nothing", func(t *testing.T) {
-		for name, g := range testGrids(geom.Sz(6, 5), geom.Sz(32.0, 20.0), geom.Pt(100.0, 50.0)) {
-			allocs := testing.AllocsPerRun(100, func() {
-				sinkSize = g.CellSpacing()
-			})
-
-			assert.Equal(t, allocs, 0.0, name+": ")
-		}
-	})
-}
-
-func BenchmarkGrid_CellSpacing(b *testing.B) {
-	g := NewHexFlatTop[int](geom.Sz(64, 64), geom.Sz(32.0, 20.0))
-
-	for range b.N {
-		sinkSize = g.CellSpacing()
-	}
-}
-
-func TestGrid_CellWidth(t *testing.T) {
-	for name, g := range layoutGrids() {
-		assert.Equal(t, g.CellWidth(), g.CellSize().Width, name+": ")
-	}
-}
-
-func TestGrid_CellHeight(t *testing.T) {
-	for name, g := range layoutGrids() {
-		assert.Equal(t, g.CellHeight(), g.CellSize().Height, name+": ")
-	}
-}
-
-func TestGrid_IndexAt(t *testing.T) {
-	origin := geom.Pt(100.0, 50.0)
-	grids := testGrids(geom.Sz(6, 5), geom.Sz(32.0, 20.0), origin)
-
-	t.Run("a point inside a square is its cell", func(t *testing.T) {
-		g := NewRect[int](geom.Sz(4, 3), geom.Sz(64.0, 32.0))
-
-		assert.Equal(t, g.IndexAt(geom.Pt(1.0, 1.0)), geom.Pt(0, 0))
-		assert.Equal(t, g.IndexAt(geom.Pt(63.0, 31.0)), geom.Pt(0, 0))
-		assert.Equal(t, g.IndexAt(geom.Pt(130.0, 70.0)), geom.Pt(2, 2))
-	})
-	t.Run("the corner of the bounds is the first square wherever the grid is", func(t *testing.T) {
-		for _, corner := range []geom.Point[float64]{origin, geom.Pt(0.1, -7.3), geom.Pt(-816.19, 732.64), geom.Pt(1e6/3, -1e-3)} {
-			for _, cellSize := range []geom.Size[float64]{geom.Sz(32.0, 20.0), geom.Sz(49.0, 82.0), geom.Sz(8.48, 89.09)} {
-				g := testGrids(geom.Sz(6, 5), cellSize, corner)["rectangular"]
-
-				assert.Equal(t, g.IndexAt(corner), geom.Pt(0, 0), corner.String()+" "+cellSize.String()+": ")
-			}
-		}
-	})
-	t.Run("an edge shared by two squares belongs to the one after it", func(t *testing.T) {
-		corner := geom.Pt(7.0, -448.0)
-		g := testGrids(geom.Sz(6, 5), geom.Sz(49.0, 82.0), corner)["rectangular"]
-
-		for index := range container.Arr[int](geom.Sz(9, 9)).Keys() {
-			index = index.AddXY(-4, -4)
-			edge := corner.AddXY(float64(index.X)*49, float64(index.Y)*82)
-
-			assert.Equal(t, g.IndexAt(edge), index, index.String()+": ")
-		}
-	})
-	t.Run("a vertex of a diamond goes to the same side on every diamond", func(t *testing.T) {
-		g := testGrids(geom.Sz(6, 5), geom.Sz(82.0, 49.0), geom.Pt(7.0, -448.0))["isometric"]
-		vertices := map[string]geom.Vector[float64]{
-			"top":    geom.Vec(0.0, -24.5),
-			"right":  geom.Vec(41.0, 0.0),
-			"bottom": geom.Vec(0.0, 24.5),
-			"left":   geom.Vec(-41.0, 0.0),
-		}
-		owners := map[string]geom.Vector[int]{
-			"top":    geom.Vec(0, 0),
-			"right":  geom.Vec(1, 0),
-			"bottom": geom.Vec(1, 1),
-			"left":   geom.Vec(0, 1),
-		}
-
-		for name, vertex := range vertices {
-			for index := range container.Arr[int](geom.Sz(9, 9)).Keys() {
-				index = index.AddXY(-4, -4)
-
-				assert.Equal(t, g.IndexAt(g.Cell(index).Center().Add(vertex)), index.Add(owners[name]), name+" of "+index.String()+": ")
-			}
-		}
-	})
-	t.Run("a point outside the grid gives an index outside it", func(t *testing.T) {
-		g := NewRect[int](geom.Sz(5, 5), geom.Sz(32.0, 32.0))
-
-		assert.False(t, g.Contains(g.IndexAt(geom.Pt(-10.0, 40.0))))
-		assert.False(t, g.Contains(g.IndexAt(geom.Pt(40.0, 500.0))))
-	})
-	t.Run("the center of a cell gives its index, beyond the grid too", func(t *testing.T) {
-		for name, g := range grids {
-			for index := range container.Arr[int](geom.Sz(12, 12)).Keys() {
-				index = index.AddXY(-4, -4)
-
-				assert.Equal(t, g.IndexAt(g.Cell(index).Center()), index, name+" "+index.String()+": ")
-			}
-		}
-	})
-	t.Run("round-trips on cells too small to tell from nothing", func(t *testing.T) {
-		for name, g := range testGrids(geom.Sz(6, 5), geom.Sz(1e-7, 3e-9), geom.Pt(0.0, 0.0)) {
-			for index := range container.Arr[int](g.Size()).Keys() {
-				assert.Equal(t, g.IndexAt(g.Cell(index).Center()), index, name+" "+index.String()+": ")
-			}
-		}
-	})
-	t.Run("a point is in the cell whose center is nearest", func(t *testing.T) {
-		for name, g := range testGrids(geom.Sz(6, 5), geom.Sz(8.48, 89.09), geom.Pt(-816.19, 732.64)) {
-			around := geom.Pt(2, 3)
-			center := g.Cell(around).Center()
-
-			for step := range container.Arr[int](geom.Sz(41, 41)).Keys() {
-				point := center.Add(g.CellSize().Vector().MultiplyXY(float64(step.X-20)/13, float64(step.Y-20)/13))
-
-				if nearest, clear := testNearest(name, g, around, point); clear {
-					assert.Equal(t, g.IndexAt(point), nearest, name+" "+point.String()+": ")
-				}
-			}
-		}
-	})
-	t.Run("a point just inside a vertex is the cell of the polygon", func(t *testing.T) {
-		for name, g := range grids {
-			for index := range container.Arr[int](g.Size()).Keys() {
-				center := g.Cell(index).Center()
-				for vertex := range g.Cell(index).Polygon().Vertices() {
-					assert.Equal(t, g.IndexAt(center.Lerp(vertex, 0.99)), index, name+" "+index.String()+": ")
-				}
-			}
-		}
-	})
-	for name, point := range map[string]geom.Point[float64]{
-		"NaN":      geom.Pt(math.NaN(), 50.0),
-		"infinite": geom.Pt(100.0, math.Inf(1)),
-	} {
-		t.Run("panics for a "+name+" point on every layout, as geom.Cast does", func(t *testing.T) {
-			for _, g := range grids {
-				assert.PanicsWith(t, func() {
-					g.IndexAt(point)
-				}, "geom: cast of a non-finite value to an integer")
-			}
-		})
-	}
-	t.Run("allocates nothing", func(t *testing.T) {
-		for name, g := range grids {
-			allocs := testing.AllocsPerRun(100, func() {
-				sinkPoint = g.IndexAt(geom.Pt(170.0, 95.0))
-			})
-
-			assert.Equal(t, allocs, 0.0, name+": ")
-		}
-	})
-}
-
-func BenchmarkGrid_IndexAt(b *testing.B) {
-	benchmarkGrids(b, func(b *testing.B, g *Grid[int]) {
-		for i := range b.N {
-			sinkPoint = g.IndexAt(geom.Pt(float64(i&1023), 77.0))
-		}
-	})
-}
-
-func FuzzGrid_IndexAt(f *testing.F) {
-	f.Add(0, 0, 64.0, 32.0, 0.0, 0.0, 0.0, 0.0)
-	f.Add(3, -2, 20.0, 20.0, 100.0, 100.0, 0.3, -0.8)
-	f.Add(-7, 11, 0.5, 300.0, -1000.0, 250.5, -1.0, 0.49)
-
-	f.Fuzz(func(t *testing.T, column, row int, width, height, x, y, across, down float64) {
-		if max(column, -column, row, -row) > 1000 {
-			t.Skip()
-		}
-		if !(width >= 0.01 && width <= 1000 && height >= 0.01 && height <= 1000) {
-			t.Skip()
-		}
-		if !(math.Abs(x) <= 1e6 && math.Abs(y) <= 1e6) {
-			t.Skip()
-		}
-
-		if !(math.Abs(across) <= 1 && math.Abs(down) <= 1) {
-			t.Skip()
-		}
-
-		index := geom.Pt(column, row)
-		for name, g := range testGrids(geom.Sz(6, 5), geom.Sz(width, height), geom.Pt(x, y)) {
-			assert.Equal(t, g.IndexAt(g.Cell(index).Center()), index, name+": ")
-
-			point := g.Cell(index).Center().Add(g.CellSize().Vector().MultiplyXY(across, down))
-			if nearest, clear := testNearest(name, g, index, point); clear {
-				assert.Equal(t, g.IndexAt(point), nearest, name+" nearest: ")
-			}
-		}
-
-		assert.Equal(t, NewRect[int](geom.Sz(6, 5), geom.Sz(width, height), func(options *RectOptions) {
-			options.Origin = geom.Pt(x, y)
-		}).IndexAt(geom.Pt(x, y)), geom.Pt(0, 0), "the corner of the bounds: ")
-
-		corner := geom.Pt(math.Trunc(x), math.Trunc(y))
-		whole := geom.Sz(math.Ceil(width), math.Ceil(height))
-		grids := testGrids(geom.Sz(6, 5), whole, corner)
-		edge := corner.AddXY(float64(column)*whole.Width, float64(row)*whole.Height)
-		top := grids["isometric"].Cell(index).Center().AddXY(0, -whole.Height/2)
-
-		assert.Equal(t, grids["rectangular"].IndexAt(edge), index, "an edge of a square: ")
-		assert.Equal(t, grids["isometric"].IndexAt(top), index, "the top of a diamond: ")
-	})
-}
-
-func ExampleGrid_IndexAt() {
-	g := NewRect[int](geom.Sz(100, 100), RectCellSize(32))
-
-	cell := g.CellAt(geom.Pt(499.0, 123.4))
-
-	fmt.Println(g.IndexAt(geom.Pt(499.0, 123.4)))
-	fmt.Println(cell, cell.Center(), cell.Bounds())
-	fmt.Println(g.Contains(g.IndexAt(geom.Pt(-5.0, 20.0))))
-	// Output:
-	// (15,3)
-	// Cell(15,3) (496.00,112.00) (480.00,96.00)-(512.00,128.00)
-	// false
-}
-
-func TestGrid_CellAt(t *testing.T) {
-	t.Run("is the cell of IndexAt", func(t *testing.T) {
-		for name, g := range layoutGrids() {
-			for _, point := range []geom.Point[float64]{geom.Pt(64.0, 96.0), geom.Pt(10.5, 3.25), geom.Pt(-40.0, 900.0)} {
-				assert.Equal(t, g.CellAt(point).Index(), g.IndexAt(point), name+" at "+point.String()+": ")
-			}
-		}
-	})
-	t.Run("writes through to the grid", func(t *testing.T) {
-		g := NewRect[int](geom.Sz(5, 5), geom.Sz(32.0, 32.0))
-		g.CellAt(geom.Pt(64.0, 96.0)).Set(7)
-
-		assert.Equal(t, *g.Cell(geom.Pt(2, 3)).Value(), 7)
-	})
-}
-
-func TestGrid_MoveTo(t *testing.T) {
-	origin := geom.Pt(100.0, 50.0)
-	start := geom.Pt(7.0, 9.0)
-	moved := func() (map[string]*Grid[int], map[string]*Grid[int]) {
-		before := testGrids(geom.Sz(6, 5), geom.Sz(32.0, 20.0), start)
-		after := testGrids(geom.Sz(6, 5), geom.Sz(32.0, 20.0), start)
-		for _, g := range after {
-			g.MoveTo(origin)
-		}
-
-		return before, after
-	}
-
-	t.Run("places the corner of the bounds at the origin", func(t *testing.T) {
-		_, after := moved()
-
-		for name, g := range after {
-			assert.Equal(t, g.Bounds().Min, origin, name+": ")
-		}
-	})
-	t.Run("keeps the extent", func(t *testing.T) {
-		before, after := moved()
-
-		for name, g := range after {
-			geomtest.AssertSize(t, g.Bounds().Size(), before[name].Bounds().Size(), name+": ")
-		}
-	})
-	t.Run("shifts every cell by what the corner moved", func(t *testing.T) {
-		before, after := moved()
-
-		for name, g := range after {
-			for cell := range g.All() {
-				geomtest.AssertPoint(t, cell.Center(), before[name].Cell(cell.Index()).Center().Add(origin.Subtract(start)), name+" "+cell.Index().String()+": ")
-			}
-		}
-	})
-	t.Run("is the grid built at that origin", func(t *testing.T) {
-		_, after := moved()
-
-		for name, built := range testGrids(geom.Sz(6, 5), geom.Sz(32.0, 20.0), origin) {
-			assert.Equal(t, after[name].Bounds(), built.Bounds(), name+": ")
-			assert.Equal(t, after[name].Cell(geom.Pt(4, 3)).Center(), built.Cell(geom.Pt(4, 3)).Center(), name+": ")
-		}
-	})
-	t.Run("changes nothing applied twice", func(t *testing.T) {
-		_, after := moved()
-
-		for name, g := range after {
-			center := g.Cell(geom.Pt(2, 3)).Center()
-			g.MoveTo(origin)
-
-			assert.Equal(t, g.Cell(geom.Pt(2, 3)).Center(), center, name+": ")
-		}
-	})
-	t.Run("keeps the values", func(t *testing.T) {
-		g := NewRect[int](geom.Sz(3, 3), geom.Sz(32.0, 32.0))
-		g.Fill(5)
-		g.MoveTo(origin)
-
-		assert.Equal(t, *g.CellAt(geom.Pt(116.0, 66.0)).Value(), 5)
-	})
-	t.Run("leaves a clone where it is", func(t *testing.T) {
-		g := NewRect[int](geom.Sz(3, 3), geom.Sz(32.0, 32.0))
-		clone := g.Clone()
-		g.MoveTo(origin)
-
-		assert.Equal(t, clone.Bounds().Min, geom.Pt(0.0, 0.0))
-	})
-	t.Run("places a grid of no cells", func(t *testing.T) {
-		for name, g := range testGrids(geom.Sz(0, 0), geom.Sz(32.0, 20.0), start) {
-			g.MoveTo(origin)
-
-			assert.Equal(t, g.Bounds(), geom.Box[float64]{Min: origin, Max: origin}, name+": ")
-		}
-	})
-	for name, corner := range map[string]geom.Point[float64]{
-		"NaN":      geom.Pt(math.NaN(), 50.0),
-		"infinite": geom.Pt(100.0, math.Inf(-1)),
-	} {
-		t.Run("panics for a "+name+" origin", func(t *testing.T) {
-			before, _ := moved()
-
-			for _, g := range before {
-				assert.PanicsWith(t, func() {
-					g.MoveTo(corner)
-				}, "grid: origin "+corner.String()+" is not finite")
-			}
-		})
-	}
-	t.Run("a failed move leaves the grid where it was", func(t *testing.T) {
-		g := NewRect[int](geom.Sz(6, 5), geom.Sz(32.0, 20.0))
-
-		assert.Panics(t, func() {
-			g.MoveTo(geom.Pt(math.NaN(), 50.0))
-		})
-		assert.Equal(t, g.Bounds().Min, geom.Pt(0.0, 0.0))
-	})
-	t.Run("allocates nothing", func(t *testing.T) {
-		before, _ := moved()
-
-		for name, g := range before {
-			allocs := testing.AllocsPerRun(100, func() {
-				g.MoveTo(origin)
-			})
-
-			assert.Equal(t, allocs, 0.0, name+": ")
-		}
-	})
-}
-
-func BenchmarkGrid_MoveTo(b *testing.B) {
-	benchmarkGrids(b, func(b *testing.B, g *Grid[int]) {
-		for i := range b.N {
-			g.MoveTo(geom.Pt(float64(i&7), 1.0))
-		}
-	})
-}
-
-func ExampleGrid_MoveTo() {
-	g := NewRect[int](geom.Sz(10, 10), RectCellSize(32))
-
-	g.MoveTo(geom.Pt(100.0, 50.0))
-	fmt.Println(g.Bounds(), g.Cell(geom.Pt(0, 0)).Center())
-
-	g.Resize(RectCellSize(48))
-	fmt.Println(g.Bounds(), g.Cell(geom.Pt(0, 0)).Center())
-	// Output:
-	// (100.00,50.00)-(420.00,370.00) (116.00,66.00)
-	// (100.00,50.00)-(580.00,530.00) (124.00,74.00)
-}
-
-func TestGrid_Resize(t *testing.T) {
-	origin := geom.Pt(10.0, 20.0)
-	scale := geom.Sz(20.0, 12.0)
-	grids := func() map[string]*Grid[int] {
-		return testGrids(geom.Sz(6, 5), geom.Sz(64.0, 32.0), origin)
-	}
-
-	t.Run("replaces the size of a square", func(t *testing.T) {
-		g := grids()["rectangular"]
-		g.Resize(geom.Sz(128.0, 64.0))
-
-		geomtest.AssertSize(t, g.CellSize(), geom.Sz(128.0, 64.0))
-		geomtest.AssertSize(t, g.CellSpacing(), geom.Sz(128.0, 64.0))
-	})
-	t.Run("replaces the circumradius of a hexagon", func(t *testing.T) {
-		g := grids()["flat-top"]
-		g.Resize(geom.Sz(10.0, 10.0))
-
-		geomtest.AssertSize(t, g.CellSize(), geom.Sz(20.0, geom.Sqrt3*10))
-	})
-	t.Run("is the grid built at that size", func(t *testing.T) {
-		built := testGrids(geom.Sz(6, 5), scale, origin)
-
-		for name, g := range grids() {
-			g.Resize(scale)
-
-			assert.Equal(t, g.Bounds(), built[name].Bounds(), name+": ")
-			assert.Equal(t, g.CellSize(), built[name].CellSize(), name+": ")
-			assert.Equal(t, g.CellSpacing(), built[name].CellSpacing(), name+": ")
-			assert.Equal(t, g.Cell(geom.Pt(4, 3)).Center(), built[name].Cell(geom.Pt(4, 3)).Center(), name+": ")
-			assert.Equal(t, g.Cell(geom.Pt(4, 3)).Polygon(), built[name].Cell(geom.Pt(4, 3)).Polygon(), name+": ")
-		}
-	})
-	t.Run("keeps the origin", func(t *testing.T) {
-		for name, g := range grids() {
-			g.Resize(scale)
-
-			assert.Equal(t, g.Bounds().Min, origin, name+": ")
-		}
-	})
-	t.Run("keeps the values", func(t *testing.T) {
-		g := grids()["rectangular"]
-		g.Fill(5)
-		g.Resize(scale)
-
-		assert.Equal(t, *g.Cell(geom.Pt(2, 3)).Value(), 5)
-	})
-	t.Run("leaves a clone at its size", func(t *testing.T) {
-		g := grids()["rectangular"]
-		clone := g.Clone()
-		g.Resize(scale)
-
-		geomtest.AssertSize(t, clone.CellSize(), geom.Sz(64.0, 32.0))
-	})
-	t.Run("a failed resize leaves the grid as it was", func(t *testing.T) {
-		g := grids()["rectangular"]
-
-		assert.Panics(t, func() {
-			g.Resize(geom.Sz(-1.0, 2.0))
-		})
-		geomtest.AssertSize(t, g.CellSize(), geom.Sz(64.0, 32.0))
 	})
 	for name, bad := range map[string]geom.Size[float64]{
 		"zero":     geom.Sz(0.0, 32.0),
@@ -597,28 +39,279 @@ func TestGrid_Resize(t *testing.T) {
 		"infinite": geom.Sz(32.0, math.Inf(1)),
 	} {
 		t.Run("panics for a "+name+" size", func(t *testing.T) {
-			for _, g := range grids() {
-				assert.PanicsWith(t, func() {
-					g.Resize(bad)
-				}, "grid: cell scale "+bad.String()+" cannot be laid out")
-			}
+			assert.PanicsWith(t, func() {
+				construct(bad, hex.Axial)
+			}, "grid: cell scale "+bad.String()+" is not positive and finite")
 		})
 	}
-	t.Run("allocates nothing", func(t *testing.T) {
-		for name, g := range grids() {
-			allocs := testing.AllocsPerRun(100, func() {
-				g.Resize(scale)
-			})
+	t.Run("panics for a system outside the seven", func(t *testing.T) {
+		assert.PanicsWith(t, func() {
+			construct(geom.Sz(32.0, 20.0), hex.CoordinateSystem(9))
+		}, "grid: unknown coordinate system 9")
+		assert.PanicsWith(t, func() {
+			construct(geom.Sz(32.0, 20.0), hex.CoordinateSystemNone)
+		}, "grid: unknown coordinate system -1")
+	})
+	t.Run("allocates once", func(t *testing.T) {
+		assert.Equal(t, testing.AllocsPerRun(100, func() {
+			sinkHexLayout = construct(geom.Sz(32.0, 20.0), hex.OffsetOddR)
+		}), 1.0)
+	})
+}
 
-			assert.Equal(t, allocs, 0.0, name+": ")
+func TestNewHexFlatTopLayout(t *testing.T) {
+	testNewHexLayout(t, NewHexFlatTopLayout, geom.OrientationFlatTop)
+}
+
+func TestNewHexPointyTopLayout(t *testing.T) {
+	testNewHexLayout(t, NewHexPointyTopLayout, geom.OrientationPointyTop)
+}
+
+// hexLayoutGrid is a hexagonal grid with the layout that places its cells and the coordinate
+// system both index them in.
+type hexLayoutGrid struct {
+	layout *HexLayout
+	grid   *Grid[int]
+	system hex.CoordinateSystem
+}
+
+// hexLayoutGrids returns, for each hexagonal grid of kindGrids, the layout of the same scale and
+// coordinate system with the center of index zero where the grid places it.
+func hexLayoutGrids() map[string]hexLayoutGrid {
+	scale := geom.Sz(32.0, 20.0)
+	grids := kindGrids(geom.Sz(6, 5), scale, geom.Pt(100.0, 50.0))
+	tests := map[string]hexLayoutGrid{}
+
+	for name, system := range map[string]hex.CoordinateSystem{
+		"flat-top":        hex.OffsetOddQ,
+		"flat-top even":   hex.OffsetEvenQ,
+		"pointy-top":      hex.OffsetOddR,
+		"pointy-top even": hex.OffsetEvenR,
+	} {
+		layout := NewHexPointyTopLayout(scale, system)
+		if system == hex.OffsetOddQ || system == hex.OffsetEvenQ {
+			layout = NewHexFlatTopLayout(scale, system)
+		}
+		layout.MoveTo(grids[name].Cell(geom.Pt(0, 0)).Center())
+
+		tests[name] = hexLayoutGrid{layout, grids[name], system}
+	}
+
+	return tests
+}
+
+func TestHexLayout_CellSize(t *testing.T) {
+	for name, test := range hexLayoutGrids() {
+		assert.Equal(t, test.layout.CellSize(), test.grid.CellSize(), name+": ")
+	}
+}
+
+func TestHexLayout_CellSpacing(t *testing.T) {
+	for name, test := range hexLayoutGrids() {
+		assert.Equal(t, test.layout.CellSpacing(), test.grid.CellSpacing(), name+": ")
+	}
+}
+
+func TestHexLayout_Center(t *testing.T) {
+	t.Run("places every cell where a grid places it", func(t *testing.T) {
+		for name, test := range hexLayoutGrids() {
+			for cell := range test.grid.All() {
+				geomtest.AssertPoint(t, test.layout.Center(cell.Index()), cell.Center(), name+" "+cell.Index().String()+": ")
+			}
+		}
+	})
+	t.Run("places an index beyond any grid", func(t *testing.T) {
+		layout := NewHexFlatTopLayout(geom.Sz(32.0, 20.0), hex.Axial)
+
+		geomtest.AssertPoint(t, layout.Center(geom.Pt(-2, 3)), geom.Pt(-96.0, 4*geom.Sqrt3*10))
+	})
+	t.Run("allocates nothing", func(t *testing.T) {
+		layout := NewHexFlatTopLayout(geom.Sz(32.0, 20.0), hex.OffsetOddQ)
+
+		assert.Equal(t, testing.AllocsPerRun(100, func() {
+			sinkCenter = layout.Center(geom.Pt(3, -2))
+		}), 0.0)
+	})
+}
+
+func BenchmarkHexLayout_Center(b *testing.B) {
+	layout := NewHexFlatTopLayout(geom.Sz(32.0, 20.0), hex.OffsetOddQ)
+
+	for i := range b.N {
+		sinkCenter = layout.Center(geom.Pt(i&63, -(i & 31)))
+	}
+}
+
+func TestHexLayout_Bounds(t *testing.T) {
+	t.Run("is the box a grid gives the cell", func(t *testing.T) {
+		for name, test := range hexLayoutGrids() {
+			for cell := range test.grid.All() {
+				geomtest.AssertBox(t, test.layout.Bounds(cell.Index()), cell.Bounds(), name+" "+cell.Index().String()+": ")
+			}
+		}
+	})
+	t.Run("holds the polygon", func(t *testing.T) {
+		for name, test := range hexLayoutGrids() {
+			for _, h := range hex.Pt(1, -3).Spiral(2) {
+				index := test.system.To(h)
+
+				geomtest.AssertBox(t, test.layout.Bounds(index), test.layout.Polygon(index).Bounds(), name+" "+index.String()+": ")
+			}
+		}
+	})
+	t.Run("meets the box of a neighbor in the same number", func(t *testing.T) {
+		flatTop := NewHexFlatTopLayout(geom.Sz(32.0, 20.0), hex.Axial)
+		pointyTop := NewHexPointyTopLayout(geom.Sz(32.0, 20.0), hex.Axial)
+
+		for _, h := range hex.Pt(-4, 7).Spiral(3) {
+			assert.Equal(t, flatTop.Bounds(h.Point()).Max.Y, flatTop.Bounds(h.Add(hex.Pt(0, 1)).Point()).Min.Y, "flat-top "+h.String()+": ")
+			assert.Equal(t, pointyTop.Bounds(h.Point()).Max.X, pointyTop.Bounds(h.Add(hex.Pt(1, 0)).Point()).Min.X, "pointy-top "+h.String()+": ")
 		}
 	})
 }
 
-func BenchmarkGrid_Resize(b *testing.B) {
-	benchmarkGrids(b, func(b *testing.B, g *Grid[int]) {
-		for i := range b.N {
-			g.Resize(geom.Sz(float64(i&7+8), 20.0))
+func TestHexLayout_Polygon(t *testing.T) {
+	t.Run("is the polygon a grid gives the cell", func(t *testing.T) {
+		for name, test := range hexLayoutGrids() {
+			for cell := range test.grid.All() {
+				geomtest.AssertRegularPolygon(t, test.layout.Polygon(cell.Index()), cell.Polygon(), name+" "+cell.Index().String()+": ")
+			}
 		}
 	})
+	t.Run("is centered on the cell", func(t *testing.T) {
+		layout := NewHexFlatTopLayout(geom.Sz(32.0, 20.0), hex.DoubleHeight)
+
+		assert.Equal(t, layout.Polygon(geom.Pt(3, -1)).Center, layout.Center(geom.Pt(3, -1)))
+	})
+}
+
+func TestHexLayout_IndexAt(t *testing.T) {
+	t.Run("finds every index at its center", func(t *testing.T) {
+		for name, test := range hexLayoutGrids() {
+			for _, h := range hex.Pt(-2, 5).Spiral(6) {
+				index := test.system.To(h)
+
+				assert.Equal(t, test.layout.IndexAt(test.layout.Center(index)), index, name+" "+index.String()+": ")
+			}
+		}
+	})
+	t.Run("finds the index a grid finds", func(t *testing.T) {
+		for name, test := range hexLayoutGrids() {
+			for cell := range test.grid.All() {
+				polygon := cell.Polygon()
+				for vertex := range polygon.Vertices() {
+					point := polygon.Center.Lerp(vertex, 0.9)
+
+					assert.Equal(t, test.layout.IndexAt(point), test.grid.IndexAt(point), name+" "+point.String()+": ")
+				}
+			}
+		}
+	})
+	t.Run("puts a point on an edge where a grid puts it", func(t *testing.T) {
+		layout := NewHexFlatTopLayout(geom.Sz(32.0, 20.0), hex.OffsetOddQ)
+		g := NewHexFlatTop[int](geom.Sz(6, 5), geom.Sz(32.0, 20.0))
+		layout.MoveTo(g.Cell(geom.Pt(0, 0)).Center())
+
+		for x := 32.0; x <= 160; x += 16 {
+			point := geom.Pt(x, 52.0)
+
+			assert.Equal(t, layout.IndexAt(point), g.IndexAt(point), point.String()+": ")
+		}
+	})
+	t.Run("panics for a NaN point", func(t *testing.T) {
+		layout := NewHexFlatTopLayout(geom.Sz(32.0, 20.0), hex.Axial)
+
+		assert.Panics(t, func() {
+			sinkPoint = layout.IndexAt(geom.Pt(math.NaN(), 0.0))
+		})
+	})
+	t.Run("allocates nothing", func(t *testing.T) {
+		layout := NewHexPointyTopLayout(geom.Sz(32.0, 20.0), hex.OffsetOddR)
+
+		assert.Equal(t, testing.AllocsPerRun(100, func() {
+			sinkPoint = layout.IndexAt(geom.Pt(123.4, -56.7))
+		}), 0.0)
+	})
+}
+
+func BenchmarkHexLayout_IndexAt(b *testing.B) {
+	layout := NewHexPointyTopLayout(geom.Sz(32.0, 20.0), hex.OffsetOddR)
+
+	for i := range b.N {
+		sinkPoint = layout.IndexAt(geom.Pt(float64(i&1023), float64(i&511)))
+	}
+}
+
+func TestHexLayout_MoveTo(t *testing.T) {
+	origin := geom.Pt(100.0, 50.0)
+
+	t.Run("places the center of index zero at the origin", func(t *testing.T) {
+		layout := NewHexFlatTopLayout(geom.Sz(32.0, 20.0), hex.OffsetEvenQ)
+		layout.MoveTo(origin)
+
+		assert.Equal(t, layout.Center(geom.Pt(0, 0)), origin)
+	})
+	t.Run("shifts every cell by what the origin moved", func(t *testing.T) {
+		before := NewHexPointyTopLayout(geom.Sz(32.0, 20.0), hex.Axial)
+		after := NewHexPointyTopLayout(geom.Sz(32.0, 20.0), hex.Axial)
+		after.MoveTo(origin)
+
+		for _, h := range hex.Pt(3, -1).Spiral(3) {
+			geomtest.AssertPoint(t, after.Center(h.Point()), before.Center(h.Point()).Add(origin.Vector()), h.String()+": ")
+		}
+	})
+	t.Run("a failed move leaves the layout where it was", func(t *testing.T) {
+		layout := NewHexFlatTopLayout(geom.Sz(32.0, 20.0), hex.Axial)
+
+		assert.PanicsWith(t, func() {
+			layout.MoveTo(geom.Pt(math.Inf(1), 50.0))
+		}, "grid: origin "+geom.Pt(math.Inf(1), 50.0).String()+" is not finite")
+		assert.Equal(t, layout.Center(geom.Pt(0, 0)), geom.Pt(0.0, 0.0))
+	})
+}
+
+func TestHexLayout_Resize(t *testing.T) {
+	origin := geom.Pt(100.0, 50.0)
+	scale := geom.Sz(10.0, 12.0)
+
+	t.Run("is the layout built at that scale and moved", func(t *testing.T) {
+		resized := NewHexFlatTopLayout(geom.Sz(32.0, 20.0), hex.Axial)
+		resized.MoveTo(origin)
+		resized.Resize(scale)
+		built := NewHexFlatTopLayout(scale, hex.Axial)
+		built.MoveTo(origin)
+
+		assert.Equal(t, resized.CellSize(), built.CellSize())
+		for _, h := range hex.Pt(3, -1).Spiral(3) {
+			assert.Equal(t, resized.Polygon(h.Point()), built.Polygon(h.Point()), h.String()+": ")
+		}
+	})
+	t.Run("a failed resize leaves the layout as it was", func(t *testing.T) {
+		layout := NewHexFlatTopLayout(geom.Sz(32.0, 20.0), hex.Axial)
+
+		assert.PanicsWith(t, func() {
+			layout.Resize(geom.Sz(-1.0, 2.0))
+		}, "grid: cell scale "+geom.Sz(-1.0, 2.0).String()+" is not positive and finite")
+		assert.Equal(t, layout.CellSize(), NewHexFlatTopLayout(geom.Sz(32.0, 20.0), hex.Axial).CellSize())
+	})
+}
+
+func ExampleHexLayout() {
+	layout := NewHexFlatTopLayout(HexFlatTopCellScale(32), hex.Axial)
+	layout.MoveTo(geom.Pt(400.0, 300.0))
+
+	h := hex.Pt(2, -1)
+
+	fmt.Println(layout.Center(h.Point()))
+	fmt.Println(layout.Bounds(h.Point()))
+	fmt.Println(hex.Axial.From(layout.IndexAt(geom.Pt(470.0, 320.0))))
+
+	offset := NewHexFlatTopLayout(HexFlatTopCellScale(32), hex.OffsetOddQ)
+	offset.MoveTo(geom.Pt(400.0, 300.0))
+	fmt.Println(offset.IndexAt(geom.Pt(470.0, 320.0)))
+	// Output:
+	// (448.00,300.00)
+	// (432.00,286.14)-(464.00,313.86)
+	// (3,-1)
+	// (3,0)
 }

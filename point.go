@@ -270,15 +270,15 @@ func (p Point) spiral(radius int, movement Movement, yield func(geom.Point[int])
 // DistanceTo returns the number of steps from p to the index under the movement: the Manhattan
 // distance for MovementCardinal, the Chebyshev distance for MovementDiagonal. It panics for a
 // movement outside the constants.
-func (p Point) DistanceTo(to geom.Point[int], movement Movement) int {
-	return movement.DistanceTo(p.Point(), to)
+func (p Point) DistanceTo(index geom.Point[int], movement Movement) int {
+	return movement.Distance(p.Point(), index)
 }
 
-// DirectionTo returns the direction of the movement nearest to the one from p to target, and
+// DirectionTo returns the direction of the movement nearest to the one from p to the index, and
 // geom.DirectionNone for p itself and for a movement outside the constants. Under
-// MovementCardinal a target on a diagonal answers the horizontal direction.
-func (p Point) DirectionTo(target geom.Point[int], movement Movement) geom.Direction {
-	dx, dy := target.X-p.X, target.Y-p.Y
+// MovementCardinal an index on a diagonal answers the horizontal direction.
+func (p Point) DirectionTo(index geom.Point[int], movement Movement) geom.Direction {
+	dx, dy := index.X-p.X, index.Y-p.Y
 
 	switch {
 	case dx == 0 && dy == 0, movement.IsNone():
@@ -486,9 +486,8 @@ func (p Point) sees(candidate geom.Point[int], blocks blockers) bool {
 // hasLineOfSight is the sight rule every form shares, asking the blockers about the cells the
 // line from p to target passes.
 func (p Point) hasLineOfSight(target geom.Point[int], blocks blockers) bool {
-	// A Bresenham walk is not mirror-symmetric — reversing the endpoints can trace a
-	// different chain of cells — so always walk from the lower endpoint. Neither
-	// endpoint is ever tested against the blockers, which makes the swap free of meaning.
+	// A Bresenham walk is not mirror-symmetric, so it always starts at the lower end; neither end
+	// is asked about, so the swap changes nothing else.
 	from, to := p.Point(), target
 	if to.Compare(from) < 0 {
 		from, to = to, from
@@ -497,17 +496,9 @@ func (p Point) hasLineOfSight(target geom.Point[int], blocks blockers) bool {
 	x0, y0 := from.XY()
 	x1, y1 := to.XY()
 
-	// the walk starts at the lower endpoint, so it never steps back along x
-	dx := x1 - x0
-	dy := y1 - y0
-	if dy < 0 {
-		dy = -dy
-	}
-
-	sy := 1
-	if y0 > y1 {
-		sy = -1
-	}
+	// Starting at the lower end, the walk never steps back along x.
+	dx, dy := x1-x0, geom.Abs(y1-y0)
+	sy := geom.Sign(y1 - y0)
 
 	x, y, err := x0, y0, dx-dy
 
@@ -516,11 +507,11 @@ func (p Point) hasLineOfSight(target geom.Point[int], blocks blockers) bool {
 			return true
 		}
 
-		e2 := 2 * err
-		stepX := e2 > -dy
-		stepY := e2 < dx
+		doubled := 2 * err
+		stepX := doubled > -dy
+		stepY := doubled < dx
 
-		// crossing a corner: opaque only when both flanking cells block
+		// Crossing a corner is stopped only when both cells beside it block.
 		if stepX && stepY && blocks.has(geom.Pt(x+1, y)) && blocks.has(geom.Pt(x, y+sy)) {
 			return false
 		}
@@ -546,50 +537,4 @@ func (p Point) hasLineOfSight(target geom.Point[int], blocks blockers) bool {
 // Point returns p as the geom.Point it is.
 func (p Point) Point() geom.Point[int] {
 	return geom.Point[int](p)
-}
-
-// blockers answers whether an index blocks sight, from a set of indices or from a function, so
-// the slice and the Func forms of the sight methods share one rule and neither pays for the
-// other: the set is read without a call.
-type blockers struct {
-	set     pointSet
-	blocked func(geom.Point[int]) bool
-}
-
-// has reports whether the index blocks.
-func (b blockers) has(index geom.Point[int]) bool {
-	if b.blocked != nil {
-		return b.blocked(index)
-	}
-
-	return b.set.has(index)
-}
-
-// isEmpty reports whether nothing can block.
-func (b blockers) isEmpty() bool {
-	return b.blocked == nil && len(b.set) == 0
-}
-
-// pointSet is a set of indices read without a call.
-type pointSet map[geom.Point[int]]struct{}
-
-// newPointSet returns the set of the points, and nil, which holds nothing, for none.
-func newPointSet(points []geom.Point[int]) pointSet {
-	if len(points) == 0 {
-		return nil
-	}
-
-	set := make(pointSet, len(points))
-	for _, point := range points {
-		set[point] = struct{}{}
-	}
-
-	return set
-}
-
-// has reports whether the set contains the point.
-func (s pointSet) has(point geom.Point[int]) bool {
-	_, found := s[point]
-
-	return found
 }

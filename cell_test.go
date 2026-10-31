@@ -23,7 +23,7 @@ func TestCell_Size(t *testing.T) {
 }
 
 func TestCell_Center(t *testing.T) {
-	grids := testGrids(geom.Sz(6, 5), geom.Sz(32.0, 20.0), geom.Pt(100.0, 50.0))
+	grids := kindGrids(geom.Sz(6, 5), geom.Sz(32.0, 20.0), geom.Pt(100.0, 50.0))
 
 	t.Run("a square is a cell from the one before it", func(t *testing.T) {
 		g := NewRect[int](geom.Sz(4, 3), geom.Sz(64.0, 32.0))
@@ -71,13 +71,13 @@ func TestCell_Center(t *testing.T) {
 		geomtest.AssertPoint(t, g.Cell(geom.Pt(0, 1)).Center(), geom.Pt(geom.Sqrt3*5, 25.0))
 	})
 	t.Run("rounds each product before it is added", func(t *testing.T) {
-		corner, cellSize := geom.Pt(-816.19, 732.64), geom.Sz(8.48, 89.09)
-		g := testGrids(geom.Sz(64, 64), cellSize, corner)["rectangular"]
+		corner, cellScale := geom.Pt(-816.19, 732.64), geom.Sz(8.48, 89.09)
+		g := kindGrids(geom.Sz(64, 64), cellScale, corner)["rectangular"]
 
 		for index := range container.Arr[int](g.Size()).Keys() {
 			center := geom.Pt(
-				corner.X+float64(float64(2*index.X+1)*float64(cellSize.Width*0.5)),
-				corner.Y+float64(float64(2*index.Y+1)*float64(cellSize.Height*0.5)),
+				corner.X+float64(float64(2*index.X+1)*float64(cellScale.Width*0.5)),
+				corner.Y+float64(float64(2*index.Y+1)*float64(cellScale.Height*0.5)),
 			)
 
 			assert.Equal(t, g.Cell(index).Center(), center, index.String()+": ")
@@ -104,7 +104,7 @@ func BenchmarkCell_Center(b *testing.B) {
 }
 
 func TestCell_Bounds(t *testing.T) {
-	awkward := testGrids(geom.Sz(6, 5), geom.Sz(8.48, 89.09), geom.Pt(-816.19, 732.64))
+	awkward := kindGrids(geom.Sz(6, 5), geom.Sz(8.48, 89.09), geom.Pt(-816.19, 732.64))
 
 	t.Run("a square spans its column and row", func(t *testing.T) {
 		g := NewRect[int](geom.Sz(5, 5), geom.Sz(32.0, 32.0))
@@ -159,7 +159,7 @@ func BenchmarkCell_Bounds(b *testing.B) {
 }
 
 func TestCell_Polygon(t *testing.T) {
-	grids := testGrids(geom.Sz(6, 5), geom.Sz(32.0, 20.0), geom.Pt(100.0, 50.0))
+	grids := kindGrids(geom.Sz(6, 5), geom.Sz(32.0, 20.0), geom.Pt(100.0, 50.0))
 
 	t.Run("a square and a diamond have four sides", func(t *testing.T) {
 		assert.Equal(t, grids["rectangular"].Cell(geom.Pt(2, 3)).Polygon().N, 4)
@@ -239,7 +239,7 @@ func TestCell_Set(t *testing.T) {
 }
 
 func TestCell_Neighbors(t *testing.T) {
-	grids, center := rangeGrids()
+	grids, center := ruleGrids(geom.Sz(11, 11)), geom.Pt(5, 5)
 
 	for name, g := range grids {
 		for _, index := range []geom.Point[int]{center, geom.Pt(0, 0), geom.Pt(10, 3), geom.Pt(-1, 0)} {
@@ -249,7 +249,7 @@ func TestCell_Neighbors(t *testing.T) {
 }
 
 func TestCell_AppendNeighbors(t *testing.T) {
-	grids, center := rangeGrids()
+	grids, center := ruleGrids(geom.Sz(11, 11)), geom.Pt(5, 5)
 
 	for name, g := range grids {
 		assert.Equal(t, g.Cell(center).AppendNeighbors([]geom.Point[int]{geom.Pt(-9, -9)}), g.AppendNeighbors([]geom.Point[int]{geom.Pt(-9, -9)}, center), name+": ")
@@ -257,7 +257,7 @@ func TestCell_AppendNeighbors(t *testing.T) {
 }
 
 func TestCell_Range(t *testing.T) {
-	grids, center := rangeGrids()
+	grids, center := ruleGrids(geom.Sz(11, 11)), geom.Pt(5, 5)
 	open := func(cell Cell[int]) bool {
 		return cell.Index() != geom.Pt(5, 6)
 	}
@@ -268,7 +268,7 @@ func TestCell_Range(t *testing.T) {
 }
 
 func TestCell_AppendRange(t *testing.T) {
-	grids, center := rangeGrids()
+	grids, center := ruleGrids(geom.Sz(11, 11)), geom.Pt(5, 5)
 	open := func(cell Cell[int]) bool {
 		return cell.Index() != geom.Pt(5, 6)
 	}
@@ -279,7 +279,7 @@ func TestCell_AppendRange(t *testing.T) {
 }
 
 func TestCell_RangeSeq(t *testing.T) {
-	grids, center := rangeGrids()
+	grids, center := ruleGrids(geom.Sz(11, 11)), geom.Pt(5, 5)
 	open := func(cell Cell[int]) bool {
 		return cell.Index() != geom.Pt(5, 6)
 	}
@@ -290,7 +290,7 @@ func TestCell_RangeSeq(t *testing.T) {
 }
 
 func TestCell_DistanceTo(t *testing.T) {
-	grids, center := rangeGrids()
+	grids, center := ruleGrids(geom.Sz(11, 11)), geom.Pt(5, 5)
 
 	for name, g := range grids {
 		assert.Equal(t, g.Cell(center).DistanceTo(geom.Pt(1, 9)), g.Distance(center, geom.Pt(1, 9)), name+": ")
@@ -298,7 +298,7 @@ func TestCell_DistanceTo(t *testing.T) {
 }
 
 func TestCell_PathTo(t *testing.T) {
-	grids, center := rangeGrids()
+	grids, center := ruleGrids(geom.Sz(11, 11)), geom.Pt(5, 5)
 	open := func(cell Cell[int]) bool {
 		return cell.Index() != geom.Pt(5, 6)
 	}
