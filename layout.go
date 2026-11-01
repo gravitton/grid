@@ -64,17 +64,17 @@ func (l *HexLayout) CellSpacing() geom.Size[float64] {
 }
 
 // Center returns the center of the cell at the index in the world.
-func (l *HexLayout) Center(index geom.Point[int]) geom.Point[float64] {
+func (l *HexLayout) Center(index Index) geom.Point[float64] {
 	return l.layout.latticeToWorld(l.position(index))
 }
 
 // Bounds returns the box around the cell at the index as drawn, in the world.
-func (l *HexLayout) Bounds(index geom.Point[int]) geom.Box[float64] {
+func (l *HexLayout) Bounds(index Index) geom.Box[float64] {
 	return l.layout.cellBoundsAt(l.position(index))
 }
 
 // Polygon returns the hexagon of the cell at the index in the world.
-func (l *HexLayout) Polygon(index geom.Point[int]) geom.RegularPolygon[float64] {
+func (l *HexLayout) Polygon(index Index) geom.RegularPolygon[float64] {
 	polygon := l.layout.cellPolygon
 	polygon.Center = l.Center(index)
 
@@ -82,14 +82,14 @@ func (l *HexLayout) Polygon(index geom.Point[int]) geom.RegularPolygon[float64] 
 }
 
 // position returns where the center of the cell at the index is on the lattice.
-func (l *HexLayout) position(index geom.Point[int]) geom.Point[int] {
+func (l *HexLayout) position(index Index) Index {
 	return l.layout.kind.hexToLattice(l.system.From(index))
 }
 
 // IndexAt returns the index of the cell the point of the world lies in. A point on an edge
 // goes to the same side in every cell. It panics for a point with a NaN or infinite
 // coordinate.
-func (l *HexLayout) IndexAt(point geom.Point[float64]) geom.Point[int] {
+func (l *HexLayout) IndexAt(point geom.Point[float64]) Index {
 	return l.system.To(l.layout.kind.hexFromLattice(l.layout.latticeFromWorld(point)).Round())
 }
 

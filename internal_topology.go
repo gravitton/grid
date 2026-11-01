@@ -15,11 +15,11 @@ type topology interface {
 
 	// offsets returns the steps from the index to its neighbors, in the order of the directions
 	// of the kind. The slice is the topology's own and is never written to.
-	offsets(index geom.Point[int]) []geom.Vector[int]
+	offsets(index Index) []geom.Vector[int]
 
 	// distance returns the number of steps between two indices, whether or not they lie inside
 	// a grid.
-	distance(from, to geom.Point[int]) int
+	distance(from, to Index) int
 
 	// rangeLen returns the number of indices within radius of an index, what appendWithin
 	// appends.
@@ -27,7 +27,7 @@ type topology interface {
 
 	// appendWithin appends every index within radius of index, inside a grid or not, in the
 	// order of a region, so a range kept in that order is a region with nothing to sort.
-	appendWithin(dst []geom.Point[int], index geom.Point[int], radius int) []geom.Point[int]
+	appendWithin(dst []Index, index Index, radius int) []Index
 
 	// ringLen returns the number of indices at exactly radius steps from an index, what
 	// appendRing appends.
@@ -35,28 +35,28 @@ type topology interface {
 
 	// appendRing appends every index at exactly radius steps from index, inside a grid or not,
 	// in the order the kind walks around it.
-	appendRing(dst []geom.Point[int], index geom.Point[int], radius int) []geom.Point[int]
+	appendRing(dst []Index, index Index, radius int) []Index
 
 	// appendSpiral appends every index within radius of index, inside a grid or not, ring by
 	// ring outward from it.
-	appendSpiral(dst []geom.Point[int], index geom.Point[int], radius int) []geom.Point[int]
+	appendSpiral(dst []Index, index Index, radius int) []Index
 
 	// walkSpiral yields what appendSpiral appends as it walks and reports whether it yielded it
 	// all.
-	walkSpiral(index geom.Point[int], radius int, yield func(geom.Point[int]) bool) bool
+	walkSpiral(index Index, radius int, yield func(Index) bool) bool
 
 	// appendLine appends the indices of the straight line from one index to another, both
 	// included, inside a grid or not.
-	appendLine(dst []geom.Point[int], from, to geom.Point[int]) []geom.Point[int]
+	appendLine(dst []Index, from, to Index) []Index
 
 	// sees reports whether from sees to past the indices blocked reports, neither end blocking.
 	// A nil blocked blocks nothing.
-	sees(from, to geom.Point[int], blocked func(geom.Point[int]) bool) bool
+	sees(from, to Index, blocked func(Index) bool) bool
 
 	// sight marks as seen the indices within radius of center that are in sight of it past the
 	// indices the marks block, neither end blocking: every one of the candidates that is, and
 	// any others the kind finds on the way.
-	sight(center geom.Point[int], radius int, candidates []geom.Point[int], marks *sightMarks)
+	sight(center Index, radius int, candidates []Index, marks *sightMarks)
 }
 
 // newTopology returns the neighbor rule of the kind, the movement that of a kind of square cells
@@ -90,11 +90,11 @@ func (t *squareTopology) rule() Movement {
 	return t.movement
 }
 
-func (t *squareTopology) offsets(geom.Point[int]) []geom.Vector[int] {
+func (t *squareTopology) offsets(Index) []geom.Vector[int] {
 	return t.steps
 }
 
-func (t *squareTopology) distance(from, to geom.Point[int]) int {
+func (t *squareTopology) distance(from, to Index) int {
 	return Point(from).DistanceTo(to, t.movement)
 }
 
@@ -102,7 +102,7 @@ func (t *squareTopology) rangeLen(radius int) int {
 	return RangeLen(radius, t.movement)
 }
 
-func (t *squareTopology) appendWithin(dst []geom.Point[int], index geom.Point[int], radius int) []geom.Point[int] {
+func (t *squareTopology) appendWithin(dst []Index, index Index, radius int) []Index {
 	return slices.AppendSeq(dst, Point(index).RangeSeq(radius, t.movement))
 }
 
@@ -110,27 +110,27 @@ func (t *squareTopology) ringLen(radius int) int {
 	return RingLen(radius, t.movement)
 }
 
-func (t *squareTopology) appendRing(dst []geom.Point[int], index geom.Point[int], radius int) []geom.Point[int] {
+func (t *squareTopology) appendRing(dst []Index, index Index, radius int) []Index {
 	return slices.AppendSeq(dst, Point(index).RingSeq(radius, t.movement))
 }
 
-func (t *squareTopology) appendSpiral(dst []geom.Point[int], index geom.Point[int], radius int) []geom.Point[int] {
+func (t *squareTopology) appendSpiral(dst []Index, index Index, radius int) []Index {
 	return slices.AppendSeq(dst, Point(index).SpiralSeq(radius, t.movement))
 }
 
-func (t *squareTopology) walkSpiral(index geom.Point[int], radius int, yield func(geom.Point[int]) bool) bool {
+func (t *squareTopology) walkSpiral(index Index, radius int, yield func(Index) bool) bool {
 	return Point(index).spiral(radius, t.movement, yield)
 }
 
-func (t *squareTopology) appendLine(dst []geom.Point[int], from, to geom.Point[int]) []geom.Point[int] {
+func (t *squareTopology) appendLine(dst []Index, from, to Index) []Index {
 	return slices.AppendSeq(dst, Point(from).LineToSeq(to, t.movement))
 }
 
-func (t *squareTopology) sees(from, to geom.Point[int], blocked func(geom.Point[int]) bool) bool {
+func (t *squareTopology) sees(from, to Index, blocked func(Index) bool) bool {
 	return blocked == nil || Point(from).sees(to, blocked)
 }
 
-func (t *squareTopology) sight(center geom.Point[int], _ int, candidates []geom.Point[int], marks *sightMarks) {
+func (t *squareTopology) sight(center Index, _ int, candidates []Index, marks *sightMarks) {
 	Point(center).markSeen(candidates, marks)
 }
 
@@ -160,7 +160,7 @@ func (t *hexTopology) rule() Movement {
 	return MovementNone
 }
 
-func (t *hexTopology) offsets(index geom.Point[int]) []geom.Vector[int] {
+func (t *hexTopology) offsets(index Index) []geom.Vector[int] {
 	if t.byColumn {
 		return t.steps[index.X&1][:]
 	}
@@ -168,7 +168,7 @@ func (t *hexTopology) offsets(index geom.Point[int]) []geom.Vector[int] {
 	return t.steps[index.Y&1][:]
 }
 
-func (t *hexTopology) distance(from, to geom.Point[int]) int {
+func (t *hexTopology) distance(from, to Index) int {
 	return t.system.From(from).DistanceTo(t.system.From(to))
 }
 
@@ -176,7 +176,7 @@ func (t *hexTopology) rangeLen(radius int) int {
 	return hex.RangeLen(radius)
 }
 
-func (t *hexTopology) appendWithin(dst []geom.Point[int], index geom.Point[int], radius int) []geom.Point[int] {
+func (t *hexTopology) appendWithin(dst []Index, index Index, radius int) []Index {
 	center := t.system.From(index)
 	if t.byColumn {
 		for candidate := range center.RangeSeq(radius) {
@@ -201,7 +201,7 @@ func (t *hexTopology) ringLen(radius int) int {
 	return hex.RingLen(radius)
 }
 
-func (t *hexTopology) appendRing(dst []geom.Point[int], index geom.Point[int], radius int) []geom.Point[int] {
+func (t *hexTopology) appendRing(dst []Index, index Index, radius int) []Index {
 	for candidate := range t.system.From(index).RingSeq(radius) {
 		dst = append(dst, t.system.To(candidate))
 	}
@@ -209,7 +209,7 @@ func (t *hexTopology) appendRing(dst []geom.Point[int], index geom.Point[int], r
 	return dst
 }
 
-func (t *hexTopology) appendSpiral(dst []geom.Point[int], index geom.Point[int], radius int) []geom.Point[int] {
+func (t *hexTopology) appendSpiral(dst []Index, index Index, radius int) []Index {
 	for candidate := range t.system.From(index).SpiralSeq(radius) {
 		dst = append(dst, t.system.To(candidate))
 	}
@@ -217,7 +217,7 @@ func (t *hexTopology) appendSpiral(dst []geom.Point[int], index geom.Point[int],
 	return dst
 }
 
-func (t *hexTopology) walkSpiral(index geom.Point[int], radius int, yield func(geom.Point[int]) bool) bool {
+func (t *hexTopology) walkSpiral(index Index, radius int, yield func(Index) bool) bool {
 	for candidate := range t.system.From(index).SpiralSeq(radius) {
 		if !yield(t.system.To(candidate)) {
 			return false
@@ -227,7 +227,7 @@ func (t *hexTopology) walkSpiral(index geom.Point[int], radius int, yield func(g
 	return true
 }
 
-func (t *hexTopology) appendLine(dst []geom.Point[int], from, to geom.Point[int]) []geom.Point[int] {
+func (t *hexTopology) appendLine(dst []Index, from, to Index) []Index {
 	for candidate := range t.system.From(from).LineToSeq(t.system.From(to)) {
 		dst = append(dst, t.system.To(candidate))
 	}
@@ -235,7 +235,7 @@ func (t *hexTopology) appendLine(dst []geom.Point[int], from, to geom.Point[int]
 	return dst
 }
 
-func (t *hexTopology) sees(from, to geom.Point[int], blocked func(geom.Point[int]) bool) bool {
+func (t *hexTopology) sees(from, to Index, blocked func(Index) bool) bool {
 	if blocked == nil {
 		return true
 	}
@@ -245,7 +245,7 @@ func (t *hexTopology) sees(from, to geom.Point[int], blocked func(geom.Point[int
 	})
 }
 
-func (t *hexTopology) sight(center geom.Point[int], radius int, _ []geom.Point[int], marks *sightMarks) {
+func (t *hexTopology) sight(center Index, radius int, _ []Index, marks *sightMarks) {
 	sight := t.system.From(center).FieldOfViewSeq(radius, func(candidate hex.Hex) bool {
 		return marks.blocks(t.system.To(candidate))
 	})

@@ -77,23 +77,23 @@ func checkCellScale(cellScale geom.Size[float64]) error {
 
 // fromWorld returns the index of the cell the point of the world falls in. It checks nothing:
 // every kind converts through geom.Cast, which panics for a point that is not finite.
-func (l *layout) fromWorld(point geom.Point[float64]) geom.Point[int] {
+func (l *layout) fromWorld(point geom.Point[float64]) Index {
 	return l.kind.fromLattice(l.latticeFromWorld(point))
 }
 
 // toWorld returns the center of the cell at the index in the world.
-func (l *layout) toWorld(index geom.Point[int]) geom.Point[float64] {
+func (l *layout) toWorld(index Index) geom.Point[float64] {
 	return l.latticeToWorld(l.kind.toLattice(index))
 }
 
 // cellBounds returns the box around the cell at the index, its corners read off the lattice
 // as its center is.
-func (l *layout) cellBounds(index geom.Point[int]) geom.Box[float64] {
+func (l *layout) cellBounds(index Index) geom.Box[float64] {
 	return l.cellBoundsAt(l.kind.toLattice(index))
 }
 
 // cellBoundsAt returns the box around the cell centered at the position on the lattice.
-func (l *layout) cellBoundsAt(position geom.Point[int]) geom.Box[float64] {
+func (l *layout) cellBoundsAt(position Index) geom.Box[float64] {
 	sizeSteps := l.kind.sizeSteps()
 	half := geom.Vec(sizeSteps.X/2, sizeSteps.Y/2)
 
@@ -111,7 +111,7 @@ func (l *layout) latticeFromWorld(point geom.Point[float64]) geom.Point[float64]
 
 // latticeToWorld returns the point of the world at the position on the lattice, each product
 // rounded before it is added, never fused with the sum.
-func (l *layout) latticeToWorld(position geom.Point[int]) geom.Point[float64] {
+func (l *layout) latticeToWorld(position Index) geom.Point[float64] {
 	return geom.Pt(
 		l.origin.X+float64(float64(position.X-l.latticeBounds.Min.X)*l.latticeStep.Width),
 		l.origin.Y+float64(float64(position.Y-l.latticeBounds.Min.Y)*l.latticeStep.Height),
@@ -276,7 +276,7 @@ func (k kind) latticeBounds(size geom.Size[int]) geom.Box[int] {
 		return geom.Box[int]{}
 	}
 
-	var low, high geom.Point[int]
+	var low, high Index
 	for _, x := range [3]int{0, min(1, w-1), w - 1} {
 		for _, y := range [3]int{0, min(1, h-1), h - 1} {
 			center := k.toLattice(geom.Pt(x, y))
@@ -295,7 +295,7 @@ func (k kind) latticeBounds(size geom.Size[int]) geom.Box[int] {
 // the inverse of toLattice for a position between the points of the lattice too. A square and
 // a diamond own the edges that round up to them, and a hexagon the ones
 // hex.FractionalHex.Round gives it.
-func (k kind) fromLattice(position geom.Point[float64]) geom.Point[int] {
+func (k kind) fromLattice(position geom.Point[float64]) Index {
 	x, y := position.XY()
 
 	switch k {
@@ -317,7 +317,7 @@ func (k kind) fromLattice(position geom.Point[float64]) geom.Point[int] {
 // toLattice returns where the center of the cell at the index is on the lattice of the kind,
 // in whole steps from the center of the first cell: the index doubled for a square, the
 // diagonals through it for a diamond, and the lattice position of its hex for a hexagon.
-func (k kind) toLattice(index geom.Point[int]) geom.Point[int] {
+func (k kind) toLattice(index Index) Index {
 	x, y := index.XY()
 
 	switch k {
@@ -349,7 +349,7 @@ func (k kind) hexFromLattice(position geom.Point[float64]) hex.FractionalHex {
 // hexToLattice returns where the center of a hex is on the lattice of a hexagonal kind, in whole
 // steps from the center of hex zero: three steps a column with half a row more for each on a
 // flat-top one, three steps a row with half a column more for each on a pointy-top one.
-func (k kind) hexToLattice(h hex.Hex) geom.Point[int] {
+func (k kind) hexToLattice(h hex.Hex) Index {
 	if k.orientation() == geom.OrientationFlatTop {
 		return geom.Pt(3*h.Q, 2*h.R+h.Q)
 	}

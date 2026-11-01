@@ -4,17 +4,20 @@ import (
 	geom "github.com/gravitton/geometry"
 )
 
+// Index is the column and row of a cell.
+type Index = geom.Point[int]
+
 // Cell is a handle on one cell of a [Grid]: its index, its value and its place in the world,
 // with the short forms of the queries the grid answers from it. It is passed by value, and the
 // cell of an index outside the grid is held like any other. The zero value belongs to no grid,
 // and its methods are not to be called.
 type Cell[T any] struct {
 	grid  *Grid[T]
-	index geom.Point[int]
+	index Index
 }
 
 // Index returns the index of the cell.
-func (c Cell[T]) Index() geom.Point[int] {
+func (c Cell[T]) Index() Index {
 	return c.index
 }
 
@@ -58,7 +61,7 @@ func (c Cell[T]) Set(value T) {
 }
 
 // Neighbors returns the indices of Grid.Neighbors from the cell.
-func (c Cell[T]) Neighbors() []geom.Point[int] {
+func (c Cell[T]) Neighbors() []Index {
 	return c.grid.Neighbors(c.index)
 }
 
@@ -68,27 +71,27 @@ func (c Cell[T]) Range(radius int) Region {
 }
 
 // Ring returns the indices of Grid.Ring from the cell.
-func (c Cell[T]) Ring(radius int) []geom.Point[int] {
+func (c Cell[T]) Ring(radius int) []Index {
 	return c.grid.Ring(c.index, radius)
 }
 
 // Spiral returns the indices of Grid.Spiral from the cell.
-func (c Cell[T]) Spiral(radius int) []geom.Point[int] {
+func (c Cell[T]) Spiral(radius int) []Index {
 	return c.grid.Spiral(c.index, radius)
 }
 
 // DistanceTo returns the number of steps of Grid.Distance from the cell to the index.
-func (c Cell[T]) DistanceTo(index geom.Point[int]) int {
+func (c Cell[T]) DistanceTo(index Index) int {
 	return c.grid.Distance(c.index, index)
 }
 
 // LineTo returns the indices of Grid.Line from the cell to the index.
-func (c Cell[T]) LineTo(index geom.Point[int]) []geom.Point[int] {
+func (c Cell[T]) LineTo(index Index) []Index {
 	return c.grid.Line(c.index, index)
 }
 
 // HasLineOfSight reports whether the cell sees target by Grid.HasLineOfSight.
-func (c Cell[T]) HasLineOfSight(target geom.Point[int], blocked func(Cell[T]) bool) bool {
+func (c Cell[T]) HasLineOfSight(target Index, blocked func(Cell[T]) bool) bool {
 	return c.grid.HasLineOfSight(c.index, target, blocked)
 }
 
@@ -98,7 +101,7 @@ func (c Cell[T]) FieldOfView(radius int, blocked func(Cell[T]) bool) Region {
 }
 
 // PathTo returns the path of Grid.Path from the cell to the index.
-func (c Cell[T]) PathTo(index geom.Point[int], passable func(Cell[T]) bool, cost func(current, next Cell[T]) float64) []geom.Point[int] {
+func (c Cell[T]) PathTo(index Index, passable func(Cell[T]) bool, cost func(current, next Cell[T]) float64) []Index {
 	return c.grid.Path(c.index, index, passable, cost)
 }
 

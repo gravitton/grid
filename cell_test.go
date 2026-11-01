@@ -263,7 +263,7 @@ func TestCell_Neighbors(t *testing.T) {
 	grids, center := ruleGrids(geom.Sz(11, 11)), geom.Pt(5, 5)
 
 	for name, g := range grids {
-		for _, index := range []geom.Point[int]{center, geom.Pt(0, 0), geom.Pt(10, 3), geom.Pt(-1, 0)} {
+		for _, index := range []Index{center, geom.Pt(0, 0), geom.Pt(10, 3), geom.Pt(-1, 0)} {
 			assert.Equal(t, g.Cell(index).Neighbors(), g.Neighbors(index), name+" at "+index.String()+": ")
 		}
 	}

@@ -158,7 +158,7 @@ func TestMovement_Offset(t *testing.T) {
 
 func TestMovement_Distance(t *testing.T) {
 	origin := geom.Pt(0, 0)
-	targets := []geom.Point[int]{geom.Pt(3, 4), geom.Pt(-2, 3), geom.Pt(2, 2), geom.Pt(0, -5), geom.Pt(0, 0)}
+	targets := []Index{geom.Pt(3, 4), geom.Pt(-2, 3), geom.Pt(2, 2), geom.Pt(0, -5), geom.Pt(0, 0)}
 
 	t.Run("cardinal is the Manhattan distance", func(t *testing.T) {
 		assert.Equal(t, MovementCardinal.Distance(origin, geom.Pt(3, 4)), 7)

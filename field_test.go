@@ -49,7 +49,7 @@ func TestField_Next(t *testing.T) {
 		assert.False(t, found)
 	})
 	t.Run("a cell not reached has none", func(t *testing.T) {
-		for _, index := range []geom.Point[int]{testWall, geom.Pt(-1, 0), geom.Pt(5, 5)} {
+		for _, index := range []Index{testWall, geom.Pt(-1, 0), geom.Pt(5, 5)} {
 			_, found := field.Next(index)
 
 			assert.False(t, found, index.String()+": ")
@@ -126,7 +126,7 @@ func TestField_PathTo(t *testing.T) {
 		}
 	})
 	t.Run("to the start is the start alone", func(t *testing.T) {
-		assert.Equal(t, field.PathTo(testStart), []geom.Point[int]{testStart})
+		assert.Equal(t, field.PathTo(testStart), []Index{testStart})
 	})
 	t.Run("to a cell not reached is nil", func(t *testing.T) {
 		assert.Equal(t, field.PathTo(testWall), nil)
@@ -156,7 +156,7 @@ func TestField_AppendPathTo(t *testing.T) {
 	field := walledGrid().BreadthFirstSearchField(testStart, walkable)
 
 	t.Run("appends the indices of PathTo", func(t *testing.T) {
-		prefix := []geom.Point[int]{geom.Pt(-9, -9)}
+		prefix := []Index{geom.Pt(-9, -9)}
 
 		assert.Equal(t, field.AppendPathTo(prefix, testGoal), append(prefix, field.PathTo(testGoal)...))
 	})
@@ -164,7 +164,7 @@ func TestField_AppendPathTo(t *testing.T) {
 		assert.Length(t, field.AppendPathTo(nil, testWall), 0)
 	})
 	t.Run("allocates nothing with room", func(t *testing.T) {
-		buffer := make([]geom.Point[int], 0, 16)
+		buffer := make([]Index, 0, 16)
 
 		assert.Equal(t, testing.AllocsPerRun(10, func() {
 			sinkPoints = field.AppendPathTo(buffer[:0], testGoal)
@@ -183,7 +183,7 @@ func TestField_Contains(t *testing.T) {
 		assert.False(t, field.Contains(testWall))
 	})
 	t.Run("outside the grid", func(t *testing.T) {
-		for _, index := range []geom.Point[int]{geom.Pt(-1, 0), geom.Pt(0, -1), geom.Pt(5, 0), geom.Pt(0, 5)} {
+		for _, index := range []Index{geom.Pt(-1, 0), geom.Pt(0, -1), geom.Pt(5, 0), geom.Pt(0, 5)} {
 			assert.False(t, field.Contains(index), index.String()+": ")
 		}
 	})
@@ -237,7 +237,7 @@ func TestField_Region(t *testing.T) {
 		}
 	})
 	t.Run("is sorted as a region is", func(t *testing.T) {
-		assert.True(t, slices.IsSortedFunc(field.Region().Elements(), geom.Point[int].Compare))
+		assert.True(t, slices.IsSortedFunc(field.Region().Elements(), Index.Compare))
 	})
 	t.Run("the empty field is the empty region", func(t *testing.T) {
 		assert.True(t, Field{}.Region().IsEmpty())

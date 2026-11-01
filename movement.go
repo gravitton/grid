@@ -102,7 +102,7 @@ func (m Movement) neighborsLen() int {
 // Distance returns the number of steps between two indices under the movement: the
 // Manhattan distance for MovementCardinal, the Chebyshev distance for MovementDiagonal. It
 // panics for a movement outside the constants.
-func (m Movement) Distance(from, to geom.Point[int]) int {
+func (m Movement) Distance(from, to Index) int {
 	switch m {
 	case MovementCardinal:
 		return from.ManhattanDistanceTo(to)
