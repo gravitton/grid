@@ -4,5 +4,5 @@ github.com/gravitton/container v1.0.0 h1:IMZIXna/FtALO5K0PNlumFWqQ5sG/ePI/iHImCO
 github.com/gravitton/container v1.0.0/go.mod h1:1BZ4HEWqYDNt0WXu2FR6N0uSlC6uX6I52yVu9+MsgRE=
 github.com/gravitton/geometry v1.17.0 h1:A+i9/sWbaNZQGWJEzQmD4+LjDjgxCGz1wVazCpSVv40=
 github.com/gravitton/geometry v1.17.0/go.mod h1:4HP8/HP6weJUx4Nju3sYpjGKfKlngpPbIT90iPy3oIo=
-github.com/gravitton/hexagon v1.6.0 h1:iLy8ySato0iIoprEOQxQiWfm2LHJHCC+tsZbuXeGYo0=
-github.com/gravitton/hexagon v1.6.0/go.mod h1:foBqVeEZ8UTxid2KYi2tJ9szlkuSjIZTAHvRtUGxxMw=
+github.com/gravitton/hexagon v1.7.0 h1:vZkexTNEf7GQnbC+gj99hQQsdbQVLznlLFOIeQQUUIE=
+github.com/gravitton/hexagon v1.7.0/go.mod h1:ALLgT477TaJvcT9O/9pOecXtIvoCgLTwV7oOLeEOfkI=
