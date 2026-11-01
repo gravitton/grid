@@ -27,10 +27,10 @@ Generic 2D grid library for game development
 - **Four layouts** – rectangular, isometric, hexagonal flat-top and pointy-top, behind one API.
 - **World space** – a pixel to its cell and back, with the center, bounds and polygon of every cell.
 - **Pathfinding** – A*, Dijkstra, greedy best-first and breadth-first search, with flow fields.
-- **Visibility** – range with field of view, and a line of sight that reads the same from either end.
+- **Visibility** – line of sight and field of view on every layout, reading the same from either end.
 - **Draw order** – a viewport iterated back to front, whatever the layout.
 - **Regions** – immutable sets of cells with union, intersection and difference.
-- **Movement** – four or eight neighbors on a square grid, six on a hexagonal one.
+- **Neighbors** – four or eight on a square grid, six on a hexagonal one.
 
 The rules behind them are in the [package documentation][link-go-dev-reference].
 
@@ -52,6 +52,7 @@ import (
 ```go
 type Tile struct {
 	Walkable bool
+	Opaque   bool
 	Cost     float64
 }
 
@@ -77,11 +78,11 @@ grid.NewHexFlatTop[Tile](size, grid.HexFlatTopCellScale(64))     // odd columns 
 grid.NewHexPointyTop[Tile](size, grid.HexPointyTopCellScale(64)) // odd rows shifted right
 ```
 
-Options are set in a callback, on [`RectOptions`][link-go-dev-reference] for the square grids and
+Options are set in a callback, on [`SquareOptions`][link-go-dev-reference] for the square grids and
 `HexOptions` for the hexagonal ones:
 
 ```go
-grid.NewRect[Tile](size, grid.RectCellScale(32), func(options *grid.RectOptions) {
+grid.NewRect[Tile](size, grid.RectCellScale(32), func(options *grid.SquareOptions) {
 	options.Movement = grid.MovementDiagonal // 8 neighbors
 	options.Origin = geom.Pt(100.0, 50.0)    // the top-left corner of the grid in the world
 })
@@ -108,6 +109,8 @@ Every constructor returns the same `*Grid[T]`, so everything below holds for all
 
 ### Cells
 
+An index is a `grid.Index`, the `geom.Point[int]` of a column and a row, on every layout:
+
 ```go
 index := geom.Pt(3, 4)
 
@@ -117,12 +120,14 @@ g.Size()          // Size{100, 100}; also Width and Height
 cell := g.Cell(index)          // a Cell[Tile], a handle on the index
 cell.Set(Tile{Cost: 3})        // a write outside the grid does nothing
 cell.Value().Cost = 5          // a pointer into the grid, nil outside it
-cell.IsValid()                 // true, the same answer as g.Contains
+cell.IsContained()             // true, the same answer as g.Contains
 cell.Neighbors()               // the adjacent indices inside the grid; also g.Neighbors(index)
 cell.DistanceTo(geom.Pt(0, 0)) // 7, in steps of the grid's movement
 fmt.Println(cell)              // Cell(3,4)
 
-g.Clone() // a copy with storage of its own; also Fill and Clear
+g.Clone()          // a copy with storage of its own; also Fill and Clear
+g.Layer[bool]()    // a grid of another type over the same cells, an index of one an index of the other
+g.Select(walkable) // a Region of the cells a callback picks
 
 for cell := range g.All() { // every cell, row by row
 	cell.Value().Cost = 1
@@ -142,9 +147,10 @@ cell.Polygon() // the square, diamond or hexagon to draw or hit-test
 g.Bounds()      // the geom.Box around the whole grid
 g.CellSize()    // the size of one tile as drawn
 g.CellSpacing() // the step between two tiles, smaller than the tile where they interlock
+g.CellScale()   // the scale of a tile; also Origin
 
-g.MoveTo(geom.Pt(100.0, 50.0))   // the top-left corner of the bounds, to scroll the grid
-g.Resize(grid.RectCellScale(48)) // the scale of a tile, to zoom it
+g.MoveTo(geom.Pt(100.0, 50.0))    // the top-left corner of the bounds, to scroll the grid
+g.Rescale(grid.RectCellScale(48)) // the scale of a tile, to zoom it
 ```
 
 A `HexLayout` places hexagonal cells with no grid around them, for a map whose data lives
@@ -169,110 +175,116 @@ cost := func(current, next grid.Cell[Tile]) float64 {
 	return next.Value().Cost
 }
 
-g.Path(from, to, walkable, cost) // the cheapest path as indices, both ends included; nil where there is none
-cell.PathTo(to, walkable, cost)  // the same, from a cell
+g.Path(from, to, walkable, cost)        // the cheapest path as indices, both ends included; nil where there is none
+g.Reachable(unit, 12.5, walkable, cost) // a Field of the cells within the budget
+g.Field(goal, walkable, cost)           // a Field of every cell reached
+
+cell.PathTo(to, walkable, cost)      // the same, from a cell; also Reachable and Field
 ```
 
-A nil callback means no constraint: every cell is passable, every step costs one. `Path` is A*;
-the searches are also there by name:
+A nil callback means no constraint: every cell is passable, every step costs one, so a budget
+counts steps. A cost of +Inf is a step never taken; a negative cost or a NaN panics.
 
-| Method                                           | Algorithm         | Weighted | Shortest |
-|--------------------------------------------------|-------------------|----------|----------|
-| `AStar(start, goal, passable, cost)`             | A*                | yes      | yes      |
-| `UniformCostSearch(start, goal, passable, cost)` | Dijkstra          | yes      | yes      |
-| `BreadthFirstSearch(start, goal, passable)`      | Breadth-first     | no       | in steps |
-| `GreedyBestFirstSearch(start, goal, passable)`   | Greedy best-first | no       | no       |
-
-The two exhaustive ones also come as a `Field`: every cell the search reached, with the step
-back toward the start and the cost of getting there, for many units heading to one place:
+A `Field` is what a search reached, with the step back toward its start and the cost of getting
+there. `Reachable` is where a unit can move, with the way to where it is sent. A `Field` searched
+from a goal serves many units heading there, where a step costs the same both ways:
 
 ```go
-field := g.UniformCostSearchField(goal, walkable, cost) // also BreadthFirstSearchField
+reach := g.Reachable(unit, 4, walkable, nil)
 
-next, ok := field.Next(unit) // one step closer to the goal; false at the goal and where it is not reached
-field.CostTo(unit)           // what the way costs, and whether there is one
-field.PathTo(unit)           // the whole path, from the goal to the unit; also AppendPathTo
-field.Region()               // every cell reached
+reach.Region()        // the cells to highlight, going around what stands in the way; also All
+reach.PathTo(picked)  // the way there, from the unit to the cell; also AppendPathTo
+reach.CostTo(picked)  // what it costs, and whether there is a way
+reach.Next(picked)    // one step back toward the unit; false at the unit and where it is not reached
 ```
 
-Where a unit can move to is the cells within its steps along passable ones:
+`Path` is A*, and `Field` picks a search by whether a cost is given. To ask for one by name:
 
-```go
-g.Reachable(unit, 4, walkable) // a Region, going around what stands in the way
-```
+| Method                                         | Algorithm         | Weighted | Shortest |
+|------------------------------------------------|-------------------|----------|----------|
+| `PathBreadthFirst(start, goal, passable)`      | Breadth-first     | no       | in steps |
+| `PathUniformCost(start, goal, passable, cost)` | Dijkstra          | yes      | yes      |
+| `PathGreedyBestFirst(start, goal, passable)`   | Greedy best-first | no       | no       |
+| `PathAStar(start, goal, passable, cost)`       | A*                | yes      | yes      |
+
+The two exhaustive ones also come as `FieldUniformCost` and `FieldBreadthFirst`.
 
 ### Range and visibility
 
 ```go
-g.Distance(from, to)        // in steps of the grid's movement
-g.Range(index, 3, walkable) // a Region: the cells within 3 steps that are in sight; nil admits every cell
-cell.Range(3, walkable)     // the same, from a cell
+g.Distance(from, to) // in steps of the grid's movement
+g.Range(index, 3)    // a Region: the cells within 3 steps
+cell.Range(3)        // the same, from a cell
+
+opaque := func(cell grid.Cell[Tile]) bool {
+	return cell.Value().Opaque
+}
+
+g.HasLineOfSight(from, to, opaque)       // whether one sees the other
+g.FieldOfView(index, 8, opaque)     // a Region: the cells within 8 steps in sight; also Append
+cell.FieldOfView(8, opaque)         // the same, from a cell
 ```
 
-A cell that is not passable is left out and hides what lies behind it, and a range from a cell
-that is not passable itself, or from an index outside the grid, is empty. Two cells always see
-each other or neither does. On a square grid a sightline across a corner is blocked only when
+What blocks sight is apart from what can be walked on: water can be seen across, and a unit can
+stand on what hides it. A blocked cell is in sight and hides what lies behind it, neither end
+blocks, and what lies outside the grid blocks nothing. Two cells always see each other or neither
+does. On a square grid a sightline across a corner is blocked only when
 both cells beside the corner block: a diagonal wall is opaque, a single pillar is not. A
 hexagonal grid uses the rule of [`gravitton/hexagon`][link-hexagon].
 
-### Points
+### Squares
 
-`grid.Point` is to a square grid what `hex.Hex` is to a hexagonal one: an index with the
+`grid.Square` is to a square grid what `hex.Hex` is to a hexagonal one: an index with the
 lattice queries `geom.Point` does not have. A method whose answer depends on which cells are
 adjacent takes the `Movement`:
 
 ```go
-p := grid.Pt(5, 5)
+s := grid.Sq(5, 5)
 
-p.Neighbors(grid.MovementDiagonal)           // all 8, by increasing angle
-p.Neighbor(geom.DirectionUp)                 // Point{5, 4}
-p.DistanceTo(target, grid.MovementCardinal)  // Manhattan; MovementDiagonal gives Chebyshev
-p.DirectionTo(target, grid.MovementCardinal) // the nearest of the four directions
+s.Neighbors(grid.MovementDiagonal)           // all 8, by increasing angle
+s.Neighbor(geom.DirectionUp)                 // Square{5, 4}
+s.DistanceTo(target, grid.MovementCardinal)  // Manhattan; MovementDiagonal gives Chebyshev
+s.DirectionTo(target, grid.MovementCardinal) // the nearest of the four directions
 
-p.Range(2, grid.MovementCardinal)     // the indices within 2 steps: a diamond, or a square for MovementDiagonal
-p.Ring(2, grid.MovementCardinal)      // the indices exactly 2 steps away, by increasing angle
-p.Spiral(2, grid.MovementCardinal)    // the same set as Range, ordered outward
-p.Line(target, grid.MovementDiagonal) // the indices to target, each a neighbor of the last
+s.Range(2, grid.MovementCardinal)     // the indices within 2 steps: a diamond, or a square for MovementDiagonal
+s.Ring(2, grid.MovementCardinal)      // the indices exactly 2 steps away, by increasing angle
+s.Spiral(2, grid.MovementCardinal)    // the same set as Range, ordered outward
+s.LineTo(target, grid.MovementDiagonal) // the indices to target, each a neighbor of the last
 ```
 
-Each traversal has an `Append` form taking a buffer and a `Seq` form that walks without one:
+Each traversal has a `Seq` form, which allocates nothing and stops where you break, and
+`slices.AppendSeq` puts one in a buffer of yours:
 
 ```go
-buffer := make([]geom.Point[int], 0, grid.RangeLen(2, grid.MovementDiagonal)) // 25; RingLen sizes a ring
-buffer = p.AppendRange(buffer[:0], 2, grid.MovementDiagonal)
+buffer := make([]grid.Index, 0, grid.RangeLen(2, grid.MovementDiagonal)) // 25; RingLen sizes a ring
+buffer = slices.AppendSeq(buffer[:0], s.RangeSeq(2, grid.MovementDiagonal))
 
-for near := range p.SpiralSeq(5, grid.MovementCardinal) { // nearest first, stops at the break
+for near := range s.SpiralSeq(5, grid.MovementCardinal) { // nearest first, stops at the break
 	if occupied[near] {
 		break
 	}
 }
 ```
 
-Sight takes the blockers as a slice, or as a function for a map or a grid to answer:
+Sight takes a function saying what blocks, for a map or a grid to answer:
 
 ```go
-p.HasLineOfSight(target, blocking)     // blocking is a slice of indices
-p.FieldOfView(candidates, blocking)    // the candidates in sight; also Append and Seq
-p.HasLineOfSightFunc(target, blocked)  // blocked is a func(geom.Point[int]) bool
-p.FieldOfViewFunc(candidates, blocked) // also AppendFieldOfViewFunc and FieldOfViewFuncSeq
+s.HasLineOfSight(target, blocked)   // blocked is a func(grid.Index) bool
+s.FieldOfView(8, movement, blocked) // the cells within 8 steps in sight; also FieldOfViewSeq
 ```
 
 A quarter turn and a mirror keep a shape on the lattice:
 
 ```go
-p.Turn(1)                       // Point{-5, 5}, a quarter turn around the origin, clockwise on a screen
-p.TurnAround(geom.Pt(4, 4), -1) // the other way, around another index
-p.ReflectX()                    // Point{5, -5}, mirrored across the x-axis; also ReflectY
+s.Turn(1)                       // Square{-5, 5}, a quarter turn around the origin, clockwise on a screen
+s.TurnAround(geom.Pt(4, 4), -1) // the other way, around another index
+s.ReflectX()                    // Square{5, -5}, mirrored across the x-axis; also ReflectY
 ```
 
 ### Drawing
 
 ```go
 for cell := range g.DrawOrder(viewport) { // a zero box walks the whole grid
-	if !cell.IsValid() {
-		continue
-	}
-
 	draw(cell.Polygon(), cell.Value())
 }
 ```
@@ -286,7 +298,7 @@ for cell := range g.DrawOrder(viewport) { // a zero box walks the whole grid
 | Hex flat-top   | Row by row, the columns drawn higher first |
 | Hex pointy-top | Row by row                                 |
 
-A tile partly in view is included, so a cell may lie outside the grid.
+A tile partly in view is included; a cell outside the grid never is.
 
 ### Regions
 
@@ -294,8 +306,8 @@ A tile partly in view is included, so a cell may lie outside the grid.
 grid they came from, so it serves square and hexagonal grids alike:
 
 ```go
-reach := g.Reachable(unit, 3, walkable) // where the unit can move
-blast := g.Range(target, 1, walkable)   // what a blast at the target hits
+reach := g.Reachable(unit, 3, walkable, nil).Region() // where the unit can move
+blast := g.Range(target, 1)                           // what a blast at the target hits
 
 reach.Intersection(blast)     // also Union, Difference and SymmetricDifference, each one pass and one allocation
 reach.Intersects(blast)       // whether they share a cell, without building it; also Encloses
@@ -310,7 +322,7 @@ reach.Elements()    // the indices as a fresh slice; also AppendElements
 json.Marshal(reach) // an array of points
 ```
 
-It is `container.Set` over `geom.Point[int]`, from [`gravitton/container`][link-container],
+It is `container.Set` over `grid.Index`, from [`gravitton/container`][link-container],
 and `grid.Reg` builds one from any slice of indices, in any order, with repeats. The same set
 over hexes is `container.SetOf`, with no grid and no conversion to points:
 
@@ -331,8 +343,9 @@ g.Spiral(index, 2) // the cells within two steps, nearest first, ring by ring
 g.Line(from, to)   // the straight line between two indices, both included
 ```
 
-Each has its `Append` and `Seq` forms. A ring and a spiral keep the cells inside the grid; a
-line is measured between any two indices, as `Distance` is.
+Each has its `Append` form, and `SpiralSeq` stops where you break, for the nearest match. A ring and
+a spiral keep the cells inside the grid; a line is measured between any two indices, as `Distance`
+is.
 
 What depends on which cells are adjacent is asked of the grid, which knows:
 
@@ -343,8 +356,19 @@ g.IsConnected(reach) // whether it is one piece
 g.Components(reach)  // its pieces, as regions
 ```
 
-`Range` also has `AppendRange` and `RangeSeq`, for a caller who wants the indices without a
-region.
+`Range` also has `AppendRange`, for a caller who wants the indices without a region.
+
+### Saving
+
+A grid is written as JSON with its layout and its values, so a save file can hold one in a struct
+of its own. A value is written as its type writes it:
+
+```go
+data, err := json.Marshal(g)
+
+var loaded grid.Grid[Tile]
+err = json.Unmarshal(data, &loaded) // the same grid; what no constructor builds is an error
+```
 
 ### Movement
 
