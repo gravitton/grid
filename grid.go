@@ -176,10 +176,20 @@ func (g *Grid[T]) Height() int {
 	return g.cells.Height()
 }
 
+// Origin returns where the top-left corner of the bounds of the grid is in the world.
+func (g *Grid[T]) Origin() geom.Point[float64] {
+	return g.layout.origin
+}
+
 // Bounds returns the box around every cell of the grid in the world, its top-left corner the
 // origin of the grid, and an empty box at the origin for a grid of no cells.
 func (g *Grid[T]) Bounds() geom.Box[float64] {
 	return g.layout.bounds
+}
+
+// CellScale returns the cell scale the constructor or Resize took.
+func (g *Grid[T]) CellScale() geom.Size[float64] {
+	return g.layout.cellScale
 }
 
 // CellSize returns the size of a cell as drawn, the width and height of the box around it.
@@ -239,6 +249,13 @@ func (g *Grid[T]) Clone() *Grid[T] {
 	return &clone
 }
 
+// Layer returns a grid of zero values of type U over the same cells: of the size, the layout and
+// the neighbor rule of the grid, in the same place, an index of one an index of the other. It
+// moves and resizes apart from the grid.
+func (g *Grid[T]) Layer[U any]() *Grid[U] {
+	return newGrid[U](g.Size(), g.layout, g.topology)
+}
+
 // All returns an iterator over every cell of the grid, row by row.
 func (g *Grid[T]) All() iter.Seq[Cell[T]] {
 	return func(yield func(Cell[T]) bool) {
@@ -248,6 +265,22 @@ func (g *Grid[T]) All() iter.Seq[Cell[T]] {
 			}
 		}
 	}
+}
+
+// Select returns the cells of the grid selected reports.
+func (g *Grid[T]) Select(selected func(Cell[T]) bool) Region {
+	selected = passableOrAny(selected)
+
+	points := make([]geom.Point[int], 0, g.cells.Len())
+	for x := range g.Width() {
+		for y := range g.Height() {
+			if cell := g.Cell(geom.Pt(x, y)); selected(cell) {
+				points = append(points, cell.index)
+			}
+		}
+	}
+
+	return container.SetFrom(points)
 }
 
 // DrawOrder returns an iterator over the cells of the grid in view of bounds, back to front, so

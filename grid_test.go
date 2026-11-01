@@ -414,6 +414,17 @@ func TestGrid_Height(t *testing.T) {
 	assert.Equal(t, g.Height(), 5)
 }
 
+func TestGrid_Origin(t *testing.T) {
+	for name, g := range kindGrids(geom.Sz(3, 3), geom.Sz(32.0, 20.0), geom.Pt(7.0, -3.0)) {
+		assert.Equal(t, g.Origin(), geom.Pt(7.0, -3.0), name+": ")
+		assert.Equal(t, g.Origin(), g.Bounds().Min, name+": ")
+
+		g.MoveTo(geom.Pt(1.0, 2.0))
+
+		assert.Equal(t, g.Origin(), geom.Pt(1.0, 2.0), name+": ")
+	}
+}
+
 // testCellBox returns the box around the cell at the index, measured from its center.
 func testCellBox(g *Grid[int], index geom.Point[int]) geom.Box[float64] {
 	center := g.Cell(index).Center()
@@ -468,6 +479,16 @@ func TestGrid_Bounds(t *testing.T) {
 			assert.Equal(t, allocs, 0.0, name+": ")
 		}
 	})
+}
+
+func TestGrid_CellScale(t *testing.T) {
+	for name, g := range kindGrids(geom.Sz(3, 3), geom.Sz(32.0, 20.0), geom.Pt(0.0, 0.0)) {
+		assert.Equal(t, g.CellScale(), geom.Sz(32.0, 20.0), name+": ")
+
+		g.Resize(geom.Sz(8.0, 4.0))
+
+		assert.Equal(t, g.CellScale(), geom.Sz(8.0, 4.0), name+": ")
+	}
 }
 
 func TestGrid_CellSize(t *testing.T) {
@@ -887,6 +908,42 @@ func TestGrid_Clone(t *testing.T) {
 	})
 }
 
+func TestGrid_Layer(t *testing.T) {
+	for name, g := range layoutGrids() {
+		g.Cell(geom.Pt(1, 1)).Set(7)
+		layer := g.Layer[string]()
+
+		t.Run(name, func(t *testing.T) {
+			t.Run("keeps the size, the layout and the neighbor rule", func(t *testing.T) {
+				assert.Equal(t, layer.Size(), g.Size())
+				assert.Equal(t, layer.Bounds(), g.Bounds())
+				assert.Equal(t, layer.Cell(geom.Pt(1, 1)).Center(), g.Cell(geom.Pt(1, 1)).Center())
+				assert.Equal(t, layer.Neighbors(geom.Pt(1, 1)), g.Neighbors(geom.Pt(1, 1)))
+			})
+			t.Run("holds zero values", func(t *testing.T) {
+				assert.Equal(t, *layer.Cell(geom.Pt(1, 1)).Value(), "")
+			})
+			t.Run("moves apart from the grid", func(t *testing.T) {
+				before := g.Bounds()
+				layer.MoveTo(geom.Pt(500.0, 500.0))
+
+				assert.Equal(t, g.Bounds(), before)
+			})
+		})
+	}
+}
+
+func ExampleGrid_Layer() {
+	g := NewHexFlatTop[string](geom.Sz(4, 4), HexFlatTopCellScale(64))
+	visited := g.Layer[bool]()
+
+	visited.Cell(geom.Pt(1, 2)).Set(true)
+
+	fmt.Println(visited.Size(), visited.Bounds() == g.Bounds())
+	// Output:
+	// 4x4 true
+}
+
 func TestGrid_All(t *testing.T) {
 	g := NewHexFlatTop[int](geom.Sz(3, 2), geom.SzU(16.0))
 
@@ -925,6 +982,48 @@ func BenchmarkGrid_All(b *testing.B) {
 			sinkPoint = cell.Index()
 		}
 	}
+}
+
+func TestGrid_Select(t *testing.T) {
+	g := NewRect[int](geom.Sz(3, 2), RectCellScale(32))
+	g.Cell(geom.Pt(2, 0)).Set(1)
+	g.Cell(geom.Pt(0, 1)).Set(1)
+
+	t.Run("returns the cells selected reports", func(t *testing.T) {
+		selected := g.Select(func(cell Cell[int]) bool {
+			return *cell.Value() == 1
+		})
+
+		assert.Equal(t, selected.Elements(), []geom.Point[int]{geom.Pt(0, 1), geom.Pt(2, 0)})
+	})
+	t.Run("a nil selected is every cell", func(t *testing.T) {
+		assert.Equal(t, g.Select(nil).Len(), 6)
+	})
+	t.Run("holds exactly what the callback picks, on every layout", func(t *testing.T) {
+		for name, g := range layoutGrids() {
+			corner := func(cell Cell[int]) bool {
+				return g.Distance(cell.Index(), geom.Pt(0, 0)) <= 2
+			}
+
+			assert.True(t, g.Select(corner).Equal(g.Range(geom.Pt(0, 0), 2)), name+": ")
+		}
+	})
+	t.Run("allocates once, sized for the grid", func(t *testing.T) {
+		assert.Equal(t, testing.AllocsPerRun(10, func() {
+			sinkRegion = g.Select(nil)
+		}), 1.0)
+	})
+}
+
+func ExampleGrid_Select() {
+	g := NewRect[int](geom.Sz(3, 2), RectCellScale(32))
+	g.Cell(geom.Pt(2, 0)).Set(1)
+
+	fmt.Println(g.Select(func(cell Cell[int]) bool {
+		return *cell.Value() == 1
+	}).Elements())
+	// Output:
+	// [(2,0)]
 }
 
 func TestGrid_DrawOrder(t *testing.T) {

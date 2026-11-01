@@ -43,6 +43,16 @@ func newHexLayout(kind kind, cellScale geom.Size[float64], system hex.Coordinate
 	return &HexLayout{newLayout(kind, geom.Size[int]{}, cellScale, geom.Point[float64]{}), system}
 }
 
+// Origin returns where the center of the cell at index zero is in the world.
+func (l *HexLayout) Origin() geom.Point[float64] {
+	return l.layout.origin
+}
+
+// CellScale returns the cell scale the constructor or Resize took.
+func (l *HexLayout) CellScale() geom.Size[float64] {
+	return l.layout.cellScale
+}
+
 // CellSize returns the size of a cell as drawn, the width and height of the box around it.
 func (l *HexLayout) CellSize() geom.Size[float64] {
 	return l.layout.cellSize

@@ -270,6 +270,27 @@ func TestHexLayout_MoveTo(t *testing.T) {
 	})
 }
 
+func TestHexLayout_Origin(t *testing.T) {
+	layout := NewHexFlatTopLayout(geom.SzU(32.0), hex.Axial)
+
+	assert.Equal(t, layout.Origin(), geom.Pt(0.0, 0.0))
+
+	layout.MoveTo(geom.Pt(4.0, 8.0))
+
+	assert.Equal(t, layout.Origin(), geom.Pt(4.0, 8.0))
+	assert.Equal(t, layout.Center(geom.Pt(0, 0)), layout.Origin())
+}
+
+func TestHexLayout_CellScale(t *testing.T) {
+	layout := NewHexPointyTopLayout(geom.Sz(32.0, 20.0), hex.Axial)
+
+	assert.Equal(t, layout.CellScale(), geom.Sz(32.0, 20.0))
+
+	layout.Resize(geom.Sz(8.0, 4.0))
+
+	assert.Equal(t, layout.CellScale(), geom.Sz(8.0, 4.0))
+}
+
 func TestHexLayout_Resize(t *testing.T) {
 	origin := geom.Pt(100.0, 50.0)
 	scale := geom.Sz(10.0, 12.0)
