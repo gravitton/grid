@@ -137,6 +137,22 @@ const (
 	kindHexPointyTopEven
 )
 
+// kinds returns every kind in order.
+func kinds() [6]kind {
+	return [6]kind{kindRect, kindIsometric, kindHexFlatTop, kindHexFlatTopEven, kindHexPointyTop, kindHexPointyTopEven}
+}
+
+// parseKind returns the kind with the name String prints, and an error for any other string.
+func parseKind(name string) (kind, error) {
+	for _, candidate := range kinds() {
+		if candidate.String() == name {
+			return candidate, nil
+		}
+	}
+
+	return kindRect, fmt.Errorf("grid: unknown kind %q", name)
+}
+
 // sides returns the number of sides of a cell of the kind.
 func (k kind) sides() int {
 	switch k {
@@ -339,4 +355,39 @@ func (k kind) hexToLattice(h hex.Hex) geom.Point[int] {
 	}
 
 	return geom.Pt(2*h.Q+h.R, 3*h.R)
+}
+
+// String returns the name of the kind.
+func (k kind) String() string {
+	switch k {
+	case kindIsometric:
+		return "Isometric"
+	case kindHexFlatTop:
+		return "HexFlatTop"
+	case kindHexFlatTopEven:
+		return "HexFlatTopEven"
+	case kindHexPointyTop:
+		return "HexPointyTop"
+	case kindHexPointyTopEven:
+		return "HexPointyTopEven"
+	default:
+		return "Rect"
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler with the name String prints.
+func (k kind) MarshalText() ([]byte, error) {
+	return []byte(k.String()), nil
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler through parseKind.
+func (k *kind) UnmarshalText(text []byte) error {
+	parsed, err := parseKind(string(text))
+	if err != nil {
+		return err
+	}
+
+	*k = parsed
+
+	return nil
 }

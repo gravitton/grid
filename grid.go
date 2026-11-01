@@ -1,6 +1,7 @@
 package grid
 
 import (
+	"encoding/json"
 	"fmt"
 	"iter"
 	"math"
@@ -33,8 +34,9 @@ type HexOptions struct {
 
 // Grid holds a value of type T for every cell of a rectangular, isometric or hexagonal layout,
 // places its cells in the world, and answers the neighbor, range, area and path queries between
-// them. It is built by [NewRect], [NewIsometric], [NewHexFlatTop] or [NewHexPointyTop]; the
-// zero value is no grid, and its methods are not to be called.
+// them. It is built by [NewRect], [NewIsometric], [NewHexFlatTop] or [NewHexPointyTop], or read
+// back by [Grid.UnmarshalJSON]; the zero value is no grid, and no other method of it is to be
+// called.
 type Grid[T any] struct {
 	cells    container.Array[T, int]
 	layout   layout
@@ -1027,4 +1029,57 @@ func (g *Grid[T]) checkPath(start geom.Point[int], goal *geom.Point[int], passab
 // Contains reports whether the index is that of a cell of the grid.
 func (g *Grid[T]) Contains(index geom.Point[int]) bool {
 	return g.cells.Contains(index)
+}
+
+// MarshalJSON implements json.Marshaler with the kind of the grid, the movement of a square one,
+// its cell scale and origin, and its size and values.
+func (g Grid[T]) MarshalJSON() ([]byte, error) {
+	var movement *Movement
+	if rule := g.topology.rule(); !rule.IsNone() {
+		movement = &rule
+	}
+
+	return json.Marshal(struct {
+		Kind      kind                    `json:"k"`
+		Movement  *Movement               `json:"m,omitempty"`
+		CellScale geom.Size[float64]      `json:"c"`
+		Origin    geom.Point[float64]     `json:"o"`
+		Cells     container.Array[T, int] `json:"v"`
+	}{g.layout.kind, movement, g.layout.cellScale, g.layout.origin, g.cells})
+}
+
+// UnmarshalJSON implements json.Unmarshaler, replacing the grid, a zero one too, with the one
+// MarshalJSON wrote, and reading null as nothing. It returns an error for what no constructor
+// builds, and leaves the grid as it was on an error.
+func (g *Grid[T]) UnmarshalJSON(data []byte) error {
+	if string(data) == "null" {
+		return nil
+	}
+
+	var decoded struct {
+		Kind      kind                    `json:"k"`
+		Movement  Movement                `json:"m"`
+		CellScale geom.Size[float64]      `json:"c"`
+		Origin    geom.Point[float64]     `json:"o"`
+		Cells     container.Array[T, int] `json:"v"`
+	}
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+
+	if decoded.Kind.sides() == 4 && decoded.Movement.IsNone() {
+		return fmt.Errorf("grid: square cells with no movement")
+	}
+
+	if err := checkCellScale(decoded.CellScale); err != nil {
+		return err
+	}
+
+	*g = Grid[T]{
+		cells:    decoded.Cells,
+		layout:   newLayout(decoded.Kind, decoded.Cells.Size(), decoded.CellScale, decoded.Origin),
+		topology: newTopology(decoded.Kind, decoded.Movement),
+	}
+
+	return nil
 }

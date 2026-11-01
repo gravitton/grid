@@ -1,6 +1,7 @@
 package grid
 
 import (
+	"encoding/json"
 	"fmt"
 	"maps"
 	"math"
@@ -3167,4 +3168,131 @@ func TestGrid_Contains(t *testing.T) {
 		assert.False(t, g.Contains(geom.Pt(4, 0)))
 		assert.False(t, g.Contains(geom.Pt(0, 3)))
 	})
+}
+
+func TestGrid_JSON(t *testing.T) {
+	grids := kindGrids(geom.Sz(3, 2), geom.Sz(32.0, 20.0), geom.Pt(7.0, -3.0))
+	grids["diagonal"] = NewRect[int](geom.Sz(3, 2), geom.Sz(32.0, 20.0), withDiagonalMovement)
+	grids["flat-top even"] = NewHexFlatTop[int](geom.Sz(3, 2), geom.Sz(32.0, 20.0), func(options *HexOptions) {
+		options.EvenOffset = true
+	})
+	grids["pointy-top even"] = NewHexPointyTop[int](geom.Sz(3, 2), geom.Sz(32.0, 20.0), func(options *HexOptions) {
+		options.EvenOffset = true
+	})
+	square := NewRect[int](geom.Sz(2, 1), RectCellScale(32))
+	square.Cell(geom.Pt(1, 0)).Set(7)
+
+	t.Run("wire format is the constructor and the cells", func(t *testing.T) {
+		assert.JSON(t, square, `{"k":"Rect","m":"Cardinal","c":{"w":32,"h":32},"o":{"x":0,"y":0},"v":{"w":2,"h":1,"d":[0,7]}}`)
+	})
+	t.Run("a hexagonal grid writes no movement", func(t *testing.T) {
+		assert.JSON(t, NewHexPointyTop[int](geom.Sz(1, 1), geom.SzU(16.0)), `{"k":"HexPointyTop","c":{"w":16,"h":16},"o":{"x":0,"y":0},"v":{"w":1,"h":1,"d":[0]}}`)
+	})
+	t.Run("a grid held by value is written too", func(t *testing.T) {
+		assert.JSON(t, struct {
+			Map Grid[int] `json:"map"`
+		}{*square}, `{"map":{"k":"Rect","m":"Cardinal","c":{"w":32,"h":32},"o":{"x":0,"y":0},"v":{"w":2,"h":1,"d":[0,7]}}}`)
+	})
+	t.Run("round-trip, on every layout", func(t *testing.T) {
+		for name, g := range grids {
+			for cell := range g.All() {
+				cell.Set(cell.Index().X + 10*cell.Index().Y)
+			}
+
+			data, err := json.Marshal(g)
+			assert.NoError(t, err, name+": ")
+
+			var decoded Grid[int]
+			assert.NoError(t, json.Unmarshal(data, &decoded), name+": ")
+
+			assert.Equal(t, decoded.Size(), g.Size(), name+": ")
+			assert.Equal(t, decoded.Bounds(), g.Bounds(), name+": ")
+			assert.Equal(t, decoded.CellScale(), g.CellScale(), name+": ")
+
+			for cell := range g.All() {
+				index := cell.Index()
+
+				assert.Equal(t, *decoded.Cell(index).Value(), *cell.Value(), name+" at "+index.String()+": ")
+				assert.Equal(t, decoded.Cell(index).Center(), cell.Center(), name+" at "+index.String()+": ")
+				assert.Equal(t, decoded.Neighbors(index), g.Neighbors(index), name+" at "+index.String()+": ")
+			}
+		}
+	})
+	t.Run("a grid nested in a struct round-trips", func(t *testing.T) {
+		type save struct {
+			Map *Grid[int] `json:"map"`
+		}
+
+		data, err := json.Marshal(save{square})
+		assert.NoError(t, err)
+
+		var decoded save
+		assert.NoError(t, json.Unmarshal(data, &decoded))
+		assert.Equal(t, *decoded.Map.Cell(geom.Pt(1, 0)).Value(), 7)
+	})
+	t.Run("null reads as nothing", func(t *testing.T) {
+		kept := square.Clone()
+
+		assert.NoError(t, json.Unmarshal([]byte("null"), kept))
+		assert.Equal(t, kept.Size(), square.Size())
+	})
+	for _, bad := range []struct {
+		name string
+		data string
+	}{
+		{"malformed", `{"k":`},
+		{"no kind", `{}`},
+		{"an unknown kind", `{"k":"Triangle","c":{"w":1,"h":1}}`},
+		{"square cells with no movement", `{"k":"Rect","m":"None","c":{"w":1,"h":1}}`},
+		{"an unknown movement", `{"k":"Rect","m":"Knight","c":{"w":1,"h":1}}`},
+		{"no cell scale", `{"k":"Rect"}`},
+		{"a negative cell scale", `{"k":"HexFlatTop","c":{"w":-1,"h":1}}`},
+		{"a negative size", `{"k":"Rect","c":{"w":1,"h":1},"v":{"w":-1,"h":1,"d":[]}}`},
+		{"too few values", `{"k":"Rect","c":{"w":1,"h":1},"v":{"w":2,"h":2,"d":[1]}}`},
+	} {
+		t.Run(bad.name+" is an error that leaves the grid as it was", func(t *testing.T) {
+			kept := square.Clone()
+
+			assert.Error(t, json.Unmarshal([]byte(bad.data), kept))
+			assert.Equal(t, kept.Size(), square.Size())
+			assert.Equal(t, *kept.Cell(geom.Pt(1, 0)).Value(), 7)
+		})
+	}
+}
+
+func FuzzGrid_JSON(f *testing.F) {
+	f.Add(`{"k":"Rect","m":"Cardinal","c":{"w":32,"h":32},"o":{"x":0,"y":0},"v":{"w":2,"h":1,"d":[0,7]}}`)
+	f.Add(`{"k":"HexFlatTopEven","m":"None","c":{"w":1e308,"h":1e-308},"o":{"x":1e308,"y":-1e308},"v":{"w":1,"h":1,"d":[1]}}`)
+	f.Add(`{"k":"Isometric","c":{"w":1,"h":1},"v":{"w":0,"h":9,"d":[]}}`)
+
+	f.Fuzz(func(t *testing.T, data string) {
+		var decoded Grid[int]
+		if json.Unmarshal([]byte(data), &decoded) != nil || data == "null" {
+			return
+		}
+
+		written, err := json.Marshal(decoded)
+		assert.NoError(t, err)
+
+		var again Grid[int]
+		assert.NoError(t, json.Unmarshal(written, &again))
+		assert.Equal(t, again.Size(), decoded.Size())
+		assert.Equal(t, again.Bounds().IsZero(), decoded.Bounds().IsZero())
+	})
+}
+
+func ExampleGrid_MarshalJSON() {
+	g := NewRect[int](geom.Sz(2, 1), RectCellScale(32), func(options *RectOptions) {
+		options.Movement = MovementDiagonal
+	})
+	g.Cell(geom.Pt(1, 0)).Set(7)
+
+	data, _ := json.Marshal(g)
+	fmt.Println(string(data))
+
+	var loaded Grid[int]
+	fmt.Println(json.Unmarshal(data, &loaded), len(loaded.Neighbors(geom.Pt(0, 0))), *loaded.Cell(geom.Pt(1, 0)).Value())
+	// Output:
+	// {"k":"Rect","m":"Diagonal","c":{"w":32,"h":32},"o":{"x":0,"y":0},"v":{"w":2,"h":1,"d":[0,7]}}
+	// <nil> 1 7
 }
