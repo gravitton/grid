@@ -8,14 +8,14 @@ import (
 	geom "github.com/gravitton/geometry"
 )
 
-// Point is an index of a square grid, with the lattice queries [geom.Point] does not have: the
+// Square is an index of a square grid, with the lattice queries [geom.Point] does not have: the
 // neighbors, ranges, rings and lines around it and the sight from it. A method whose answer
 // depends on which cells are adjacent takes the [Movement].
-type Point geom.Point[int]
+type Square geom.Point[int]
 
-// Pt is shorthand for Point{x, y}.
-func Pt(x, y int) Point {
-	return Point{X: x, Y: y}
+// Sq is shorthand for Square{x, y}.
+func Sq(x, y int) Square {
+	return Square{X: x, Y: y}
 }
 
 // RangeLen returns the length of Range and Spiral for the radius under the movement
@@ -47,14 +47,14 @@ func RingLen(radius int, movement Movement) int {
 
 // Turn returns the point turned about the origin by steps quarter-turns of increasing angle;
 // negative steps go the other way.
-func (s Point) Turn(steps int) Point {
+func (s Square) Turn(steps int) Square {
 	switch ((steps % 4) + 4) % 4 {
 	case 1:
-		return Point{X: -s.Y, Y: s.X}
+		return Square{X: -s.Y, Y: s.X}
 	case 2:
-		return Point{X: -s.X, Y: -s.Y}
+		return Square{X: -s.X, Y: -s.Y}
 	case 3:
-		return Point{X: s.Y, Y: -s.X}
+		return Square{X: s.Y, Y: -s.X}
 	default:
 		return s
 	}
@@ -62,31 +62,31 @@ func (s Point) Turn(steps int) Point {
 
 // TurnAround returns the point turned about pivot by steps quarter-turns of increasing angle;
 // negative steps go the other way.
-func (s Point) TurnAround(pivot Index, steps int) Point {
-	turned := Point{X: s.X - pivot.X, Y: s.Y - pivot.Y}.Turn(steps)
+func (s Square) TurnAround(pivot Index, steps int) Square {
+	turned := Square{X: s.X - pivot.X, Y: s.Y - pivot.Y}.Turn(steps)
 
-	return Point{X: turned.X + pivot.X, Y: turned.Y + pivot.Y}
+	return Square{X: turned.X + pivot.X, Y: turned.Y + pivot.Y}
 }
 
 // ReflectX returns the point reflected across the x-axis, its row negated.
-func (s Point) ReflectX() Point {
-	return Point{X: s.X, Y: -s.Y}
+func (s Square) ReflectX() Square {
+	return Square{X: s.X, Y: -s.Y}
 }
 
 // ReflectY returns the point reflected across the y-axis, its column negated.
-func (s Point) ReflectY() Point {
-	return Point{X: -s.X, Y: s.Y}
+func (s Square) ReflectY() Square {
+	return Square{X: -s.X, Y: s.Y}
 }
 
 // Neighbor returns the index one step from s in the direction, and s itself for
 // geom.DirectionNone.
-func (s Point) Neighbor(direction geom.Direction) Index {
+func (s Square) Neighbor(direction geom.Direction) Index {
 	return s.Point().Add(direction.Offset[int]())
 }
 
 // Neighbors returns the indices adjacent to s under the movement, by increasing angle from the
 // one to the right, and nil for a movement outside the constants.
-func (s Point) Neighbors(movement Movement) []Index {
+func (s Square) Neighbors(movement Movement) []Index {
 	count := movement.neighborsLen()
 	if count == 0 {
 		return nil
@@ -96,14 +96,14 @@ func (s Point) Neighbors(movement Movement) []Index {
 }
 
 // NeighborsSeq returns an iterator over the indices of Neighbors, in the same order.
-func (s Point) NeighborsSeq(movement Movement) iter.Seq[Index] {
+func (s Square) NeighborsSeq(movement Movement) iter.Seq[Index] {
 	return s.RingSeq(1, movement)
 }
 
 // Range returns the indices within radius of s under the movement, s included, in the order of
 // a region: a diamond for MovementCardinal, a square for MovementDiagonal and s alone for a
 // movement outside the constants. It returns nil for a negative radius.
-func (s Point) Range(radius int, movement Movement) []Index {
+func (s Square) Range(radius int, movement Movement) []Index {
 	size := RangeLen(radius, movement)
 	if radius < 0 {
 		return nil
@@ -113,7 +113,7 @@ func (s Point) Range(radius int, movement Movement) []Index {
 }
 
 // RangeSeq returns an iterator over the indices of Range, in the same order.
-func (s Point) RangeSeq(radius int, movement Movement) iter.Seq[Index] {
+func (s Square) RangeSeq(radius int, movement Movement) iter.Seq[Index] {
 	return func(yield func(Index) bool) {
 		s.within(radius, movement, yield)
 	}
@@ -121,7 +121,7 @@ func (s Point) RangeSeq(radius int, movement Movement) iter.Seq[Index] {
 
 // within yields the indices within radius of s column by column, each as far up and down as
 // the movement reaches, and reports whether it yielded them all.
-func (s Point) within(radius int, movement Movement, yield func(Index) bool) bool {
+func (s Square) within(radius int, movement Movement, yield func(Index) bool) bool {
 	if movement.IsNone() {
 		return radius < 0 || yield(s.Point())
 	}
@@ -145,7 +145,7 @@ func (s Point) within(radius int, movement Movement, yield func(Index) bool) boo
 // Ring returns the indices at exactly radius steps from s under the movement, by increasing
 // angle from the one to the right, so the ring of radius one is Neighbors. It returns nil for a
 // negative radius and s alone for a zero one.
-func (s Point) Ring(radius int, movement Movement) []Index {
+func (s Square) Ring(radius int, movement Movement) []Index {
 	size := RingLen(radius, movement)
 	if radius < 0 {
 		return nil
@@ -155,7 +155,7 @@ func (s Point) Ring(radius int, movement Movement) []Index {
 }
 
 // RingSeq returns an iterator over the indices of Ring, in the same order.
-func (s Point) RingSeq(radius int, movement Movement) iter.Seq[Index] {
+func (s Square) RingSeq(radius int, movement Movement) iter.Seq[Index] {
 	return func(yield func(Index) bool) {
 		s.ring(radius, movement, yield)
 	}
@@ -163,7 +163,7 @@ func (s Point) RingSeq(radius int, movement Movement) iter.Seq[Index] {
 
 // ring yields the indices at radius steps from s, walking from each neighbor step scaled by
 // radius toward the next, and reports whether it yielded them all.
-func (s Point) ring(radius int, movement Movement, yield func(Index) bool) bool {
+func (s Square) ring(radius int, movement Movement, yield func(Index) bool) bool {
 	if radius < 0 {
 		return true
 	}
@@ -196,7 +196,7 @@ func (s Point) ring(radius int, movement Movement, yield func(Index) bool) bool 
 
 // Spiral returns the indices of Range ring by ring outward from s, each in the order of Ring.
 // It returns nil for a negative radius.
-func (s Point) Spiral(radius int, movement Movement) []Index {
+func (s Square) Spiral(radius int, movement Movement) []Index {
 	size := RangeLen(radius, movement)
 	if radius < 0 {
 		return nil
@@ -206,7 +206,7 @@ func (s Point) Spiral(radius int, movement Movement) []Index {
 }
 
 // SpiralSeq returns an iterator over the indices of Spiral, in the same order.
-func (s Point) SpiralSeq(radius int, movement Movement) iter.Seq[Index] {
+func (s Square) SpiralSeq(radius int, movement Movement) iter.Seq[Index] {
 	return func(yield func(Index) bool) {
 		s.spiral(radius, movement, yield)
 	}
@@ -214,7 +214,7 @@ func (s Point) SpiralSeq(radius int, movement Movement) iter.Seq[Index] {
 
 // spiral yields the rings from zero to radius steps in turn and reports whether it yielded them
 // all.
-func (s Point) spiral(radius int, movement Movement, yield func(Index) bool) bool {
+func (s Square) spiral(radius int, movement Movement, yield func(Index) bool) bool {
 	for distance := 0; distance <= radius; distance++ {
 		if !s.ring(distance, movement, yield) {
 			return false
@@ -227,14 +227,14 @@ func (s Point) spiral(radius int, movement Movement, yield func(Index) bool) boo
 // DistanceTo returns the number of steps from s to the index under the movement: the Manhattan
 // distance for MovementCardinal, the Chebyshev distance for MovementDiagonal. It panics for a
 // movement outside the constants.
-func (s Point) DistanceTo(index Index, movement Movement) int {
+func (s Square) DistanceTo(index Index, movement Movement) int {
 	return movement.Distance(s.Point(), index)
 }
 
 // DirectionTo returns the direction of the movement nearest to the one from s to the index, and
 // geom.DirectionNone for s itself and for a movement outside the constants. Under
 // MovementCardinal an index on a diagonal answers the horizontal direction.
-func (s Point) DirectionTo(index Index, movement Movement) geom.Direction {
+func (s Square) DirectionTo(index Index, movement Movement) geom.Direction {
 	dx, dy := index.X-s.X, index.Y-s.Y
 
 	switch {
@@ -256,13 +256,13 @@ func (s Point) DirectionTo(index Index, movement Movement) geom.Direction {
 // LineTo returns the indices of the straight line from s to the index, both included, each a
 // neighbor of the one before under the movement. It is the traversal, not the sight rule: a
 // blocker off the line can still block sight. It panics for a movement outside the constants.
-func (s Point) LineTo(index Index, movement Movement) []Index {
+func (s Square) LineTo(index Index, movement Movement) []Index {
 	return slices.AppendSeq(make([]Index, 0, s.DistanceTo(index, movement)+1), s.LineToSeq(index, movement))
 }
 
 // LineToSeq returns an iterator over the indices of LineTo, in the same order. It panics, once
 // ranged, for a movement outside the constants.
-func (s Point) LineToSeq(index Index, movement Movement) iter.Seq[Index] {
+func (s Square) LineToSeq(index Index, movement Movement) iter.Seq[Index] {
 	return func(yield func(Index) bool) {
 		s.line(index, movement, yield)
 	}
@@ -271,7 +271,7 @@ func (s Point) LineToSeq(index Index, movement Movement) iter.Seq[Index] {
 // line yields the indices from s to target and reports whether it yielded them all. Under a
 // cardinal movement each step goes along the axis further behind the line, i and j counting the
 // steps along each; under a diagonal one it is the Bresenham walk.
-func (s Point) line(target Index, movement Movement, yield func(Index) bool) bool {
+func (s Square) line(target Index, movement Movement, yield func(Index) bool) bool {
 	if movement.IsNone() {
 		panic(movement.unknown())
 	}
@@ -324,14 +324,14 @@ func (s Point) line(target Index, movement Movement, yield func(Index) bool) boo
 // HasLineOfSight reports whether s sees target past the indices blocked reports, asking it only
 // about the indices the line passes. Where the line passes the corner between two cells it is
 // stopped only when both block, so a diagonal run of blockers is opaque and a single one is not.
-func (s Point) HasLineOfSight(target Index, blocked func(Index) bool) bool {
+func (s Square) HasLineOfSight(target Index, blocked func(Index) bool) bool {
 	return blocked == nil || s.hasLineOfSight(target, blocked)
 }
 
 // FieldOfView returns the indices of Spiral s sees past the indices blocked reports, in that
 // order, asking it about each index at most once. An index adjacent to s, across a corner too, is
 // always in sight. It returns nil for a negative radius.
-func (s Point) FieldOfView(radius int, movement Movement, blocked func(Index) bool) []Index {
+func (s Square) FieldOfView(radius int, movement Movement, blocked func(Index) bool) []Index {
 	if radius < 0 {
 		return nil
 	}
@@ -340,7 +340,7 @@ func (s Point) FieldOfView(radius int, movement Movement, blocked func(Index) bo
 }
 
 // FieldOfViewSeq returns an iterator over the indices of FieldOfView, in the same order.
-func (s Point) FieldOfViewSeq(radius int, movement Movement, blocked func(Index) bool) iter.Seq[Index] {
+func (s Square) FieldOfViewSeq(radius int, movement Movement, blocked func(Index) bool) iter.Seq[Index] {
 	return func(yield func(Index) bool) {
 		s.fieldOfView(radius, movement, blocked, yield)
 	}
@@ -348,7 +348,7 @@ func (s Point) FieldOfViewSeq(radius int, movement Movement, blocked func(Index)
 
 // fieldOfView yields the indices of Spiral s sees as it walks them, asking about an index the
 // first time a line passes it, and reports whether it yielded them all.
-func (s Point) fieldOfView(radius int, movement Movement, blocked func(Index) bool, yield func(Index) bool) bool {
+func (s Square) fieldOfView(radius int, movement Movement, blocked func(Index) bool, yield func(Index) bool) bool {
 	if blocked == nil {
 		return s.spiral(radius, movement, yield)
 	}
@@ -361,7 +361,7 @@ func (s Point) fieldOfView(radius int, movement Movement, blocked func(Index) bo
 }
 
 // markSeen marks the candidates s sees past the cells the marks block.
-func (s Point) markSeen(candidates []Index, marks *sightMarks) {
+func (s Square) markSeen(candidates []Index, marks *sightMarks) {
 	for _, candidate := range candidates {
 		if s.sees(candidate, marks.blocks) {
 			marks.see(candidate)
@@ -371,13 +371,13 @@ func (s Point) markSeen(candidates []Index, marks *sightMarks) {
 
 // sees reports whether the candidate is in the field of view of s: adjacent to it, corners
 // included, or in line of sight past what blocked reports.
-func (s Point) sees(candidate Index, blocked func(Index) bool) bool {
+func (s Square) sees(candidate Index, blocked func(Index) bool) bool {
 	return s.Point().ChebyshevDistanceTo(candidate) <= 1 || s.hasLineOfSight(candidate, blocked)
 }
 
 // hasLineOfSight is the sight rule every form shares, asking blocked about the cells the line
 // from s to target passes.
-func (s Point) hasLineOfSight(target Index, blocked func(Index) bool) bool {
+func (s Square) hasLineOfSight(target Index, blocked func(Index) bool) bool {
 	// A Bresenham walk is not mirror-symmetric, so it always starts at the lower end; neither end
 	// is asked about, so the swap changes nothing else.
 	from, to := s.Point(), target
@@ -426,7 +426,7 @@ func (s Point) hasLineOfSight(target Index, blocked func(Index) bool) bool {
 	}
 }
 
-// Point returns s as the geom.Point it is.
-func (s Point) Point() geom.Point[int] {
+// Square returns s as the geom.Point it is.
+func (s Square) Point() geom.Point[int] {
 	return geom.Point[int](s)
 }

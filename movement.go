@@ -87,7 +87,7 @@ func (m Movement) Offset(direction geom.Direction) geom.Vector[int] {
 }
 
 // neighborsLen returns the number of neighbors of an index under the movement, the length of
-// Directions, Offsets and Point.Neighbors, and zero for a movement outside the constants.
+// Directions, Offsets and Square.Neighbors, and zero for a movement outside the constants.
 func (m Movement) neighborsLen() int {
 	switch m {
 	case MovementCardinal:

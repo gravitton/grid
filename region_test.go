@@ -37,8 +37,8 @@ func TestRegion_Constructor(t *testing.T) {
 }
 
 func ExampleReg() {
-	reach := Reg(Pt(0, 0).Range(1, MovementDiagonal))
-	blast := Reg(Pt(1, 0).Range(1, MovementDiagonal))
+	reach := Reg(Sq(0, 0).Range(1, MovementDiagonal))
+	blast := Reg(Sq(1, 0).Range(1, MovementDiagonal))
 
 	fmt.Println(reach.Intersection(blast).Elements())
 	fmt.Println(reach.Difference(blast).Len(), reach.Union(blast).Len(), reach.Contains(geom.Pt(1, 0)))

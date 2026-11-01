@@ -16,7 +16,7 @@
 //   - [Region] is the immutable sorted set of indices every area query returns. A search returns
 //     a [Field] or a path: [Grid.Path], [Grid.Field] and [Grid.Reachable] ask for the answer, and
 //     the searches named for their algorithm choose how it is found.
-//   - [Point] is an index of a square grid with its lattice queries, and [Movement] the choice
+//   - [Square] is an index of a square grid with its lattice queries, and [Movement] the choice
 //     between its four and eight neighbors.
 //
 // # Indices
@@ -66,7 +66,7 @@
 // # Allocations
 //
 // A slice or region result is allocated once, at its final size. A slice result of a [Grid] has
-// an Append form that allocates nothing once the caller's slice has room, and one of a [Point]
+// an Append form that allocates nothing once the caller's slice has room, and one of a [Square]
 // a Seq form that allocates nothing and walks no further than where it is stopped, which
 // slices.AppendSeq puts in a buffer. A search allocates its scratch
 // once per call, sized by the grid, and its path has the Append form of [Field.PathTo]. What
@@ -90,7 +90,7 @@
 // A degenerate value gets an answer; an argument with no meaning gets a panic, whose value is
 // an error:
 //
-//   - [Movement.Distance], [Point.DistanceTo], [Point.LineTo] with its Seq form, and
+//   - [Movement.Distance], [Square.DistanceTo], [Square.LineTo] with its Seq form, and
 //     [NewRect] and [NewIsometric], for a movement outside the constants: no index is reached
 //     from another under it. Every other method answers as for no neighbors.
 //   - [Grid.IndexAt], [Grid.CellAt] and [HexLayout.IndexAt] for a point with a NaN or infinite

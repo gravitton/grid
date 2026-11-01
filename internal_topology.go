@@ -69,7 +69,7 @@ func newTopology(kind kind, movement Movement) topology {
 	return newHexTopology(kind.system())
 }
 
-// squareTopology is the neighbor rule of square cells under a movement, the methods of Point
+// squareTopology is the neighbor rule of square cells under a movement, the methods of Square
 // with that movement.
 type squareTopology struct {
 	movement Movement
@@ -95,7 +95,7 @@ func (t *squareTopology) offsets(Index) []geom.Vector[int] {
 }
 
 func (t *squareTopology) distance(from, to Index) int {
-	return Point(from).DistanceTo(to, t.movement)
+	return Square(from).DistanceTo(to, t.movement)
 }
 
 func (t *squareTopology) rangeLen(radius int) int {
@@ -103,7 +103,7 @@ func (t *squareTopology) rangeLen(radius int) int {
 }
 
 func (t *squareTopology) appendWithin(dst []Index, index Index, radius int) []Index {
-	return slices.AppendSeq(dst, Point(index).RangeSeq(radius, t.movement))
+	return slices.AppendSeq(dst, Square(index).RangeSeq(radius, t.movement))
 }
 
 func (t *squareTopology) ringLen(radius int) int {
@@ -111,27 +111,27 @@ func (t *squareTopology) ringLen(radius int) int {
 }
 
 func (t *squareTopology) appendRing(dst []Index, index Index, radius int) []Index {
-	return slices.AppendSeq(dst, Point(index).RingSeq(radius, t.movement))
+	return slices.AppendSeq(dst, Square(index).RingSeq(radius, t.movement))
 }
 
 func (t *squareTopology) appendSpiral(dst []Index, index Index, radius int) []Index {
-	return slices.AppendSeq(dst, Point(index).SpiralSeq(radius, t.movement))
+	return slices.AppendSeq(dst, Square(index).SpiralSeq(radius, t.movement))
 }
 
 func (t *squareTopology) walkSpiral(index Index, radius int, yield func(Index) bool) bool {
-	return Point(index).spiral(radius, t.movement, yield)
+	return Square(index).spiral(radius, t.movement, yield)
 }
 
 func (t *squareTopology) appendLine(dst []Index, from, to Index) []Index {
-	return slices.AppendSeq(dst, Point(from).LineToSeq(to, t.movement))
+	return slices.AppendSeq(dst, Square(from).LineToSeq(to, t.movement))
 }
 
 func (t *squareTopology) sees(from, to Index, blocked func(Index) bool) bool {
-	return blocked == nil || Point(from).sees(to, blocked)
+	return blocked == nil || Square(from).sees(to, blocked)
 }
 
 func (t *squareTopology) sight(center Index, _ int, candidates []Index, marks *sightMarks) {
-	Point(center).markSeen(candidates, marks)
+	Square(center).markSeen(candidates, marks)
 }
 
 // hexTopology is the neighbor rule of hexagonal cells indexed in an offset coordinate system,
