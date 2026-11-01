@@ -1,6 +1,8 @@
 package grid
 
 import (
+	"slices"
+
 	geom "github.com/gravitton/geometry"
 	hex "github.com/gravitton/hexagon"
 )
@@ -8,6 +10,9 @@ import (
 // topology is the neighbor rule of one kind of cell, the primitives every neighbor query of a
 // grid is built on.
 type topology interface {
+	// rule returns the movement of the kind, MovementNone where it has none.
+	rule() Movement
+
 	// offsets returns the steps from the index to its neighbors, in the order of the directions
 	// of the kind. The slice is the topology's own and is never written to.
 	offsets(index geom.Point[int]) []geom.Vector[int]
@@ -36,14 +41,32 @@ type topology interface {
 	// ring outward from it.
 	appendSpiral(dst []geom.Point[int], index geom.Point[int], radius int) []geom.Point[int]
 
+	// walkSpiral yields what appendSpiral appends as it walks and reports whether it yielded it
+	// all.
+	walkSpiral(index geom.Point[int], radius int, yield func(geom.Point[int]) bool) bool
+
 	// appendLine appends the indices of the straight line from one index to another, both
 	// included, inside a grid or not.
 	appendLine(dst []geom.Point[int], from, to geom.Point[int]) []geom.Point[int]
+
+	// sees reports whether from sees to past the indices blocked reports, neither end blocking.
+	// A nil blocked blocks nothing.
+	sees(from, to geom.Point[int], blocked func(geom.Point[int]) bool) bool
 
 	// sight marks as seen the indices within radius of center that are in sight of it past the
 	// indices the marks block, neither end blocking: every one of the candidates that is, and
 	// any others the kind finds on the way.
 	sight(center geom.Point[int], radius int, candidates []geom.Point[int], marks *sightMarks)
+}
+
+// newTopology returns the neighbor rule of the kind, the movement that of a kind of square cells
+// alone.
+func newTopology(kind kind, movement Movement) topology {
+	if kind.sides() == 4 {
+		return newSquareTopology(movement)
+	}
+
+	return newHexTopology(kind.system())
 }
 
 // squareTopology is the neighbor rule of square cells under a movement, the methods of Point
@@ -63,6 +86,10 @@ func newSquareTopology(movement Movement) *squareTopology {
 	}
 }
 
+func (t *squareTopology) rule() Movement {
+	return t.movement
+}
+
 func (t *squareTopology) offsets(geom.Point[int]) []geom.Vector[int] {
 	return t.steps
 }
@@ -76,7 +103,7 @@ func (t *squareTopology) rangeLen(radius int) int {
 }
 
 func (t *squareTopology) appendWithin(dst []geom.Point[int], index geom.Point[int], radius int) []geom.Point[int] {
-	return Point(index).AppendRange(dst, radius, t.movement)
+	return slices.AppendSeq(dst, Point(index).RangeSeq(radius, t.movement))
 }
 
 func (t *squareTopology) ringLen(radius int) int {
@@ -84,24 +111,27 @@ func (t *squareTopology) ringLen(radius int) int {
 }
 
 func (t *squareTopology) appendRing(dst []geom.Point[int], index geom.Point[int], radius int) []geom.Point[int] {
-	return Point(index).AppendRing(dst, radius, t.movement)
+	return slices.AppendSeq(dst, Point(index).RingSeq(radius, t.movement))
 }
 
 func (t *squareTopology) appendSpiral(dst []geom.Point[int], index geom.Point[int], radius int) []geom.Point[int] {
-	return Point(index).AppendSpiral(dst, radius, t.movement)
+	return slices.AppendSeq(dst, Point(index).SpiralSeq(radius, t.movement))
+}
+
+func (t *squareTopology) walkSpiral(index geom.Point[int], radius int, yield func(geom.Point[int]) bool) bool {
+	return Point(index).spiral(radius, t.movement, yield)
 }
 
 func (t *squareTopology) appendLine(dst []geom.Point[int], from, to geom.Point[int]) []geom.Point[int] {
-	return Point(from).AppendLine(dst, to, t.movement)
+	return slices.AppendSeq(dst, Point(from).LineToSeq(to, t.movement))
+}
+
+func (t *squareTopology) sees(from, to geom.Point[int], blocked func(geom.Point[int]) bool) bool {
+	return blocked == nil || Point(from).sees(to, blocked)
 }
 
 func (t *squareTopology) sight(center geom.Point[int], _ int, candidates []geom.Point[int], marks *sightMarks) {
-	blocks := blockers{blocked: marks.blocks}
-	for _, candidate := range candidates {
-		if Point(center).sees(candidate, blocks) {
-			marks.see(candidate)
-		}
-	}
+	Point(center).markSeen(candidates, marks)
 }
 
 // hexTopology is the neighbor rule of hexagonal cells indexed in an offset coordinate system,
@@ -124,6 +154,10 @@ func newHexTopology(system hex.CoordinateSystem) *hexTopology {
 		steps:    [2][6]geom.Vector[int]{system.Offsets(geom.Pt(0, 0)), system.Offsets(geom.Pt(1, 1))},
 		byColumn: system == hex.OffsetOddQ || system == hex.OffsetEvenQ,
 	}
+}
+
+func (t *hexTopology) rule() Movement {
+	return MovementNone
 }
 
 func (t *hexTopology) offsets(index geom.Point[int]) []geom.Vector[int] {
@@ -183,16 +217,36 @@ func (t *hexTopology) appendSpiral(dst []geom.Point[int], index geom.Point[int],
 	return dst
 }
 
+func (t *hexTopology) walkSpiral(index geom.Point[int], radius int, yield func(geom.Point[int]) bool) bool {
+	for candidate := range t.system.From(index).SpiralSeq(radius) {
+		if !yield(t.system.To(candidate)) {
+			return false
+		}
+	}
+
+	return true
+}
+
 func (t *hexTopology) appendLine(dst []geom.Point[int], from, to geom.Point[int]) []geom.Point[int] {
-	for candidate := range t.system.From(from).LineSeq(t.system.From(to)) {
+	for candidate := range t.system.From(from).LineToSeq(t.system.From(to)) {
 		dst = append(dst, t.system.To(candidate))
 	}
 
 	return dst
 }
 
+func (t *hexTopology) sees(from, to geom.Point[int], blocked func(geom.Point[int]) bool) bool {
+	if blocked == nil {
+		return true
+	}
+
+	return t.system.From(from).HasLineOfSight(t.system.From(to), func(candidate hex.Hex) bool {
+		return blocked(t.system.To(candidate))
+	})
+}
+
 func (t *hexTopology) sight(center geom.Point[int], radius int, _ []geom.Point[int], marks *sightMarks) {
-	sight := t.system.From(center).FieldOfViewRangeSeq(radius, func(candidate hex.Hex) bool {
+	sight := t.system.From(center).FieldOfViewSeq(radius, func(candidate hex.Hex) bool {
 		return marks.blocks(t.system.To(candidate))
 	})
 	for visible := range sight {

@@ -1,6 +1,7 @@
 package grid
 
 import (
+	"fmt"
 	"slices"
 	"testing"
 
@@ -223,6 +224,16 @@ func TestCell_Value(t *testing.T) {
 	})
 }
 
+func BenchmarkCell_Value(b *testing.B) {
+	benchmarkGrids(b, func(b *testing.B, g *Grid[int]) {
+		cell := g.Cell(geom.Pt(3, 4))
+
+		for b.Loop() {
+			sinkInt = *cell.Value()
+		}
+	})
+}
+
 func TestCell_Set(t *testing.T) {
 	g := NewRect[int](geom.Sz(5, 5), geom.Sz(32.0, 32.0))
 
@@ -238,6 +249,16 @@ func TestCell_Set(t *testing.T) {
 	})
 }
 
+func BenchmarkCell_Set(b *testing.B) {
+	benchmarkGrids(b, func(b *testing.B, g *Grid[int]) {
+		cell := g.Cell(geom.Pt(3, 4))
+
+		for b.Loop() {
+			cell.Set(7)
+		}
+	})
+}
+
 func TestCell_Neighbors(t *testing.T) {
 	grids, center := ruleGrids(geom.Sz(11, 11)), geom.Pt(5, 5)
 
@@ -248,44 +269,27 @@ func TestCell_Neighbors(t *testing.T) {
 	}
 }
 
-func TestCell_AppendNeighbors(t *testing.T) {
-	grids, center := ruleGrids(geom.Sz(11, 11)), geom.Pt(5, 5)
-
-	for name, g := range grids {
-		assert.Equal(t, g.Cell(center).AppendNeighbors([]geom.Point[int]{geom.Pt(-9, -9)}), g.AppendNeighbors([]geom.Point[int]{geom.Pt(-9, -9)}, center), name+": ")
-	}
-}
-
 func TestCell_Range(t *testing.T) {
 	grids, center := ruleGrids(geom.Sz(11, 11)), geom.Pt(5, 5)
-	open := func(cell Cell[int]) bool {
-		return cell.Index() != geom.Pt(5, 6)
-	}
 
 	for name, g := range grids {
-		assert.True(t, g.Cell(center).Range(3, open).Equal(g.Range(center, 3, open)), name+": ")
+		assert.True(t, g.Cell(center).Range(3).Equal(g.Range(center, 3)), name+": ")
 	}
 }
 
-func TestCell_AppendRange(t *testing.T) {
+func TestCell_Ring(t *testing.T) {
 	grids, center := ruleGrids(geom.Sz(11, 11)), geom.Pt(5, 5)
-	open := func(cell Cell[int]) bool {
-		return cell.Index() != geom.Pt(5, 6)
-	}
 
 	for name, g := range grids {
-		assert.Equal(t, g.Cell(center).AppendRange([]geom.Point[int]{geom.Pt(-9, -9)}, 3, open), g.AppendRange([]geom.Point[int]{geom.Pt(-9, -9)}, center, 3, open), name+": ")
+		assert.Equal(t, g.Cell(center).Ring(2), g.Ring(center, 2), name+": ")
 	}
 }
 
-func TestCell_RangeSeq(t *testing.T) {
+func TestCell_Spiral(t *testing.T) {
 	grids, center := ruleGrids(geom.Sz(11, 11)), geom.Pt(5, 5)
-	open := func(cell Cell[int]) bool {
-		return cell.Index() != geom.Pt(5, 6)
-	}
 
 	for name, g := range grids {
-		assert.Equal(t, slices.Collect(g.Cell(center).RangeSeq(3, open)), slices.Collect(g.RangeSeq(center, 3, open)), name+": ")
+		assert.Equal(t, g.Cell(center).Spiral(2), g.Spiral(center, 2), name+": ")
 	}
 }
 
@@ -297,6 +301,31 @@ func TestCell_DistanceTo(t *testing.T) {
 	}
 }
 
+func TestCell_LineTo(t *testing.T) {
+	grids, center := ruleGrids(geom.Sz(11, 11)), geom.Pt(5, 5)
+
+	for name, g := range grids {
+		assert.Equal(t, g.Cell(center).LineTo(geom.Pt(1, 9)), g.Line(center, geom.Pt(1, 9)), name+": ")
+	}
+}
+
+func TestCell_HasLineOfSight(t *testing.T) {
+	grids, center := ruleGrids(geom.Sz(11, 11)), geom.Pt(5, 5)
+
+	for name, g := range grids {
+		assert.Equal(t, g.Cell(center).HasLineOfSight(geom.Pt(5, 7), wallAt(geom.Pt(5, 6))), g.HasLineOfSight(center, geom.Pt(5, 7), wallAt(geom.Pt(5, 6))), name+": ")
+	}
+}
+
+func TestCell_FieldOfView(t *testing.T) {
+	grids, center := ruleGrids(geom.Sz(11, 11)), geom.Pt(5, 5)
+	wall := wallAt(geom.Pt(5, 6))
+
+	for name, g := range grids {
+		assert.True(t, g.Cell(center).FieldOfView(3, wall).Equal(g.FieldOfView(center, 3, wall)), name+": ")
+	}
+}
+
 func TestCell_PathTo(t *testing.T) {
 	grids, center := ruleGrids(geom.Sz(11, 11)), geom.Pt(5, 5)
 	open := func(cell Cell[int]) bool {
@@ -305,6 +334,22 @@ func TestCell_PathTo(t *testing.T) {
 
 	for name, g := range grids {
 		assert.Equal(t, g.Cell(center).PathTo(geom.Pt(5, 9), open, nil), g.Path(center, geom.Pt(5, 9), open, nil), name+": ")
+	}
+}
+
+func TestCell_Field(t *testing.T) {
+	grids, center := ruleGrids(geom.Sz(11, 11)), geom.Pt(5, 5)
+
+	for name, g := range grids {
+		assert.True(t, g.Cell(center).Field(nil, stepCost).Region().Equal(g.Field(center, nil, stepCost).Region()), name+": ")
+	}
+}
+
+func TestCell_Reachable(t *testing.T) {
+	grids, center := ruleGrids(geom.Sz(11, 11)), geom.Pt(5, 5)
+
+	for name, g := range grids {
+		assert.True(t, g.Cell(center).Reachable(3, nil, nil).Region().Equal(g.Reachable(center, 3, nil, nil).Region()), name+": ")
 	}
 }
 
@@ -350,4 +395,21 @@ func BenchmarkCell_String(b *testing.B) {
 	for b.Loop() {
 		sinkString = cell.String()
 	}
+}
+
+func ExampleCell() {
+	g := NewRect[int](geom.Sz(3, 3), RectCellScale(32))
+	cell := g.Cell(geom.Pt(1, 1))
+
+	cell.Set(7)
+
+	fmt.Println(cell, *cell.Value(), cell.Center(), cell.IsValid())
+	fmt.Println(cell.Neighbors(), cell.DistanceTo(geom.Pt(2, 2)))
+	fmt.Println(cell.PathTo(geom.Pt(2, 1), nil, nil), cell.Reachable(1, nil, nil).Len())
+	fmt.Println(g.Cell(geom.Pt(9, 9)).IsValid(), g.Cell(geom.Pt(9, 9)).Value() == nil)
+	// Output:
+	// Cell(1,1) 7 (48.00,48.00) true
+	// [(2,1) (1,2) (0,1) (1,0)] 2
+	// [(1,1) (2,1)] 5
+	// false true
 }

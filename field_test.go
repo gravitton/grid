@@ -204,6 +204,27 @@ func TestField_IsEmpty(t *testing.T) {
 	})
 }
 
+func TestField_All(t *testing.T) {
+	field := NewRect[int](geom.Sz(3, 3), geom.SzU(32.0)).BreadthFirstSearchField(geom.Pt(1, 1), nil)
+
+	t.Run("yields what Region holds, in its order", func(t *testing.T) {
+		assert.Equal(t, slices.Collect(field.All()), field.Region().Elements())
+	})
+	t.Run("the empty field yields nothing", func(t *testing.T) {
+		assert.Length(t, slices.Collect(Field{}.All()), 0)
+	})
+	t.Run("stops at the break", func(t *testing.T) {
+		count := 0
+		for range field.All() {
+			count++
+
+			break
+		}
+
+		assert.Equal(t, count, 1)
+	})
+}
+
 func TestField_Region(t *testing.T) {
 	field := sealedGrid().BreadthFirstSearchField(testStart, walkable)
 

@@ -122,13 +122,24 @@ func TestPoint_Neighbors(t *testing.T) {
 	})
 	t.Run("has none outside the constants", func(t *testing.T) {
 		assert.Nil(t, testPoint.Neighbors(MovementNone))
-		assert.Length(t, testPoint.AppendNeighbors(nil, Movement(99)), 0)
+		assert.Length(t, slices.Collect(testPoint.NeighborsSeq(Movement(99))), 0)
 	})
 }
 
-func TestPoint_AppendNeighbors(t *testing.T) {
+func TestPoint_NeighborsSeq(t *testing.T) {
 	for _, movement := range Movements() {
-		assert.Equal(t, testPoint.AppendNeighbors([]geom.Point[int]{testPoint.Point()}, movement), append([]geom.Point[int]{testPoint.Point()}, testPoint.Neighbors(movement)...), movement.String()+": ")
+		t.Run(movement.String(), func(t *testing.T) {
+			t.Run("yields what Neighbors returns", func(t *testing.T) {
+				assert.Equal(t, slices.Collect(testPoint.NeighborsSeq(movement)), testPoint.Neighbors(movement))
+			})
+			t.Run("allocates nothing into a buffer with room", func(t *testing.T) {
+				buffer := make([]geom.Point[int], 0, 8)
+
+				assert.Equal(t, testing.AllocsPerRun(10, func() {
+					sinkPoints = slices.AppendSeq(buffer[:0], testPoint.NeighborsSeq(movement))
+				}), 0.0)
+			})
+		})
 	}
 }
 
@@ -186,26 +197,6 @@ func BenchmarkPoint_Range(b *testing.B) {
 			for b.Loop() {
 				sinkPoints = testPoint.Range(8, movement)
 			}
-		})
-	}
-}
-
-func TestPoint_AppendRange(t *testing.T) {
-	buffer := make([]geom.Point[int], 0, 64)
-
-	for _, movement := range Movements() {
-		t.Run(movement.String(), func(t *testing.T) {
-			t.Run("appends what Range returns", func(t *testing.T) {
-				assert.Equal(t, testPoint.AppendRange([]geom.Point[int]{testPoint.Point()}, 2, movement), append([]geom.Point[int]{testPoint.Point()}, testPoint.Range(2, movement)...))
-			})
-			t.Run("a negative radius appends nothing", func(t *testing.T) {
-				assert.Length(t, testPoint.AppendRange(buffer[:0], -1, movement), 0)
-			})
-			t.Run("allocates nothing with room", func(t *testing.T) {
-				assert.Equal(t, testing.AllocsPerRun(10, func() {
-					sinkPoints = testPoint.AppendRange(buffer[:0], 3, movement)
-				}), 0.0)
-			})
 		})
 	}
 }
@@ -285,12 +276,6 @@ func TestPoint_Ring(t *testing.T) {
 	})
 }
 
-func TestPoint_AppendRing(t *testing.T) {
-	for _, movement := range Movements() {
-		assert.Equal(t, testPoint.AppendRing([]geom.Point[int]{testPoint.Point()}, 3, movement), append([]geom.Point[int]{testPoint.Point()}, testPoint.Ring(3, movement)...), movement.String()+": ")
-	}
-}
-
 func TestPoint_RingSeq(t *testing.T) {
 	for _, movement := range Movements() {
 		t.Run(movement.String(), func(t *testing.T) {
@@ -367,12 +352,6 @@ func BenchmarkPoint_Spiral(b *testing.B) {
 	}
 }
 
-func TestPoint_AppendSpiral(t *testing.T) {
-	for _, movement := range Movements() {
-		assert.Equal(t, testPoint.AppendSpiral([]geom.Point[int]{testPoint.Point()}, 3, movement), append([]geom.Point[int]{testPoint.Point()}, testPoint.Spiral(3, movement)...), movement.String()+": ")
-	}
-}
-
 func TestPoint_SpiralSeq(t *testing.T) {
 	for _, movement := range Movements() {
 		t.Run(movement.String(), func(t *testing.T) {
@@ -436,23 +415,23 @@ func TestPoint_DirectionTo(t *testing.T) {
 	})
 }
 
-func TestPoint_Line(t *testing.T) {
+func TestPoint_LineTo(t *testing.T) {
 	t.Run("to the point itself is the point alone", func(t *testing.T) {
 		for _, movement := range Movements() {
-			assert.Equal(t, testPoint.Line(testPoint.Point(), movement), []geom.Point[int]{testPoint.Point()}, movement.String()+": ")
+			assert.Equal(t, testPoint.LineTo(testPoint.Point(), movement), []geom.Point[int]{testPoint.Point()}, movement.String()+": ")
 		}
 	})
 	t.Run("diagonal steps across corners", func(t *testing.T) {
-		assert.Equal(t, Pt(0, 0).Line(geom.Pt(3, 3), MovementDiagonal), []geom.Point[int]{geom.Pt(0, 0), geom.Pt(1, 1), geom.Pt(2, 2), geom.Pt(3, 3)})
+		assert.Equal(t, Pt(0, 0).LineTo(geom.Pt(3, 3), MovementDiagonal), []geom.Point[int]{geom.Pt(0, 0), geom.Pt(1, 1), geom.Pt(2, 2), geom.Pt(3, 3)})
 	})
 	t.Run("cardinal steps along one axis at a time", func(t *testing.T) {
-		assert.Equal(t, Pt(0, 0).Line(geom.Pt(2, 1), MovementCardinal), []geom.Point[int]{geom.Pt(0, 0), geom.Pt(1, 0), geom.Pt(1, 1), geom.Pt(2, 1)})
+		assert.Equal(t, Pt(0, 0).LineTo(geom.Pt(2, 1), MovementCardinal), []geom.Point[int]{geom.Pt(0, 0), geom.Pt(1, 0), geom.Pt(1, 1), geom.Pt(2, 1)})
 	})
 	for _, movement := range Movements() {
 		t.Run(movement.String(), func(t *testing.T) {
 			t.Run("runs from the point to the target by neighbors", func(t *testing.T) {
 				for _, target := range testPoint.Range(5, MovementDiagonal) {
-					line := testPoint.Line(target, movement)
+					line := testPoint.LineTo(target, movement)
 
 					assert.Equal(t, line[0], testPoint.Point(), target.String()+": ")
 					assert.Equal(t, line[len(line)-1], target, target.String()+": ")
@@ -463,51 +442,45 @@ func TestPoint_Line(t *testing.T) {
 				}
 			})
 			t.Run("allocates once at its length", func(t *testing.T) {
-				line := testPoint.Line(geom.Pt(-4, 7), movement)
+				line := testPoint.LineTo(geom.Pt(-4, 7), movement)
 
 				assert.Equal(t, cap(line), len(line))
 				assert.Equal(t, testing.AllocsPerRun(10, func() {
-					sinkPoints = testPoint.Line(geom.Pt(-4, 7), movement)
+					sinkPoints = testPoint.LineTo(geom.Pt(-4, 7), movement)
 				}), 1.0)
 			})
 		})
 	}
 	t.Run("panics for a movement outside the constants, which draws no line", func(t *testing.T) {
 		assert.PanicsWith(t, func() {
-			testPoint.Line(geom.Pt(0, 0), MovementNone)
+			testPoint.LineTo(geom.Pt(0, 0), MovementNone)
 		}, "grid: unknown movement -1")
 		assert.PanicsWith(t, func() {
-			testPoint.AppendLine(nil, geom.Pt(0, 0), Movement(99))
+			sinkPoints = slices.Collect(testPoint.LineToSeq(geom.Pt(0, 0), Movement(99)))
 		}, "grid: unknown movement 99")
 	})
 }
 
-func BenchmarkPoint_Line(b *testing.B) {
+func BenchmarkPoint_LineTo(b *testing.B) {
 	for _, movement := range Movements() {
 		b.Run(movement.String(), func(b *testing.B) {
 			for b.Loop() {
-				sinkPoints = testPoint.Line(geom.Pt(40, 17), movement)
+				sinkPoints = testPoint.LineTo(geom.Pt(40, 17), movement)
 			}
 		})
 	}
 }
 
-func TestPoint_AppendLine(t *testing.T) {
-	for _, movement := range Movements() {
-		assert.Equal(t, testPoint.AppendLine([]geom.Point[int]{testPoint.Point()}, geom.Pt(-4, 7), movement), append([]geom.Point[int]{testPoint.Point()}, testPoint.Line(geom.Pt(-4, 7), movement)...), movement.String()+": ")
-	}
-}
-
-func TestPoint_LineSeq(t *testing.T) {
+func TestPoint_LineToSeq(t *testing.T) {
 	for _, movement := range Movements() {
 		t.Run(movement.String(), func(t *testing.T) {
 			t.Run("yields what Line returns", func(t *testing.T) {
-				assert.Equal(t, slices.Collect(testPoint.LineSeq(geom.Pt(-4, 7), movement)), testPoint.Line(geom.Pt(-4, 7), movement))
+				assert.Equal(t, slices.Collect(testPoint.LineToSeq(geom.Pt(-4, 7), movement)), testPoint.LineTo(geom.Pt(-4, 7), movement))
 			})
 			t.Run("stops at the break, at the first index and after it", func(t *testing.T) {
 				for stop := 1; stop <= 2; stop++ {
 					count := 0
-					for range testPoint.LineSeq(geom.Pt(-4, 7), movement) {
+					for range testPoint.LineToSeq(geom.Pt(-4, 7), movement) {
 						count++
 						if count == stop {
 							break
@@ -519,7 +492,7 @@ func TestPoint_LineSeq(t *testing.T) {
 			})
 			t.Run("allocates nothing", func(t *testing.T) {
 				assert.Equal(t, testing.AllocsPerRun(10, func() {
-					for index := range testPoint.LineSeq(geom.Pt(-4, 7), movement) {
+					for index := range testPoint.LineToSeq(geom.Pt(-4, 7), movement) {
 						sinkPoint = index
 					}
 				}), 0.0)
@@ -528,39 +501,52 @@ func TestPoint_LineSeq(t *testing.T) {
 	}
 }
 
+func blockedBy(indices []geom.Point[int]) func(geom.Point[int]) bool {
+	return func(index geom.Point[int]) bool {
+		return slices.Contains(indices, index)
+	}
+}
+
 func TestPoint_HasLineOfSight(t *testing.T) {
 	origin := Pt(0, 0)
 
 	t.Run("clear", func(t *testing.T) {
 		assert.True(t, origin.HasLineOfSight(geom.Pt(3, 0), nil))
-		assert.True(t, origin.HasLineOfSight(geom.Pt(3, 0), []geom.Point[int]{}))
+		assert.True(t, origin.HasLineOfSight(geom.Pt(3, 0), blockedBy([]geom.Point[int]{})))
 		assert.True(t, origin.HasLineOfSight(origin.Point(), nil))
 	})
+	t.Run("allocates nothing", func(t *testing.T) {
+		blocked := blockedBy([]geom.Point[int]{geom.Pt(1, 1)})
+
+		assert.Equal(t, testing.AllocsPerRun(10, func() {
+			sinkBool = origin.HasLineOfSight(geom.Pt(6, 4), blocked)
+		}), 0.0)
+	})
 	t.Run("blocked mid", func(t *testing.T) {
-		assert.False(t, origin.HasLineOfSight(geom.Pt(3, 0), []geom.Point[int]{geom.Pt(1, 0)}))
-		assert.False(t, origin.HasLineOfSight(geom.Pt(3, 0), []geom.Point[int]{geom.Pt(2, 0)}))
+		assert.False(t, origin.HasLineOfSight(geom.Pt(3, 0), blockedBy([]geom.Point[int]{geom.Pt(1, 0)})))
+		assert.False(t, origin.HasLineOfSight(geom.Pt(3, 0), blockedBy([]geom.Point[int]{geom.Pt(2, 0)})))
 	})
 	t.Run("blocker beyond target", func(t *testing.T) {
-		assert.True(t, origin.HasLineOfSight(geom.Pt(2, 0), []geom.Point[int]{geom.Pt(3, 0)}))
+		assert.True(t, origin.HasLineOfSight(geom.Pt(2, 0), blockedBy([]geom.Point[int]{geom.Pt(3, 0)})))
 	})
 	t.Run("target in blocking list", func(t *testing.T) {
 		// can see into, not through
-		assert.True(t, origin.HasLineOfSight(geom.Pt(3, 0), []geom.Point[int]{geom.Pt(3, 0)}))
+		assert.True(t, origin.HasLineOfSight(geom.Pt(3, 0), blockedBy([]geom.Point[int]{geom.Pt(3, 0)})))
 	})
 	t.Run("diagonal", func(t *testing.T) {
 		assert.True(t, origin.HasLineOfSight(geom.Pt(3, 3), nil))
-		assert.False(t, origin.HasLineOfSight(geom.Pt(3, 3), []geom.Point[int]{geom.Pt(1, 1)}))
+		assert.False(t, origin.HasLineOfSight(geom.Pt(3, 3), blockedBy([]geom.Point[int]{geom.Pt(1, 1)})))
 	})
 	t.Run("corner between two blockers is opaque", func(t *testing.T) {
 		corner := []geom.Point[int]{geom.Pt(1, 0), geom.Pt(0, 1)}
 
-		assert.False(t, origin.HasLineOfSight(geom.Pt(1, 1), corner))
-		assert.False(t, origin.HasLineOfSight(geom.Pt(2, 2), corner))
+		assert.False(t, origin.HasLineOfSight(geom.Pt(1, 1), blockedBy(corner)))
+		assert.False(t, origin.HasLineOfSight(geom.Pt(2, 2), blockedBy(corner)))
 	})
 	t.Run("corner beside a single blocker stays open", func(t *testing.T) {
-		assert.True(t, origin.HasLineOfSight(geom.Pt(1, 1), []geom.Point[int]{geom.Pt(1, 0)}))
-		assert.True(t, origin.HasLineOfSight(geom.Pt(1, 1), []geom.Point[int]{geom.Pt(0, 1)}))
-		assert.True(t, origin.HasLineOfSight(geom.Pt(2, 2), []geom.Point[int]{geom.Pt(2, 1)}))
+		assert.True(t, origin.HasLineOfSight(geom.Pt(1, 1), blockedBy([]geom.Point[int]{geom.Pt(1, 0)})))
+		assert.True(t, origin.HasLineOfSight(geom.Pt(1, 1), blockedBy([]geom.Point[int]{geom.Pt(0, 1)})))
+		assert.True(t, origin.HasLineOfSight(geom.Pt(2, 2), blockedBy([]geom.Point[int]{geom.Pt(2, 1)})))
 	})
 	t.Run("reciprocal", func(t *testing.T) {
 		// a Bresenham walk traces a different chain of cells when reversed, so these
@@ -568,8 +554,8 @@ func TestPoint_HasLineOfSight(t *testing.T) {
 		blocking := []geom.Point[int]{geom.Pt(1, 1)}
 		for _, target := range []geom.Point[int]{geom.Pt(1, 2), geom.Pt(2, 1), geom.Pt(2, 4), geom.Pt(4, 2)} {
 			t.Run(target.String(), func(t *testing.T) {
-				forward := origin.HasLineOfSight(target, blocking)
-				backward := Pt(target.XY()).HasLineOfSight(origin.Point(), blocking)
+				forward := origin.HasLineOfSight(target, blockedBy(blocking))
+				backward := Pt(target.XY()).HasLineOfSight(origin.Point(), blockedBy(blocking))
 
 				assert.Equal(t, forward, backward)
 			})
@@ -581,7 +567,7 @@ func TestPoint_HasLineOfSight(t *testing.T) {
 			for y := -4; y <= 4; y++ {
 				a, b := Pt(0, 0), geom.Pt(x, y)
 
-				assert.Equal(t, a.HasLineOfSight(b, blocking), Pt(x, y).HasLineOfSight(a.Point(), blocking))
+				assert.Equal(t, a.HasLineOfSight(b, blockedBy(blocking)), Pt(x, y).HasLineOfSight(a.Point(), blockedBy(blocking)))
 			}
 		}
 	})
@@ -593,7 +579,7 @@ func TestPoint_HasLineOfSight(t *testing.T) {
 
 		for x := 3; x <= 6; x++ {
 			for y := 3; y <= 6; y++ {
-				assert.False(t, origin.HasLineOfSight(geom.Pt(x, y), wall))
+				assert.False(t, origin.HasLineOfSight(geom.Pt(x, y), blockedBy(wall)))
 			}
 		}
 	})
@@ -603,7 +589,7 @@ func BenchmarkPoint_HasLineOfSight(b *testing.B) {
 	blocking := []geom.Point[int]{geom.Pt(10, 5), geom.Pt(20, 12), geom.Pt(-4, 3)}
 
 	for b.Loop() {
-		sinkBool = Pt(0, 0).HasLineOfSight(geom.Pt(30, 17), blocking)
+		sinkBool = Pt(0, 0).HasLineOfSight(geom.Pt(30, 17), blockedBy(blocking))
 	}
 }
 
@@ -617,170 +603,101 @@ func FuzzPoint_HasLineOfSight(f *testing.F) {
 		blocked := func(index geom.Point[int]) bool {
 			return (index.X*7+index.Y*13+int(seed))%5 == 0
 		}
-		var blocking []geom.Point[int]
-		for _, index := range Pt(0, 0).Range(12, MovementDiagonal) {
-			if blocked(index) {
-				blocking = append(blocking, index)
-			}
-		}
+		seen := from.HasLineOfSight(to, blocked)
 
-		seen := from.HasLineOfSight(to, blocking)
-
-		assert.Equal(t, Point(to).HasLineOfSight(from.Point(), blocking), seen)
-		assert.Equal(t, from.HasLineOfSightFunc(to, blocked), seen)
+		assert.Equal(t, Point(to).HasLineOfSight(from.Point(), blocked), seen)
 		assert.True(t, from.HasLineOfSight(to, nil))
-		if from.Point().ChebyshevDistanceTo(to) <= 1 {
-			assert.Equal(t, from.FieldOfView([]geom.Point[int]{to}, blocking), []geom.Point[int]{to})
-		}
-	})
-}
-
-func TestPoint_HasLineOfSightFunc(t *testing.T) {
-	blocking := []geom.Point[int]{geom.Pt(1, 1), geom.Pt(-2, 1), geom.Pt(0, -2), geom.Pt(3, 0), geom.Pt(2, -1)}
-	blocked := func(index geom.Point[int]) bool {
-		return slices.Contains(blocking, index)
-	}
-
-	t.Run("a nil blocked blocks nothing", func(t *testing.T) {
-		assert.True(t, Pt(0, 0).HasLineOfSightFunc(geom.Pt(5, 5), nil))
-	})
-	t.Run("agrees with the slice form", func(t *testing.T) {
-		for _, target := range Pt(0, 0).Range(6, MovementDiagonal) {
-			assert.Equal(t, Pt(0, 0).HasLineOfSightFunc(target, blocked), Pt(0, 0).HasLineOfSight(target, blocking), target.String()+": ")
-		}
-	})
-	t.Run("reads the same from either end", func(t *testing.T) {
-		for _, target := range Pt(0, 0).Range(6, MovementDiagonal) {
-			assert.Equal(t, Pt(0, 0).HasLineOfSightFunc(target, blocked), Point(target).HasLineOfSightFunc(geom.Pt(0, 0), blocked), target.String()+": ")
-		}
-	})
-	t.Run("allocates nothing", func(t *testing.T) {
-		assert.Equal(t, testing.AllocsPerRun(10, func() {
-			sinkBool = Pt(0, 0).HasLineOfSightFunc(geom.Pt(6, 4), blocked)
-		}), 0.0)
-	})
-}
-
-// testFieldOfView runs the sections the forms of the field of view share, each form given as
-// the slice it produces from the candidates and the blocking indices.
-func testFieldOfView(t *testing.T, field func(p Point, candidates, blocking []geom.Point[int]) []geom.Point[int]) {
-	center := Pt(0, 0)
-	candidates := center.Range(4, MovementDiagonal)
-	blocking := []geom.Point[int]{geom.Pt(1, 0), geom.Pt(1, 1), geom.Pt(-2, 1), geom.Pt(0, -2)}
-
-	t.Run("is the candidates with line of sight, in the order given", func(t *testing.T) {
-		var expected []geom.Point[int]
-		for _, candidate := range candidates {
-			if center.Point().ChebyshevDistanceTo(candidate) <= 1 || center.HasLineOfSight(candidate, blocking) {
-				expected = append(expected, candidate)
-			}
-		}
-
-		assert.Equal(t, field(center, candidates, blocking), expected)
-	})
-	t.Run("nothing blocking sees every candidate", func(t *testing.T) {
-		assert.Equal(t, field(center, candidates, nil), candidates)
-	})
-	t.Run("no candidates see nothing", func(t *testing.T) {
-		assert.Length(t, field(center, nil, blocking), 0)
 	})
 }
 
 func TestPoint_FieldOfView(t *testing.T) {
-	center := Pt(0, 0)
-	candidates := center.Range(3, MovementDiagonal)
+	center := Pt(5, 5)
+	blocked := func(index geom.Point[int]) bool {
+		return index == geom.Pt(5, 6)
+	}
 
-	t.Run("no blocking", func(t *testing.T) {
-		assert.Equal(t, len(center.FieldOfView(candidates, nil)), len(candidates))
-		assert.Equal(t, len(center.FieldOfView(candidates, []geom.Point[int]{})), len(candidates))
-	})
-	t.Run("no candidates is nil", func(t *testing.T) {
-		assert.Nil(t, center.FieldOfView(nil, nil))
-		assert.Nil(t, center.FieldOfView([]geom.Point[int]{}, nil))
-	})
-	t.Run("adjacent always visible", func(t *testing.T) {
-		allNeighbors := []geom.Point[int]{
-			geom.Pt(1, 0), geom.Pt(0, -1), geom.Pt(-1, 0), geom.Pt(0, 1),
-			geom.Pt(1, -1), geom.Pt(-1, -1), geom.Pt(-1, 1), geom.Pt(1, 1),
-		}
-		visible := center.FieldOfView(allNeighbors, allNeighbors)
-		assert.Equal(t, len(visible), len(allNeighbors))
-	})
-	t.Run("gap in blocking ring", func(t *testing.T) {
-		// only (1,0) is unblocked, so (2,0) and (3,0) should be visible; (0,2) is not
-		blocking := []geom.Point[int]{
-			geom.Pt(0, -1), geom.Pt(-1, -1), geom.Pt(-1, 0), geom.Pt(-1, 1),
-			geom.Pt(0, 1), geom.Pt(1, -1), geom.Pt(1, 1),
-		}
-		visible := center.FieldOfView([]geom.Point[int]{geom.Pt(2, 0), geom.Pt(3, 0), geom.Pt(0, 2)}, blocking)
-		assert.Equal(t, len(visible), 2)
-		assert.Equal(t, visible[0], geom.Pt(2, 0))
-		assert.Equal(t, visible[1], geom.Pt(3, 0))
-	})
-}
+	for _, movement := range Movements() {
+		t.Run(movement.String(), func(t *testing.T) {
+			t.Run("a nil blocked is Spiral", func(t *testing.T) {
+				assert.Equal(t, center.FieldOfView(3, movement, nil), center.Spiral(3, movement))
+			})
+			t.Run("a wall is in sight and hides what is behind it, in the order of Spiral", func(t *testing.T) {
+				seen := center.FieldOfView(3, movement, blocked)
 
-func BenchmarkPoint_FieldOfView(b *testing.B) {
-	candidates := Pt(0, 0).Range(8, MovementDiagonal)
-	blocking := []geom.Point[int]{geom.Pt(1, 1), geom.Pt(-2, 1), geom.Pt(0, -2), geom.Pt(3, 0)}
+				assert.True(t, slices.Contains(seen, geom.Pt(5, 6)))
+				assert.False(t, slices.Contains(seen, geom.Pt(5, 7)))
+				assert.Equal(t, seen[0], center.Point())
+			})
+			t.Run("agrees with HasLineOfSight, an adjacent index always in sight", func(t *testing.T) {
+				every := func(index geom.Point[int]) bool {
+					return (index.X*7+index.Y*13)%5 == 2
+				}
 
-	for b.Loop() {
-		sinkPoints = Pt(0, 0).FieldOfView(candidates, blocking)
+				var expected []geom.Point[int]
+				for _, index := range center.Spiral(4, movement) {
+					if center.Point().ChebyshevDistanceTo(index) <= 1 || center.HasLineOfSight(index, every) {
+						expected = append(expected, index)
+					}
+				}
+
+				assert.Equal(t, center.FieldOfView(4, movement, every), expected)
+			})
+			t.Run("asks about every index at most once and never about s", func(t *testing.T) {
+				asked := map[geom.Point[int]]int{}
+				center.FieldOfView(4, movement, func(index geom.Point[int]) bool {
+					asked[index]++
+
+					return (index.X*7+index.Y*13)%5 == 2
+				})
+
+				assert.Equal(t, asked[center.Point()], 0)
+
+				for index, times := range asked {
+					assert.Equal(t, times, 1, index.String()+": ")
+				}
+			})
+			t.Run("a negative radius is nil", func(t *testing.T) {
+				assert.Nil(t, center.FieldOfView(-1, movement, blocked))
+			})
+			t.Run("allocates once more for what it asked where something can block", func(t *testing.T) {
+				assert.Equal(t, testing.AllocsPerRun(10, func() {
+					sinkPoints = center.FieldOfView(3, movement, blocked)
+				}), 2.0)
+			})
+			t.Run("allocates once, at its length, where nothing blocks", func(t *testing.T) {
+				assert.Equal(t, cap(center.FieldOfView(3, movement, nil)), RangeLen(3, movement))
+				assert.Equal(t, testing.AllocsPerRun(10, func() {
+					sinkPoints = center.FieldOfView(3, movement, nil)
+				}), 1.0)
+			})
+		})
 	}
 }
 
-func TestPoint_AppendFieldOfView(t *testing.T) {
-	testFieldOfView(t, func(p Point, candidates, blocking []geom.Point[int]) []geom.Point[int] {
-		return p.AppendFieldOfView([]geom.Point[int]{p.Point()}, candidates, blocking)[1:]
-	})
-}
-
 func TestPoint_FieldOfViewSeq(t *testing.T) {
-	testFieldOfView(t, func(p Point, candidates, blocking []geom.Point[int]) []geom.Point[int] {
-		return slices.Collect(p.FieldOfViewSeq(candidates, blocking))
-	})
-	t.Run("stops at the break", func(t *testing.T) {
-		count := 0
-		for range Pt(0, 0).FieldOfViewSeq(Pt(0, 0).Range(2, MovementDiagonal), []geom.Point[int]{geom.Pt(5, 5)}) {
-			count++
+	blocked := func(index geom.Point[int]) bool {
+		return (index.X*7+index.Y*13)%5 == 2
+	}
 
-			break
-		}
+	for _, movement := range Movements() {
+		t.Run(movement.String(), func(t *testing.T) {
+			t.Run("yields what FieldOfView returns", func(t *testing.T) {
+				assert.Equal(t, slices.Collect(Pt(5, 5).FieldOfViewSeq(4, movement, blocked)), Pt(5, 5).FieldOfView(4, movement, blocked))
+			})
+			t.Run("asks about nothing past where it is stopped", func(t *testing.T) {
+				asked := 0
+				for range Pt(5, 5).FieldOfViewSeq(40, movement, func(geom.Point[int]) bool {
+					asked++
 
-		assert.Equal(t, count, 1)
-	})
-}
+					return false
+				}) {
+					break
+				}
 
-func TestPoint_FieldOfViewFunc(t *testing.T) {
-	testFieldOfView(t, func(p Point, candidates, blocking []geom.Point[int]) []geom.Point[int] {
-		return p.FieldOfViewFunc(candidates, func(index geom.Point[int]) bool {
-			return slices.Contains(blocking, index)
+				assert.Equal(t, asked, 0)
+			})
 		})
-	})
-	t.Run("a nil blocked sees every candidate", func(t *testing.T) {
-		candidates := Pt(0, 0).Range(3, MovementDiagonal)
-
-		assert.Equal(t, Pt(0, 0).FieldOfViewFunc(candidates, nil), candidates)
-	})
-	t.Run("no candidates is nil", func(t *testing.T) {
-		assert.Nil(t, Pt(0, 0).FieldOfViewFunc(nil, nil))
-		assert.Nil(t, Pt(0, 0).FieldOfViewFunc([]geom.Point[int]{}, nil))
-	})
-}
-
-func TestPoint_AppendFieldOfViewFunc(t *testing.T) {
-	testFieldOfView(t, func(p Point, candidates, blocking []geom.Point[int]) []geom.Point[int] {
-		return p.AppendFieldOfViewFunc([]geom.Point[int]{p.Point()}, candidates, func(index geom.Point[int]) bool {
-			return slices.Contains(blocking, index)
-		})[1:]
-	})
-}
-
-func TestPoint_FieldOfViewFuncSeq(t *testing.T) {
-	testFieldOfView(t, func(p Point, candidates, blocking []geom.Point[int]) []geom.Point[int] {
-		return slices.Collect(p.FieldOfViewFuncSeq(candidates, func(index geom.Point[int]) bool {
-			return slices.Contains(blocking, index)
-		}))
-	})
+	}
 }
 
 func TestPoint_Point(t *testing.T) {
@@ -788,13 +705,13 @@ func TestPoint_Point(t *testing.T) {
 }
 
 func ExamplePoint() {
-	p := Pt(5, 5)
+	s := Pt(5, 5)
 
-	fmt.Println(p.Neighbor(geom.DirectionUp), p.DistanceTo(geom.Pt(8, 1), MovementCardinal))
-	fmt.Println(p.Ring(1, MovementCardinal))
-	fmt.Println(p.Line(geom.Pt(8, 6), MovementDiagonal))
-	fmt.Println(p.HasLineOfSight(geom.Pt(8, 5), []geom.Point[int]{geom.Pt(6, 5)}))
-	fmt.Println(p.Turn(1), p.ReflectX())
+	fmt.Println(s.Neighbor(geom.DirectionUp), s.DistanceTo(geom.Pt(8, 1), MovementCardinal))
+	fmt.Println(s.Ring(1, MovementCardinal))
+	fmt.Println(s.LineTo(geom.Pt(8, 6), MovementDiagonal))
+	fmt.Println(s.HasLineOfSight(geom.Pt(8, 5), blockedBy([]geom.Point[int]{geom.Pt(6, 5)})))
+	fmt.Println(s.Turn(1), s.ReflectX())
 	// Output:
 	// (5,4) 7
 	// [(6,5) (5,6) (4,5) (5,4)]

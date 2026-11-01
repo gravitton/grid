@@ -1,6 +1,7 @@
 package grid
 
 import (
+	"fmt"
 	"iter"
 	"math"
 	"slices"
@@ -45,7 +46,7 @@ type Grid[T any] struct {
 // It panics for a movement outside the constants, for a cell scale that is not positive and
 // finite on both axes, and for an origin with a NaN or infinite coordinate.
 func NewRect[T any](size geom.Size[int], cellScale geom.Size[float64], opts ...func(*RectOptions)) *Grid[T] {
-	return newRect[T](size, cellScale, kindRect, opts)
+	return newSquare[T](size, cellScale, kindRect, opts)
 }
 
 // NewIsometric returns a grid of square cells drawn as diamonds, of the given size in cells,
@@ -54,11 +55,11 @@ func NewRect[T any](size geom.Size[int], cellScale geom.Size[float64], opts ...f
 // outside the constants, for a cell scale that is not positive and finite on both axes, and for
 // an origin with a NaN or infinite coordinate.
 func NewIsometric[T any](size geom.Size[int], cellScale geom.Size[float64], opts ...func(*RectOptions)) *Grid[T] {
-	return newRect[T](size, cellScale, kindIsometric, opts)
+	return newSquare[T](size, cellScale, kindIsometric, opts)
 }
 
-// newRect returns a grid of square cells of the kind, with the options the callbacks set.
-func newRect[T any](size geom.Size[int], cellScale geom.Size[float64], kind kind, opts []func(*RectOptions)) *Grid[T] {
+// newSquare returns a grid of square cells of the kind, with the options the callbacks set.
+func newSquare[T any](size geom.Size[int], cellScale geom.Size[float64], kind kind, opts []func(*RectOptions)) *Grid[T] {
 	var options RectOptions
 	for _, opt := range opts {
 		opt(&options)
@@ -68,11 +69,7 @@ func newRect[T any](size geom.Size[int], cellScale geom.Size[float64], kind kind
 		panic(options.Movement.unknown())
 	}
 
-	return newGrid[T](
-		size,
-		newLayout(kind, size, cellScale, options.Origin),
-		newSquareTopology(options.Movement),
-	)
+	return newGrid[T](size, newLayout(kind, size, cellScale, options.Origin), newTopology(kind, options.Movement))
 }
 
 // NewHexFlatTop returns a grid of flat-top hexagons of the given size in cells, each of the
@@ -110,11 +107,7 @@ func newHex[T any](size geom.Size[int], cellScale geom.Size[float64], odd, even 
 		kind = even
 	}
 
-	return newGrid[T](
-		size,
-		newLayout(kind, size, cellScale, options.Origin),
-		newHexTopology(kind.system()),
-	)
+	return newGrid[T](size, newLayout(kind, size, cellScale, options.Origin), newTopology(kind, MovementNone))
 }
 
 // newGrid returns a grid of the given size in cells, placed by the layout, with the neighbor
@@ -257,43 +250,41 @@ func (g *Grid[T]) All() iter.Seq[Cell[T]] {
 	}
 }
 
-// DrawOrder returns an iterator over the cells in view of bounds, back to front, so a cell is
-// never drawn over one in front of it: row by row on a rectangular or pointy-top grid, by the
-// sum of column and row on an isometric one, and on a flat-top one row by row with the columns
-// drawn higher of each row first. A zero bounds is the bounds of the grid. Cells beyond the edge of
-// bounds are included where one may be partly in view, and so are cells outside the grid,
-// whose IsValid reports false.
+// DrawOrder returns an iterator over the cells of the grid in view of bounds, back to front, so
+// a cell is never drawn over one in front of it: row by row on a rectangular or pointy-top grid,
+// by the sum of column and row on an isometric one, and on a flat-top one row by row with the
+// columns drawn higher of each row first. A zero bounds is the bounds of the grid. Cells just
+// beyond the edge of bounds are included where one may be partly in view. It panics, once
+// ranged, for bounds with a NaN or infinite coordinate.
 func (g *Grid[T]) DrawOrder(bounds geom.Box[float64]) iter.Seq[Cell[T]] {
 	if bounds.IsZero() {
 		bounds = g.Bounds()
 	}
 
 	return func(yield func(Cell[T]) bool) {
+		if !bounds.Min.IsFinite() || !bounds.Max.IsFinite() {
+			panic(fmt.Errorf("grid: bounds %s is not finite", bounds))
+		}
+
 		switch g.layout.kind {
 		case kindIsometric:
 			g.drawIsometric(bounds, yield)
-		case kindHexFlatTop, kindHexFlatTopEven:
-			g.drawHex(bounds, yield, true)
-		case kindHexPointyTop, kindHexPointyTopEven:
-			g.drawHex(bounds, yield, false)
+		case kindHexFlatTop, kindHexFlatTopEven, kindHexPointyTop, kindHexPointyTopEven:
+			g.drawHex(bounds, yield)
 		default:
 			g.drawRect(bounds, yield)
 		}
 	}
 }
 
-// drawRect yields the cells of a rectangular grid row by row from the one at the corner of
-// bounds.
+// drawRect yields the cells of a rectangular grid row by row, from the cell at one corner of
+// bounds to the cell at the other.
 func (g *Grid[T]) drawRect(bounds geom.Box[float64], yield func(Cell[T]) bool) {
-	index := g.IndexAt(bounds.Min)
+	first, last := g.drawSpan(bounds, 0)
 
-	columns, rows := bounds.Size().Vector().DivideXY(g.CellSpacing().XY()).Round().Int().XY()
-
-	for row := 0; row <= rows; row++ {
-		for column := 0; column <= columns; column++ {
-			cell := g.Cell(index.AddXY(column, row))
-
-			if !yield(cell) {
+	for row := first.Y; row <= last.Y; row++ {
+		for column := first.X; column <= last.X; column++ {
+			if !yield(g.Cell(geom.Pt(column, row))) {
 				return
 			}
 		}
@@ -308,8 +299,8 @@ func (g *Grid[T]) drawIsometric(bounds geom.Box[float64], yield func(Cell[T]) bo
 	spacing := g.CellSpacing()
 	halfHeight := float64(g.CellSize().Height * 0.5)
 
-	first := int(math.Floor((bounds.Min.Y-origin.Y)/spacing.Height)) - 1
-	last := int(math.Ceil((bounds.Max.Y-origin.Y)/spacing.Height)) + 1
+	first := max(int(math.Floor((bounds.Min.Y-origin.Y)/spacing.Height))-1, 0)
+	last := min(int(math.Ceil((bounds.Max.Y-origin.Y)/spacing.Height))+1, g.Width()+g.Height()-2)
 
 	for depth := first; depth <= last; depth++ {
 		y := float64(float64(depth)*spacing.Height) + origin.Y
@@ -321,7 +312,7 @@ func (g *Grid[T]) drawIsometric(bounds geom.Box[float64], yield func(Cell[T]) bo
 		left := int(math.Floor((bounds.Min.X-origin.X)/(2*spacing.Width)+float64(float64(depth)*0.5))) - 1
 		right := int(math.Ceil((bounds.Max.X-origin.X)/(2*spacing.Width)+float64(float64(depth)*0.5))) + 1
 
-		for column := left; column <= right; column++ {
+		for column := max(left, 0, depth-g.Height()+1); column <= min(right, depth, g.Width()-1); column++ {
 			cell := g.Cell(geom.Pt(column, depth-column))
 			if !cell.Bounds().IntersectsBox(bounds) {
 				continue
@@ -333,28 +324,36 @@ func (g *Grid[T]) drawIsometric(bounds geom.Box[float64], yield func(Cell[T]) bo
 	}
 }
 
-// drawHex yields the cells of a hexagonal grid in view of bounds, one cell beyond it
-// on each side where it is in view. Where the columns are staggered, two cells of one screen
-// row differ in parity, so staggered walks each row in two passes, one parity each; a
-// pointy-top grid staggers its rows across only, and one pass is in order.
-func (g *Grid[T]) drawHex(bounds geom.Box[float64], yield func(Cell[T]) bool, staggered bool) {
-	index := g.IndexAt(bounds.Min)
+// drawHex yields the cells of a hexagonal grid in view of bounds row by row, one cell beyond
+// the corners of bounds, since a cell in view can start in the row or column beside the one a
+// corner is in. Where the columns are staggered, two cells of one screen row differ in parity,
+// so a row is walked in a pass per parity, the one its kind draws higher first.
+func (g *Grid[T]) drawHex(bounds geom.Box[float64], yield func(Cell[T]) bool) {
+	first, last := g.drawSpan(bounds, 1)
+	step, parity := g.layout.kind.drawColumns()
 
-	columns, rows := bounds.Size().Vector().DivideXY(g.CellSpacing().XY()).Round().Int().XY()
-
-	for row := range hexAxisOrder(rows, false, false) {
-		for column := range hexAxisOrder(columns, staggered, index.X%2 != 0) {
-			cell := g.Cell(index.AddXY(column, row))
-
-			if (row < 0 || column < 0 || row > rows || column > columns) && !cell.Bounds().IntersectsBox(bounds) {
-				continue
-			}
-
-			if !yield(cell) {
-				return
+	for row := first.Y; row <= last.Y; row++ {
+		for pass := range step {
+			for column := first.X + (first.X+parity+pass)%step; column <= last.X; column += step {
+				cell := g.Cell(geom.Pt(column, row))
+				if !cell.Bounds().IntersectsBox(bounds) {
+					continue
+				}
+				if !yield(cell) {
+					return
+				}
 			}
 		}
 	}
+}
+
+// drawSpan returns the indices of the cells at the corners of bounds, widened by margin and cut
+// to the grid.
+func (g *Grid[T]) drawSpan(bounds geom.Box[float64], margin int) (first, last geom.Point[int]) {
+	first, last = g.IndexAt(bounds.Min), g.IndexAt(bounds.Max)
+
+	return geom.Pt(max(first.X-margin, 0), max(first.Y-margin, 0)),
+		geom.Pt(min(last.X+margin, g.Width()-1), min(last.Y+margin, g.Height()-1))
 }
 
 // MoveTo places the top-left corner of the bounds of the grid at origin, every cell keeping its
@@ -401,92 +400,30 @@ func (g *Grid[T]) appendNeighbors(dst []geom.Point[int], index geom.Point[int]) 
 	return dst
 }
 
-// Range returns the cells within radius of the index that are passable and in sight of it,
-// asking passable about each cell at most once. It is empty for a negative radius and for an
-// index that is not passable itself: nothing is seen from where nothing can stand.
-func (g *Grid[T]) Range(index geom.Point[int], radius int, passable func(Cell[T]) bool) Region {
-	if radius < 0 || !g.passes(index, passable) {
+// Range returns the cells within radius of the index. It is empty for a negative radius.
+func (g *Grid[T]) Range(index geom.Point[int], radius int) Region {
+	if radius < 0 || !g.Contains(index) {
 		return Region{}
 	}
 
 	radius = g.clampRadius(index, radius)
 
-	return container.SetFrom(g.appendRange(make([]geom.Point[int], 0, g.topology.rangeLen(radius)), index, radius, passable))
+	return container.SetFrom(g.appendRange(make([]geom.Point[int], 0, g.topology.rangeLen(radius)), index, radius))
 }
 
 // AppendRange appends the indices of Range to dst, in no order to rely on, and returns the
 // extended slice.
-func (g *Grid[T]) AppendRange(dst []geom.Point[int], index geom.Point[int], radius int, passable func(Cell[T]) bool) []geom.Point[int] {
-	if radius < 0 || !g.passes(index, passable) {
+func (g *Grid[T]) AppendRange(dst []geom.Point[int], index geom.Point[int], radius int) []geom.Point[int] {
+	if radius < 0 || !g.Contains(index) {
 		return dst
 	}
 
-	return g.appendRange(dst, index, g.clampRadius(index, radius), passable)
+	return g.appendRange(dst, index, g.clampRadius(index, radius))
 }
 
-// RangeSeq returns an iterator over the indices of AppendRange.
-func (g *Grid[T]) RangeSeq(index geom.Point[int], radius int, passable func(Cell[T]) bool) iter.Seq[geom.Point[int]] {
-	return func(yield func(geom.Point[int]) bool) {
-		g.walkRange(index, radius, passable, yield)
-	}
-}
-
-// appendRange appends the indices in range of an index the caller knows to pass. Only where a
-// cell was refused can anything be hidden, so only then does the topology look for sight.
-func (g *Grid[T]) appendRange(dst []geom.Point[int], index geom.Point[int], radius int, passable func(Cell[T]) bool) []geom.Point[int] {
-	start := len(dst)
-	dst = g.topology.appendWithin(dst, index, radius)
-
-	passed := dst[:start]
-	marks := sightMarks{size: g.Size(), corner: geom.Pt(index.X-radius-1, index.Y-radius-1), side: 2*radius + 3}
-	for _, candidate := range dst[start:] {
-		switch {
-		case !g.Contains(candidate):
-		case candidate == index || passable == nil || passable(g.Cell(candidate)):
-			passed = append(passed, candidate)
-		default:
-			marks.refuse(candidate)
-		}
-	}
-
-	if marks.isEmpty() {
-		return passed
-	}
-
-	return g.appendSeen(passed[:start], index, radius, passed[start:], marks)
-}
-
-// appendSeen appends the candidates in sight of center past the cells refused and the edge of
-// the grid. The candidates may lie in dst past its length: each is read before its place in
-// dst is written.
-func (g *Grid[T]) appendSeen(dst []geom.Point[int], center geom.Point[int], radius int, candidates []geom.Point[int], marks sightMarks) []geom.Point[int] {
-	g.topology.sight(center, radius, candidates, &marks)
-
-	for _, candidate := range candidates {
-		if marks.seen(candidate) {
-			dst = append(dst, candidate)
-		}
-	}
-
-	return dst
-}
-
-// walkRange yields the indices of Range and reports whether it yielded them all. It checks the
-// index itself, so RangeSeq only builds its closure and stays small enough to inline.
-func (g *Grid[T]) walkRange(index geom.Point[int], radius int, passable func(Cell[T]) bool, yield func(geom.Point[int]) bool) bool {
-	if radius < 0 || !g.passes(index, passable) {
-		return true
-	}
-
-	radius = g.clampRadius(index, radius)
-
-	for _, found := range g.appendRange(make([]geom.Point[int], 0, g.topology.rangeLen(radius)), index, radius, passable) {
-		if !yield(found) {
-			return false
-		}
-	}
-
-	return true
+// appendRange appends the indices in range of an index the caller knows to be inside the grid.
+func (g *Grid[T]) appendRange(dst []geom.Point[int], index geom.Point[int], radius int) []geom.Point[int] {
+	return g.keepInside(g.topology.appendWithin(dst, index, radius), len(dst))
 }
 
 // clampRadius returns the radius cut to the distance from the index to the farthest cell of
@@ -505,11 +442,6 @@ func (g *Grid[T]) clampRadius(index geom.Point[int], radius int) int {
 		g.topology.distance(index, geom.Pt(0, bottom)),
 		g.topology.distance(index, geom.Pt(right, bottom)),
 	))
-}
-
-// passes reports whether the index is inside the grid and its cell passable.
-func (g *Grid[T]) passes(index geom.Point[int], passable func(Cell[T]) bool) bool {
-	return g.Contains(index) && (passable == nil || passable(g.Cell(index)))
 }
 
 // Ring returns the indices at exactly radius steps from the index that lie in the grid, by
@@ -532,27 +464,9 @@ func (g *Grid[T]) AppendRing(dst []geom.Point[int], index geom.Point[int], radiu
 	return g.appendRing(dst, index, radius)
 }
 
-// RingSeq returns an iterator over the indices of Ring, in the same order.
-func (g *Grid[T]) RingSeq(index geom.Point[int], radius int) iter.Seq[geom.Point[int]] {
-	return func(yield func(geom.Point[int]) bool) {
-		g.walkRing(index, radius, yield)
-	}
-}
-
 // appendRing appends the ring of an index the caller knows to have one.
 func (g *Grid[T]) appendRing(dst []geom.Point[int], index geom.Point[int], radius int) []geom.Point[int] {
 	return g.keepInside(g.topology.appendRing(dst, index, radius), len(dst))
-}
-
-// walkRing yields the indices of Ring and reports whether it yielded them all.
-func (g *Grid[T]) walkRing(index geom.Point[int], radius int, yield func(geom.Point[int]) bool) bool {
-	for _, found := range g.Ring(index, radius) {
-		if !yield(found) {
-			return false
-		}
-	}
-
-	return true
 }
 
 // hasRing reports whether the index is inside the grid and a cell of it can be at radius steps
@@ -582,7 +496,8 @@ func (g *Grid[T]) AppendSpiral(dst []geom.Point[int], index geom.Point[int], rad
 	return g.appendSpiral(dst, index, g.clampRadius(index, radius))
 }
 
-// SpiralSeq returns an iterator over the indices of Spiral, in the same order.
+// SpiralSeq returns an iterator over the indices of Spiral, in the same order, walking no further
+// than where it is stopped.
 func (g *Grid[T]) SpiralSeq(index geom.Point[int], radius int) iter.Seq[geom.Point[int]] {
 	return func(yield func(geom.Point[int]) bool) {
 		g.walkSpiral(index, radius, yield)
@@ -594,15 +509,16 @@ func (g *Grid[T]) appendSpiral(dst []geom.Point[int], index geom.Point[int], rad
 	return g.keepInside(g.topology.appendSpiral(dst, index, radius), len(dst))
 }
 
-// walkSpiral yields the indices of Spiral and reports whether it yielded them all.
+// walkSpiral yields the indices of Spiral as it walks them and reports whether it yielded them
+// all. It checks the index itself, so SpiralSeq only builds its closure.
 func (g *Grid[T]) walkSpiral(index geom.Point[int], radius int, yield func(geom.Point[int]) bool) bool {
-	for _, found := range g.Spiral(index, radius) {
-		if !yield(found) {
-			return false
-		}
+	if radius < 0 || !g.Contains(index) {
+		return true
 	}
 
-	return true
+	return g.topology.walkSpiral(index, g.clampRadius(index, radius), func(found geom.Point[int]) bool {
+		return !g.Contains(found) || yield(found)
+	})
 }
 
 // keepInside returns dst with the indices from start on that lie outside the grid taken out,
@@ -782,50 +698,139 @@ func (g *Grid[T]) AppendLine(dst []geom.Point[int], from, to geom.Point[int]) []
 	return g.topology.appendLine(dst, from, to)
 }
 
-// LineSeq returns an iterator over the indices of Line, in the same order.
-func (g *Grid[T]) LineSeq(from, to geom.Point[int]) iter.Seq[geom.Point[int]] {
-	return func(yield func(geom.Point[int]) bool) {
-		g.walkLine(from, to, yield)
+// HasLineOfSight reports whether from sees to past the cells blocked reports, asking it only
+// about the indices the line passes that lie in the grid.
+func (g *Grid[T]) HasLineOfSight(from, to geom.Point[int], blocked func(Cell[T]) bool) bool {
+	return g.Contains(from) && g.Contains(to) && g.topology.sees(from, to, g.blockedIndex(blocked))
+}
+
+// FieldOfView returns the cells of Range the index sees past the cells blocked reports,
+// asking it about each cell at most once. A blocked cell in sight is in the result, and the cell
+// of the index is never asked about.
+func (g *Grid[T]) FieldOfView(index geom.Point[int], radius int, blocked func(Cell[T]) bool) Region {
+	if radius < 0 || !g.Contains(index) {
+		return Region{}
+	}
+
+	radius = g.clampRadius(index, radius)
+
+	return container.SetFrom(g.appendFieldOfView(make([]geom.Point[int], 0, g.topology.rangeLen(radius)), index, radius, blocked))
+}
+
+// AppendFieldOfView appends the indices of Fi, eldOfViewRange to dst, in no order to rely on,
+// and returns the extended slice.
+func (g *Grid[T]) AppendFieldOfView(dst []geom.Point[int], index geom.Point[int], radius int, blocked func(Cell[T]) bool) []geom.Point[int] {
+	if radius < 0 || !g.Contains(index) {
+		return dst
+	}
+
+	return g.appendFieldOfView(dst, index, g.clampRadius(index, radius), blocked)
+}
+
+// appendFieldOfView appends the indices in sight of an index the caller knows to be inside
+// the grid. Only where a cell was refused can anything be hidden, so only then does the topology
+// look for sight.
+func (g *Grid[T]) appendFieldOfView(dst []geom.Point[int], index geom.Point[int], radius int, blocked func(Cell[T]) bool) []geom.Point[int] {
+	start := len(dst)
+	dst = g.appendRange(dst, index, radius)
+
+	marks := askSight(index, radius, dst[start:], g.blockedIndex(blocked))
+	if marks.isEmpty() {
+		return dst
+	}
+
+	return g.keepInSight(dst, start, index, radius, marks)
+}
+
+// keepInSight returns dst with the indices from start on that center does not see taken out. It
+// takes the marks by value, so only a range refused a cell puts them on the heap.
+func (g *Grid[T]) keepInSight(dst []geom.Point[int], start int, center geom.Point[int], radius int, marks sightMarks) []geom.Point[int] {
+	g.topology.sight(center, radius, dst[start:], &marks)
+
+	return marks.keepSeen(dst, start)
+}
+
+// blockedIndex returns blocked over indices, nil where it is nil. What lies outside the grid
+// blocks nothing, since nothing stands there.
+func (g *Grid[T]) blockedIndex(blocked func(Cell[T]) bool) func(geom.Point[int]) bool {
+	if blocked == nil {
+		return nil
+	}
+
+	return func(index geom.Point[int]) bool {
+		return g.Contains(index) && blocked(g.Cell(index))
 	}
 }
 
-// walkLine yields the indices of Line and reports whether it yielded them all.
-func (g *Grid[T]) walkLine(from, to geom.Point[int], yield func(geom.Point[int]) bool) bool {
-	for _, found := range g.Line(from, to) {
-		if !yield(found) {
-			return false
-		}
-	}
-
-	return true
-}
-
-// BreadthFirstSearchField returns the field of every cell reached from start, with the fewest
-// steps to each, whatever a step costs.
-func (g *Grid[T]) BreadthFirstSearchField(start geom.Point[int], passable func(Cell[T]) bool) Field {
-	return g.breadthFirstSearch(start, nil, -1, passable)
+// Path returns the path of AStar from start to goal, both included, or nil where none is found.
+func (g *Grid[T]) Path(start, goal geom.Point[int], passable func(Cell[T]) bool, cost func(current, next Cell[T]) float64) []geom.Point[int] {
+	return g.astar(start, goal, passable, cost).PathTo(goal)
 }
 
 // BreadthFirstSearch returns the path of the fewest steps from start to goal, both included,
 // or nil where none is found.
 func (g *Grid[T]) BreadthFirstSearch(start, goal geom.Point[int], passable func(Cell[T]) bool) []geom.Point[int] {
-	return g.breadthFirstSearch(start, &goal, -1, passable).PathTo(goal)
+	return g.breadthFirstSearch(start, &goal, math.Inf(1), passable).PathTo(goal)
 }
 
-// Reachable returns the cells reached from start in at most the given number of steps through
-// passable cells, start included. It is empty for a negative number of steps and for a start
-// that is not passable.
-func (g *Grid[T]) Reachable(start geom.Point[int], steps int, passable func(Cell[T]) bool) Region {
-	if steps < 0 {
-		return Region{}
+// UniformCostSearch returns the cheapest path from start to goal, both included, or nil where
+// none is found. Uniform cost search is also known as Dijkstra's algorithm.
+func (g *Grid[T]) UniformCostSearch(start, goal geom.Point[int], passable func(Cell[T]) bool, cost func(current, next Cell[T]) float64) []geom.Point[int] {
+	return g.uniformCostSearch(start, &goal, math.Inf(1), passable, cost).PathTo(goal)
+}
+
+// GreedyBestFirstSearch returns a path from start to goal, both included, or nil where none is
+// found, heading for the cell nearest to the goal at every step. The path is not always the
+// shortest.
+func (g *Grid[T]) GreedyBestFirstSearch(start, goal geom.Point[int], passable func(Cell[T]) bool) []geom.Point[int] {
+	return g.greedyBestFirstSearch(start, goal, passable).PathTo(goal)
+}
+
+// AStar returns the cheapest path from start to goal, both included, or nil where none is
+// found. A cost below one per step can make the path dearer than the cheapest.
+func (g *Grid[T]) AStar(start, goal geom.Point[int], passable func(Cell[T]) bool, cost func(current, next Cell[T]) float64) []geom.Point[int] {
+	return g.astar(start, goal, passable, cost).PathTo(goal)
+}
+
+// Field returns the field of every cell reached from start, with the cheapest way to each.
+func (g *Grid[T]) Field(start geom.Point[int], passable func(Cell[T]) bool, cost func(current, next Cell[T]) float64) Field {
+	if cost == nil {
+		return g.breadthFirstSearch(start, nil, math.Inf(1), passable)
 	}
 
-	return g.breadthFirstSearch(start, nil, steps, passable).Region()
+	return g.uniformCostSearch(start, nil, math.Inf(1), passable, cost)
+}
+
+// BreadthFirstSearchField returns the field of every cell reached from start, with the fewest
+// steps to each, whatever a step costs.
+func (g *Grid[T]) BreadthFirstSearchField(start geom.Point[int], passable func(Cell[T]) bool) Field {
+	return g.breadthFirstSearch(start, nil, math.Inf(1), passable)
+}
+
+// UniformCostSearchField returns the field of every cell reached from start, with the cheapest
+// way to each. Uniform cost search is also known as Dijkstra's algorithm.
+func (g *Grid[T]) UniformCostSearchField(start geom.Point[int], passable func(Cell[T]) bool, cost func(current, next Cell[T]) float64) Field {
+	return g.uniformCostSearch(start, nil, math.Inf(1), passable, cost)
+}
+
+// Reachable returns the field of the cells reached from start for at most budget, the search
+// walking no further, with the cheapest way to each. A nil cost makes the budget a number of
+// steps. It is empty for a negative budget or a NaN.
+func (g *Grid[T]) Reachable(start geom.Point[int], budget float64, passable func(Cell[T]) bool, cost func(current, next Cell[T]) float64) Field {
+	if budget < 0 || math.IsNaN(budget) {
+		return Field{}
+	}
+
+	if cost == nil {
+		return g.breadthFirstSearch(start, nil, budget, passable)
+	}
+
+	return g.uniformCostSearch(start, nil, budget, passable, cost)
 }
 
 // breadthFirstSearch walks outward from start a step at a time, to the goal where one is given
-// and no further than limit steps where it is not negative.
-func (g *Grid[T]) breadthFirstSearch(start geom.Point[int], goal *geom.Point[int], limit int, passable func(Cell[T]) bool) Field {
+// and no more steps than the budget.
+func (g *Grid[T]) breadthFirstSearch(start geom.Point[int], goal *geom.Point[int], budget float64, passable func(Cell[T]) bool) Field {
 	passable = passableOrAny(passable)
 
 	if !g.checkPath(start, goal, passable) {
@@ -838,7 +843,7 @@ func (g *Grid[T]) breadthFirstSearch(start geom.Point[int], goal *geom.Point[int
 	queue := make([]int32, 1, len(field.from))
 	queue[0] = field.slot(start)
 
-	for head, steps := 0, 0; head < len(queue) && steps != limit; steps++ {
+	for head, steps := 0, 1; head < len(queue) && float64(steps) <= budget; steps++ {
 		for ring := len(queue); head < ring; head++ {
 			current := field.index(queue[head])
 			if goal != nil && current == *goal {
@@ -861,20 +866,9 @@ func (g *Grid[T]) breadthFirstSearch(start geom.Point[int], goal *geom.Point[int
 	return field
 }
 
-// UniformCostSearchField returns the field of every cell reached from start, with the cheapest
-// way to each. Uniform cost search is also known as Dijkstra's algorithm.
-func (g *Grid[T]) UniformCostSearchField(start geom.Point[int], passable func(Cell[T]) bool, cost func(current, next Cell[T]) float64) Field {
-	return g.uniformCostSearch(start, nil, passable, cost)
-}
-
-// UniformCostSearch returns the cheapest path from start to goal, both included, or nil where
-// none is found. Uniform cost search is also known as Dijkstra's algorithm.
-func (g *Grid[T]) UniformCostSearch(start, goal geom.Point[int], passable func(Cell[T]) bool, cost func(current, next Cell[T]) float64) []geom.Point[int] {
-	return g.uniformCostSearch(start, &goal, passable, cost).PathTo(goal)
-}
-
-// uniformCostSearch expands the cheapest cell reached so far, to the goal where one is given.
-func (g *Grid[T]) uniformCostSearch(start geom.Point[int], goal *geom.Point[int], passable func(Cell[T]) bool, cost func(current, next Cell[T]) float64) Field {
+// uniformCostSearch expands the cheapest cell reached so far, to the goal where one is given and
+// no further than the budget.
+func (g *Grid[T]) uniformCostSearch(start geom.Point[int], goal *geom.Point[int], budget float64, passable func(Cell[T]) bool, cost func(current, next Cell[T]) float64) Field {
 	passable = passableOrAny(passable)
 	cost = costOrUnit(cost)
 
@@ -900,21 +894,14 @@ func (g *Grid[T]) uniformCostSearch(start geom.Point[int], goal *geom.Point[int]
 				continue
 			}
 
-			reached := field.costs[slot] + cost(g.Cell(current), g.Cell(next))
-			if field.improve(next, slot, reached) {
+			reached := field.costs[slot] + checkedCost(cost, g.Cell(current), g.Cell(next))
+			if reached <= budget && field.improve(next, slot, reached) {
 				open.push(field.slot(next), reached)
 			}
 		}
 	}
 
 	return field
-}
-
-// GreedyBestFirstSearch returns a path from start to goal, both included, or nil where none is
-// found, heading for the cell nearest to the goal at every step. The path is not always the
-// shortest.
-func (g *Grid[T]) GreedyBestFirstSearch(start, goal geom.Point[int], passable func(Cell[T]) bool) []geom.Point[int] {
-	return g.greedyBestFirstSearch(start, goal, passable).PathTo(goal)
 }
 
 // greedyBestFirstSearch expands the cell reached so far that is nearest to the goal.
@@ -952,14 +939,8 @@ func (g *Grid[T]) greedyBestFirstSearch(start, goal geom.Point[int], passable fu
 	return field
 }
 
-// AStar returns the cheapest path from start to goal, both included, or nil where none is
-// found. A cost below one per step can make the path dearer than the cheapest.
-func (g *Grid[T]) AStar(start, goal geom.Point[int], passable func(Cell[T]) bool, cost func(current, next Cell[T]) float64) []geom.Point[int] {
-	return g.aStar(start, goal, passable, cost).PathTo(goal)
-}
-
-// aStar expands the cell whose cost so far and distance to the goal sum to the least.
-func (g *Grid[T]) aStar(start, goal geom.Point[int], passable func(Cell[T]) bool, cost func(current, next Cell[T]) float64) Field {
+// astar expands the cell whose cost so far and distance to the goal sum to the least.
+func (g *Grid[T]) astar(start, goal geom.Point[int], passable func(Cell[T]) bool, cost func(current, next Cell[T]) float64) Field {
 	passable = passableOrAny(passable)
 	cost = costOrUnit(cost)
 
@@ -985,7 +966,7 @@ func (g *Grid[T]) aStar(start, goal geom.Point[int], passable func(Cell[T]) bool
 				continue
 			}
 
-			reached := field.costs[slot] + cost(g.Cell(current), g.Cell(next))
+			reached := field.costs[slot] + checkedCost(cost, g.Cell(current), g.Cell(next))
 			if field.improve(next, slot, reached) {
 				open.push(field.slot(next), reached+g.heuristic(next, goal))
 			}
@@ -993,12 +974,6 @@ func (g *Grid[T]) aStar(start, goal geom.Point[int], passable func(Cell[T]) bool
 	}
 
 	return field
-}
-
-// Path returns the path of AStar from one index to the other, both included, or nil where none
-// is found.
-func (g *Grid[T]) Path(from, to geom.Point[int], passable func(Cell[T]) bool, cost func(current, next Cell[T]) float64) []geom.Point[int] {
-	return g.AStar(from, to, passable, cost)
 }
 
 // heuristic returns the least a path from current to goal can cost at one per step.
@@ -1019,37 +994,4 @@ func (g *Grid[T]) checkPath(start geom.Point[int], goal *geom.Point[int], passab
 // Contains reports whether the index is that of a cell of the grid.
 func (g *Grid[T]) Contains(index geom.Point[int]) bool {
 	return g.cells.Contains(index)
-}
-
-// hexAxisOrder returns the offsets along one axis from -1 to count+1, in one pass, or
-// where double is set in two, the offsets that land on an even index first.
-func hexAxisOrder(count int, double, odd bool) iter.Seq[int] {
-	if !double {
-		return func(yield func(int) bool) {
-			for index := -1; index < count+2; index++ {
-				if !yield(index) {
-					return
-				}
-			}
-		}
-	}
-
-	i, j := 0, -1
-	if odd {
-		i, j = -1, 0
-	}
-
-	return func(yield func(int) bool) {
-		for index := i; index < count+2; index += 2 {
-			if !yield(index) {
-				return
-			}
-		}
-
-		for index := j; index < count+2; index += 2 {
-			if !yield(index) {
-				return
-			}
-		}
-	}
 }

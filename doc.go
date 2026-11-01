@@ -8,18 +8,20 @@
 // # Types
 //
 //   - [Grid] is built by [NewRect], [NewIsometric], [NewHexFlatTop] or [NewHexPointyTop] and is
-//     the same type on every layout. A [Cell] is a handle on one index of a grid, passed by
-//     value.
+//     the same type on every layout, and written to and read back from JSON. A [Cell] is a
+//     handle on one index of a grid, passed by value, and [Grid.Layer] a grid of another type
+//     over the same cells.
 //   - [HexLayout] places hexagonal cells on an unbounded plane with no grid around them, for a
 //     map whose data lives elsewhere.
 //   - [Region] is the immutable sorted set of indices every area query returns. A search returns
-//     a [Field] or a path.
+//     a [Field] or a path: [Grid.Path], [Grid.Field] and [Grid.Reachable] ask for the answer, and
+//     the searches named for their algorithm choose how it is found.
 //   - [Point] is an index of a square grid with its lattice queries, and [Movement] the choice
 //     between its four and eight neighbors.
 //
 // # Indices
 //
-// An index is a geom.Point[int] of column and row on every layout, the offset coordinate on a
+// An [Index] is a geom.Point[int] of column and row on every layout, the offset coordinate on a
 // hexagonal grid, and on a [HexLayout] the coordinate in the system it is built with. A hex.Hex
 // never appears in the API. Directions, neighbors and rings are ordered by increasing angle:
 // clockwise as drawn, with Y pointing down in the world, and negative turns go the other way.
@@ -36,19 +38,23 @@
 //
 // Outside the grid answers, it does not panic: [Grid.Contains] is false, a [Cell] has a nil
 // value and stores nothing, Neighbors, Range, Ring and Spiral from it are empty, and a search
-// from or to it finds nothing. [Grid.Distance] and [Grid.Line] alone measure between any two
-// indices.
+// from or to it finds nothing, and it sees nothing. [Grid.Distance] and [Grid.Line] alone measure
+// between any two indices.
 //
 // A nil callback means no constraint: a nil passable admits every cell, a nil cost charges one
 // per step, and a nil blocked blocks nothing.
 //
-// Range, distance and neighbors agree: [Grid.Range] holds only cells within radius by
+// Range, distance and neighbors agree: [Grid.Range] is exactly the cells within radius by
 // [Grid.Distance], and a neighbor is a cell at distance one.
 //
-// Sight is reciprocal: two cells see each other or neither does, and neither end blocks. A cell
-// that is not passable is never in a range or a search field, and hides what lies behind it.
+// Sight is reciprocal: two cells see each other or neither does, and neither end blocks. What
+// blocks sight is apart from what can be walked on: a cell blocked hides what lies behind it and
+// is itself in sight, and what lies outside the grid blocks nothing. A cell that is not passable
+// is never in a search field.
 //
 // A path holds both its ends and steps between neighbors; a search that finds none returns nil.
+// A cost is what a step adds to a path: +Inf is a step never taken, and a negative one or a NaN
+// has no meaning and panics.
 //
 // A [Region] never changes: every operation returns a region, and one that would equal a side
 // is that side.
@@ -59,10 +65,10 @@
 //
 // # Allocations
 //
-// A slice or region result is allocated once, at its final size, and a slice result has an
-// Append form that allocates nothing once the caller's slice has room. A traversal has a Seq
-// form; that of a range gathers the range before it yields any of it, since a cell is known to
-// be in sight only once every cell around it was asked about. A search allocates its scratch
+// A slice or region result is allocated once, at its final size. A slice result of a [Grid] has
+// an Append form that allocates nothing once the caller's slice has room, and one of a [Point]
+// a Seq form that allocates nothing and walks no further than where it is stopped, which
+// slices.AppendSeq puts in a buffer. A search allocates its scratch
 // once per call, sized by the grid, and its path has the Append form of [Field.PathTo]. What
 // depends on which cells of a region are adjacent builds its result in steps: [Grid.Grow]
 // marks the cells of the grid and gathers what it adds as it goes, [Grid.Shrink] builds a
@@ -84,16 +90,18 @@
 // A degenerate value gets an answer; an argument with no meaning gets a panic, whose value is
 // an error:
 //
-//   - [Movement.Distance], [Point.DistanceTo], [Point.Line] with its Append and Seq forms, and
+//   - [Movement.Distance], [Point.DistanceTo], [Point.LineTo] with its Seq form, and
 //     [NewRect] and [NewIsometric], for a movement outside the constants: no index is reached
 //     from another under it. Every other method answers as for no neighbors.
 //   - [Grid.IndexAt], [Grid.CellAt] and [HexLayout.IndexAt] for a point with a NaN or infinite
-//     coordinate, and the iterator of [Grid.DrawOrder] for such bounds on a rectangular or
-//     hexagonal grid: no cell is at it.
+//     coordinate, and the iterator of [Grid.DrawOrder] for such bounds: no cell is at it.
 //   - Every constructor, [Grid.Resize] and [HexLayout.Resize] for a cell scale that is not
 //     positive and finite on both axes: no cell can be drawn at it.
 //   - The constructors of a grid, [Grid.MoveTo] and [HexLayout.MoveTo] for an origin with a NaN
 //     or infinite coordinate: no cell can be drawn from it.
+//   - [Grid.Path], [Grid.Field], [Grid.Reachable], [Grid.UniformCostSearch],
+//     [Grid.UniformCostSearchField], [Grid.AStar], [Cell.PathTo], [Cell.Field] and [Cell.Reachable]
+//     for a cost that is negative or NaN: no search ends on it.
 //   - [NewHexFlatTopLayout] and [NewHexPointyTopLayout] for a coordinate system outside the
 //     seven: no index can be read in it.
 package grid

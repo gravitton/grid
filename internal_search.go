@@ -1,5 +1,10 @@
 package grid
 
+import (
+	"fmt"
+	"math"
+)
+
 // passableOrAny returns passable, or a function admitting every cell where it is nil.
 func passableOrAny[T any](passable func(Cell[T]) bool) func(Cell[T]) bool {
 	if passable != nil {
@@ -20,6 +25,17 @@ func costOrUnit[T any](cost func(current, next Cell[T]) float64) func(current, n
 	return func(_, _ Cell[T]) float64 {
 		return 1
 	}
+}
+
+// checkedCost returns the cost of the step, a cost with no meaning a panic: a negative one or a
+// NaN would keep a search improving on what it found and never let it end.
+func checkedCost[T any](cost func(current, next Cell[T]) float64, current, next Cell[T]) float64 {
+	step := cost(current, next)
+	if step < 0 || math.IsNaN(step) {
+		panic(fmt.Errorf("grid: cost %v from %s to %s is negative or NaN", step, current, next))
+	}
+
+	return step
 }
 
 // frontier is the cells a search has reached and not yet expanded, a binary heap that hands

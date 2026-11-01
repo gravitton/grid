@@ -1,8 +1,6 @@
 package grid
 
 import (
-	"iter"
-
 	geom "github.com/gravitton/geometry"
 )
 
@@ -22,7 +20,7 @@ func (c Cell[T]) Index() geom.Point[int] {
 
 // Size returns the size of the cell as drawn, the CellSize of its grid.
 func (c Cell[T]) Size() geom.Size[float64] {
-	return c.grid.CellSize()
+	return c.grid.layout.cellSize
 }
 
 // Center returns the center of the cell in the world.
@@ -49,16 +47,14 @@ func (c Cell[T]) Value() *T {
 		return nil
 	}
 
-	return c.grid.cells.Get(c.index)
+	return &c.grid.cells.Data()[c.grid.slot(c.index)]
 }
 
 // Set stores value in the cell.
 func (c Cell[T]) Set(value T) {
-	if !c.grid.Contains(c.index) {
-		return
+	if target := c.Value(); target != nil {
+		*target = value
 	}
-
-	c.grid.cells.Set(c.index, value)
 }
 
 // Neighbors returns the indices of Grid.Neighbors from the cell.
@@ -66,26 +62,19 @@ func (c Cell[T]) Neighbors() []geom.Point[int] {
 	return c.grid.Neighbors(c.index)
 }
 
-// AppendNeighbors appends the indices of Grid.AppendNeighbors from the cell to dst and returns
-// the extended slice.
-func (c Cell[T]) AppendNeighbors(dst []geom.Point[int]) []geom.Point[int] {
-	return c.grid.AppendNeighbors(dst, c.index)
-}
-
 // Range returns the region of Grid.Range from the cell.
-func (c Cell[T]) Range(radius int, passable func(Cell[T]) bool) Region {
-	return c.grid.Range(c.index, radius, passable)
+func (c Cell[T]) Range(radius int) Region {
+	return c.grid.Range(c.index, radius)
 }
 
-// AppendRange appends the indices of Grid.AppendRange from the cell to dst and returns the
-// extended slice.
-func (c Cell[T]) AppendRange(dst []geom.Point[int], radius int, passable func(Cell[T]) bool) []geom.Point[int] {
-	return c.grid.AppendRange(dst, c.index, radius, passable)
+// Ring returns the indices of Grid.Ring from the cell.
+func (c Cell[T]) Ring(radius int) []geom.Point[int] {
+	return c.grid.Ring(c.index, radius)
 }
 
-// RangeSeq returns an iterator over the indices of Grid.RangeSeq from the cell.
-func (c Cell[T]) RangeSeq(radius int, passable func(Cell[T]) bool) iter.Seq[geom.Point[int]] {
-	return c.grid.RangeSeq(c.index, radius, passable)
+// Spiral returns the indices of Grid.Spiral from the cell.
+func (c Cell[T]) Spiral(radius int) []geom.Point[int] {
+	return c.grid.Spiral(c.index, radius)
 }
 
 // DistanceTo returns the number of steps of Grid.Distance from the cell to the index.
@@ -93,18 +82,42 @@ func (c Cell[T]) DistanceTo(index geom.Point[int]) int {
 	return c.grid.Distance(c.index, index)
 }
 
+// LineTo returns the indices of Grid.Line from the cell to the index.
+func (c Cell[T]) LineTo(index geom.Point[int]) []geom.Point[int] {
+	return c.grid.Line(c.index, index)
+}
+
+// HasLineOfSight reports whether the cell sees target by Grid.HasLineOfSight.
+func (c Cell[T]) HasLineOfSight(target geom.Point[int], blocked func(Cell[T]) bool) bool {
+	return c.grid.HasLineOfSight(c.index, target, blocked)
+}
+
+// FieldOfView returns the region of Grid.FieldOfView from the cell.
+func (c Cell[T]) FieldOfView(radius int, blocked func(Cell[T]) bool) Region {
+	return c.grid.FieldOfView(c.index, radius, blocked)
+}
+
 // PathTo returns the path of Grid.Path from the cell to the index.
 func (c Cell[T]) PathTo(index geom.Point[int], passable func(Cell[T]) bool, cost func(current, next Cell[T]) float64) []geom.Point[int] {
 	return c.grid.Path(c.index, index, passable, cost)
 }
 
-// IsValid reports whether the cell is one of the grid, which Grid.Contains reports of its
-// index.
+// Field returns the field of Grid.Field from the cell.
+func (c Cell[T]) Field(passable func(Cell[T]) bool, cost func(current, next Cell[T]) float64) Field {
+	return c.grid.Field(c.index, passable, cost)
+}
+
+// Reachable returns the field of Grid.Reachable from the cell.
+func (c Cell[T]) Reachable(budget float64, passable func(Cell[T]) bool, cost func(current, next Cell[T]) float64) Field {
+	return c.grid.Reachable(c.index, budget, passable, cost)
+}
+
+// IsValid reports whether the grid contains the cell, as Grid.Contains does of its index.
 func (c Cell[T]) IsValid() bool {
 	return c.grid.Contains(c.index)
 }
 
-// String returns the cell as the call that gives it: Cell(x,y).
+// String returns the cell and its index: Cell(x,y).
 func (c Cell[T]) String() string {
 	return "Cell" + c.index.String()
 }

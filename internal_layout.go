@@ -15,6 +15,7 @@ import (
 type layout struct {
 	kind          kind
 	origin        geom.Point[float64]
+	cellScale     geom.Size[float64]
 	latticeStep   geom.Size[float64]
 	latticeBounds geom.Box[int]
 
@@ -26,8 +27,8 @@ type layout struct {
 }
 
 // newLayout returns the layout of a grid of the given kind and size in cells, its cells
-// at the given scale and the top-left corner of its bounds at origin. It panics where resize
-// and moveTo do.
+// at the given scale and the top-left corner of its bounds at origin. It panics where
+// resize and moveTo do.
 func newLayout(kind kind, size geom.Size[int], cellScale geom.Size[float64], origin geom.Point[float64]) layout {
 	l := layout{
 		kind:          kind,
@@ -53,15 +54,25 @@ func (l *layout) moveTo(origin geom.Point[float64]) {
 // resize replaces the scale the constructor took and leaves the origin where it is. It panics
 // for a scale that is not positive and finite on both axes.
 func (l *layout) resize(cellScale geom.Size[float64]) {
-	if !cellScale.IsPositive() || !cellScale.IsFinite() {
-		panic(fmt.Errorf("grid: cell scale %s is not positive and finite", cellScale))
+	if err := checkCellScale(cellScale); err != nil {
+		panic(err)
 	}
 
+	l.cellScale = cellScale
 	l.latticeStep = l.kind.latticeStep().ScaleXY(cellScale.XY())
 	l.bounds = geom.BoxFromMinMax(l.origin, l.latticeToWorld(l.latticeBounds.Max))
 	l.cellSize = l.worldSize(l.kind.sizeSteps())
 	l.cellSpacing = l.worldSize(l.kind.spacingSteps())
 	l.cellPolygon = l.kind.cellPolygon(cellScale)
+}
+
+// checkCellScale returns the error of a scale no cell can be drawn at.
+func checkCellScale(cellScale geom.Size[float64]) error {
+	if !cellScale.IsPositive() || !cellScale.IsFinite() {
+		return fmt.Errorf("grid: cell scale %s is not positive and finite", cellScale)
+	}
+
+	return nil
 }
 
 // fromWorld returns the index of the cell the point of the world falls in. It checks nothing:
@@ -158,6 +169,19 @@ func (k kind) system() hex.CoordinateSystem {
 		return hex.OffsetOddR
 	default:
 		return hex.OffsetEvenR
+	}
+}
+
+// drawColumns returns the walk of a row of the kind back to front: by the given step, from the
+// columns of the given parity on a flat-top grid, whose columns of that parity are drawn higher.
+func (k kind) drawColumns() (step, parity int) {
+	switch k {
+	case kindHexFlatTop:
+		return 2, 0
+	case kindHexFlatTopEven:
+		return 2, 1
+	default:
+		return 1, 0
 	}
 }
 

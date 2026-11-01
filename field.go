@@ -1,6 +1,8 @@
 package grid
 
 import (
+	"iter"
+	"math"
 	"slices"
 
 	"github.com/gravitton/container"
@@ -8,8 +10,10 @@ import (
 )
 
 // Field is what a search from one index found: every index it reached, with the step back
-// toward the start and the cost of getting there, so one field serves every unit heading to
-// the same place. It does not change with the grid. The zero value is the empty field.
+// toward the start and the cost of getting there. A field searched from a destination
+// serves every unit heading there, its path running from the destination to the unit, where a
+// step costs the same both ways. It does not change with the grid. The zero value is the empty
+// field.
 type Field struct {
 	size  geom.Size[int]
 	start geom.Point[int]
@@ -126,30 +130,40 @@ func (f Field) IsEmpty() bool {
 	return f.reached == 0
 }
 
+// All returns an iterator over the indices the search reached, in the order of a region.
+func (f Field) All() iter.Seq[geom.Point[int]] {
+	return func(yield func(geom.Point[int]) bool) {
+		if f.reached == 0 {
+			return
+		}
+
+		for x := range f.size.Width {
+			for y := range f.size.Height {
+				if index := geom.Pt(x, y); f.from[f.slot(index)] != 0 && !yield(index) {
+					return
+				}
+			}
+		}
+	}
+}
+
 // Region returns the indices the search reached.
 func (f Field) Region() Region {
 	if f.reached == 0 {
 		return Region{}
 	}
 
-	points := make([]geom.Point[int], 0, f.reached)
-	for x := range f.size.Width {
-		for y := range f.size.Height {
-			if index := geom.Pt(x, y); f.from[f.slot(index)] != 0 {
-				points = append(points, index)
-			}
-		}
-	}
-
-	return container.SetFrom(points)
+	return container.SetFrom(slices.AppendSeq(make([]geom.Point[int], 0, f.reached), f.All()))
 }
 
-// improve records that index is reached from the slot at the given cost, where the search
-// had not reached it or had paid more, and reports whether it did.
+// improve records that index is reached from the slot at the given cost, where the cost is
+// finite and the search had not reached it or had paid more, and reports whether it did.
 func (f *Field) improve(index geom.Point[int], from int32, cost float64) bool {
 	slot := f.slot(index)
 
 	switch {
+	case math.IsInf(cost, 1):
+		return false
 	case f.from[slot] == 0:
 		f.reached++
 	case cost >= f.costs[slot]:
