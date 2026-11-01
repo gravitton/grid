@@ -3,6 +3,7 @@ package grid
 import (
 	"encoding/json"
 	"fmt"
+	"iter"
 	"maps"
 	"math"
 	"slices"
@@ -1401,6 +1402,28 @@ func BenchmarkGrid_Rescale(b *testing.B) {
 	})
 }
 
+func testSeq(t *testing.T, seq func(g *Grid[int]) iter.Seq[Index], slice func(g *Grid[int]) []Index) {
+	t.Helper()
+
+	for name, g := range ruleGrids(geom.Sz(11, 11)) {
+		t.Run(name, func(t *testing.T) {
+			t.Run("yields what the slice form holds, in its order", func(t *testing.T) {
+				assert.Equal(t, slices.Collect(seq(g)), slice(g))
+			})
+			t.Run("stops at the break", func(t *testing.T) {
+				count := 0
+				for range seq(g) {
+					count++
+
+					break
+				}
+
+				assert.Equal(t, count, 1)
+			})
+		})
+	}
+}
+
 func TestGrid_Neighbors(t *testing.T) {
 	grids, center := ruleGrids(geom.Sz(11, 11)), geom.Pt(5, 5)
 
@@ -1503,26 +1526,33 @@ func FuzzGrid_Neighbors(f *testing.F) {
 	})
 }
 
-func TestGrid_AppendNeighbors(t *testing.T) {
-	grids, center := ruleGrids(geom.Sz(11, 11)), geom.Pt(5, 5)
+func TestGrid_NeighborsSeq(t *testing.T) {
+	center := geom.Pt(5, 5)
 
-	for name, g := range grids {
-		t.Run(name, func(t *testing.T) {
-			t.Run("appends the indices of Neighbors", func(t *testing.T) {
-				assert.Equal(t, g.AppendNeighbors([]Index{geom.Pt(-9, -9)}, center), append([]Index{geom.Pt(-9, -9)}, g.Neighbors(center)...))
-			})
-			t.Run("appends nothing for an index outside the grid", func(t *testing.T) {
-				assert.Equal(t, g.AppendNeighbors([]Index{geom.Pt(-9, -9)}, geom.Pt(-1, 0)), []Index{geom.Pt(-9, -9)})
-			})
-			t.Run("allocates nothing with room", func(t *testing.T) {
-				buffer := make([]Index, 0, 8)
+	testSeq(t, func(g *Grid[int]) iter.Seq[Index] {
+		return g.NeighborsSeq(center)
+	}, func(g *Grid[int]) []Index {
+		return g.Neighbors(center)
+	})
+	t.Run("allocates nothing, into a buffer with room too", func(t *testing.T) {
+		buffer := make([]Index, 0, 128)
 
-				assert.Equal(t, testing.AllocsPerRun(10, func() {
-					sinkPoints = g.AppendNeighbors(buffer[:0], center)
-				}), 0.0)
-			})
-		})
-	}
+		for name, g := range ruleGrids(geom.Sz(11, 11)) {
+			assert.Equal(t, testing.AllocsPerRun(10, func() {
+				for index := range g.NeighborsSeq(center) {
+					sinkPoint = index
+				}
+			}), 0.0, name+": ")
+			assert.Equal(t, testing.AllocsPerRun(10, func() {
+				sinkPoints = slices.AppendSeq(buffer[:0], g.NeighborsSeq(center))
+			}), 0.0, name+": ")
+		}
+	})
+	t.Run("yields nothing from outside the grid", func(t *testing.T) {
+		for name, g := range ruleGrids(geom.Sz(11, 11)) {
+			assert.Length(t, slices.Collect(g.NeighborsSeq(geom.Pt(-1, 5))), 0, name+": ")
+		}
+	})
 }
 
 func TestGrid_Range(t *testing.T) {
@@ -1650,8 +1680,8 @@ func FuzzGrid_Range(f *testing.F) {
 		index, radius := fuzzIndex(g, x, y), int(reach%6)
 		everything := g.Range(index, radius)
 
-		assert.True(t, Reg(g.AppendRange(nil, index, radius)).Equal(everything))
-		assert.True(t, slices.IsSortedFunc(g.AppendRange(nil, index, radius), Index.Compare))
+		assert.True(t, Reg(slices.Collect(g.RangeSeq(index, radius))).Equal(everything))
+		assert.True(t, slices.IsSortedFunc(slices.Collect(g.RangeSeq(index, radius)), Index.Compare))
 
 		if !g.Contains(index) {
 			assert.True(t, everything.IsEmpty())
@@ -1670,41 +1700,39 @@ func FuzzGrid_Range(f *testing.F) {
 	})
 }
 
-func TestGrid_AppendRange(t *testing.T) {
-	grids, center := ruleGrids(geom.Sz(11, 11)), geom.Pt(5, 5)
+func TestGrid_RangeSeq(t *testing.T) {
+	center := geom.Pt(5, 5)
 
-	for name, g := range grids {
-		t.Run(name, func(t *testing.T) {
-			t.Run("appends the indices of Range", func(t *testing.T) {
-				appended := g.AppendRange([]Index{geom.Pt(-9, -9)}, center, 3)
+	testSeq(t, func(g *Grid[int]) iter.Seq[Index] {
+		return g.RangeSeq(center, 3)
+	}, func(g *Grid[int]) []Index {
+		return g.Range(center, 3).Elements()
+	})
+	t.Run("allocates nothing, into a buffer with room too", func(t *testing.T) {
+		buffer := make([]Index, 0, 128)
 
-				assert.Equal(t, appended[0], geom.Pt(-9, -9))
-				assert.Equal(t, len(appended)-1, g.Range(center, 3).Len())
-				assert.True(t, Reg(appended[1:]).Equal(g.Range(center, 3)))
-			})
-			t.Run("appends in the order of the region, so Range has nothing to sort", func(t *testing.T) {
-				for _, index := range []Index{center, geom.Pt(0, 0), geom.Pt(10, 3)} {
-					assert.Equal(t, g.AppendRange(nil, index, 4), g.Range(index, 4).Elements(), index.String()+": ")
+		for name, g := range ruleGrids(geom.Sz(11, 11)) {
+			assert.Equal(t, testing.AllocsPerRun(10, func() {
+				for index := range g.RangeSeq(center, 3) {
+					sinkPoint = index
 				}
-			})
-			t.Run("a radius beyond the grid appends what one across it does", func(t *testing.T) {
-				assert.Equal(t, g.AppendRange(nil, center, math.MaxInt), g.AppendRange(nil, center, g.Width()+g.Height()))
-			})
-			t.Run("a negative radius appends nothing", func(t *testing.T) {
-				assert.Length(t, g.AppendRange(nil, center, -1), 0)
-			})
-			t.Run("an index outside the grid appends nothing", func(t *testing.T) {
-				assert.Length(t, g.AppendRange(nil, geom.Pt(-1, 5), 3), 0)
-			})
-			t.Run("allocates nothing with room", func(t *testing.T) {
-				buffer := make([]Index, 0, 128)
-
-				assert.Equal(t, testing.AllocsPerRun(10, func() {
-					sinkPoints = g.AppendRange(buffer[:0], center, 4)
-				}), 0.0)
-			})
-		})
-	}
+			}), 0.0, name+": ")
+			assert.Equal(t, testing.AllocsPerRun(10, func() {
+				sinkPoints = slices.AppendSeq(buffer[:0], g.RangeSeq(center, 3))
+			}), 0.0, name+": ")
+		}
+	})
+	t.Run("a radius beyond the grid yields what one across it does", func(t *testing.T) {
+		for name, g := range ruleGrids(geom.Sz(11, 11)) {
+			assert.Equal(t, slices.Collect(g.RangeSeq(center, math.MaxInt)), slices.Collect(g.RangeSeq(center, g.Width()+g.Height())), name+": ")
+		}
+	})
+	t.Run("yields nothing for a negative radius or from outside the grid", func(t *testing.T) {
+		for name, g := range ruleGrids(geom.Sz(11, 11)) {
+			assert.Length(t, slices.Collect(g.RangeSeq(center, -1)), 0, name+": ")
+			assert.Length(t, slices.Collect(g.RangeSeq(geom.Pt(-1, 5), 3)), 0, name+": ")
+		}
+	})
 }
 
 func TestGrid_Ring(t *testing.T) {
@@ -1793,28 +1821,34 @@ func ExampleGrid_Ring() {
 	// [(0,0) (1,0) (2,1) (3,1) (4,2)]
 }
 
-func TestGrid_AppendRing(t *testing.T) {
-	grids, center := ruleGrids(geom.Sz(11, 11)), geom.Pt(5, 5)
+func TestGrid_RingSeq(t *testing.T) {
+	center := geom.Pt(5, 5)
 
-	for name, g := range grids {
-		t.Run(name, func(t *testing.T) {
-			t.Run("appends what Ring returns", func(t *testing.T) {
-				assert.Equal(t, g.AppendRing([]Index{geom.Pt(9, 9)}, geom.Pt(1, 1), 3), append([]Index{geom.Pt(9, 9)}, g.Ring(geom.Pt(1, 1), 3)...))
-			})
-			t.Run("appends nothing where Ring has none", func(t *testing.T) {
-				assert.Length(t, g.AppendRing(nil, center, -1), 0)
-				assert.Length(t, g.AppendRing(nil, center, 40), 0)
-				assert.Length(t, g.AppendRing(nil, geom.Pt(-1, 5), 2), 0)
-			})
-			t.Run("allocates nothing with room", func(t *testing.T) {
-				buffer := make([]Index, 0, 64)
+	testSeq(t, func(g *Grid[int]) iter.Seq[Index] {
+		return g.RingSeq(center, 3)
+	}, func(g *Grid[int]) []Index {
+		return g.Ring(center, 3)
+	})
+	t.Run("allocates nothing, into a buffer with room too", func(t *testing.T) {
+		buffer := make([]Index, 0, 128)
 
-				assert.Equal(t, testing.AllocsPerRun(10, func() {
-					sinkPoints = g.AppendRing(buffer, center, 3)
-				}), 0.0)
-			})
-		})
-	}
+		for name, g := range ruleGrids(geom.Sz(11, 11)) {
+			assert.Equal(t, testing.AllocsPerRun(10, func() {
+				for index := range g.RingSeq(center, 3) {
+					sinkPoint = index
+				}
+			}), 0.0, name+": ")
+			assert.Equal(t, testing.AllocsPerRun(10, func() {
+				sinkPoints = slices.AppendSeq(buffer[:0], g.RingSeq(center, 3))
+			}), 0.0, name+": ")
+		}
+	})
+	t.Run("yields nothing where Ring has none", func(t *testing.T) {
+		for name, g := range ruleGrids(geom.Sz(11, 11)) {
+			assert.Length(t, slices.Collect(g.RingSeq(center, -1)), 0, name+": ")
+			assert.Length(t, slices.Collect(g.RingSeq(center, 40)), 0, name+": ")
+		}
+	})
 }
 
 func TestGrid_Spiral(t *testing.T) {
@@ -1830,7 +1864,7 @@ func TestGrid_Spiral(t *testing.T) {
 			for _, index := range []Index{center, geom.Pt(0, 0), geom.Pt(10, 3)} {
 				var expected []Index
 				for radius := range 5 {
-					expected = g.AppendRing(expected, index, radius)
+					expected = slices.AppendSeq(expected, g.RingSeq(index, radius))
 				}
 
 				assert.Equal(t, g.Spiral(index, 4), expected, name+" at "+index.String()+": ")
@@ -1883,29 +1917,6 @@ func BenchmarkGrid_Spiral(b *testing.B) {
 	}
 }
 
-func TestGrid_AppendSpiral(t *testing.T) {
-	grids, center := ruleGrids(geom.Sz(11, 11)), geom.Pt(5, 5)
-
-	for name, g := range grids {
-		t.Run(name, func(t *testing.T) {
-			t.Run("appends what Spiral returns", func(t *testing.T) {
-				assert.Equal(t, g.AppendSpiral([]Index{geom.Pt(9, 9)}, geom.Pt(1, 1), 3), append([]Index{geom.Pt(9, 9)}, g.Spiral(geom.Pt(1, 1), 3)...))
-			})
-			t.Run("appends nothing where Spiral has none", func(t *testing.T) {
-				assert.Length(t, g.AppendSpiral(nil, center, -1), 0)
-				assert.Length(t, g.AppendSpiral(nil, geom.Pt(-1, 5), 2), 0)
-			})
-			t.Run("allocates nothing with room", func(t *testing.T) {
-				buffer := make([]Index, 0, 64)
-
-				assert.Equal(t, testing.AllocsPerRun(10, func() {
-					sinkPoints = g.AppendSpiral(buffer, center, 3)
-				}), 0.0)
-			})
-		})
-	}
-}
-
 func spiralBreakAllocs(g *Grid[int], index Index, radius int) float64 {
 	return testing.AllocsPerRun(10, func() {
 		for found := range g.SpiralSeq(index, radius) {
@@ -1918,6 +1929,26 @@ func spiralBreakAllocs(g *Grid[int], index Index, radius int) float64 {
 
 func TestGrid_SpiralSeq(t *testing.T) {
 	grids, center := ruleGrids(geom.Sz(11, 11)), geom.Pt(5, 5)
+
+	testSeq(t, func(g *Grid[int]) iter.Seq[Index] {
+		return g.SpiralSeq(center, 3)
+	}, func(g *Grid[int]) []Index {
+		return g.Spiral(center, 3)
+	})
+	t.Run("allocates nothing, into a buffer with room too", func(t *testing.T) {
+		buffer := make([]Index, 0, 128)
+
+		for name, g := range ruleGrids(geom.Sz(11, 11)) {
+			assert.Equal(t, testing.AllocsPerRun(10, func() {
+				for index := range g.SpiralSeq(center, 3) {
+					sinkPoint = index
+				}
+			}), 0.0, name+": ")
+			assert.Equal(t, testing.AllocsPerRun(10, func() {
+				sinkPoints = slices.AppendSeq(buffer[:0], g.SpiralSeq(center, 3))
+			}), 0.0, name+": ")
+		}
+	})
 
 	for name, g := range grids {
 		t.Run(name, func(t *testing.T) {
@@ -2356,23 +2387,28 @@ func BenchmarkGrid_Line(b *testing.B) {
 	}
 }
 
-func TestGrid_AppendLine(t *testing.T) {
-	grids := ruleGrids(geom.Sz(11, 11))
+func TestGrid_LineSeq(t *testing.T) {
+	center := geom.Pt(5, 5)
 
-	for name, g := range grids {
-		t.Run(name, func(t *testing.T) {
-			t.Run("appends what Line returns", func(t *testing.T) {
-				assert.Equal(t, g.AppendLine([]Index{geom.Pt(9, 9)}, geom.Pt(1, 1), geom.Pt(10, 3)), append([]Index{geom.Pt(9, 9)}, g.Line(geom.Pt(1, 1), geom.Pt(10, 3))...))
-			})
-			t.Run("allocates nothing with room", func(t *testing.T) {
-				buffer := make([]Index, 0, 64)
+	testSeq(t, func(g *Grid[int]) iter.Seq[Index] {
+		return g.LineSeq(center, geom.Pt(1, 9))
+	}, func(g *Grid[int]) []Index {
+		return g.Line(center, geom.Pt(1, 9))
+	})
+	t.Run("allocates nothing, into a buffer with room too", func(t *testing.T) {
+		buffer := make([]Index, 0, 128)
 
-				assert.Equal(t, testing.AllocsPerRun(10, func() {
-					sinkPoints = g.AppendLine(buffer, geom.Pt(0, 0), geom.Pt(10, 3))
-				}), 0.0)
-			})
-		})
-	}
+		for name, g := range ruleGrids(geom.Sz(11, 11)) {
+			assert.Equal(t, testing.AllocsPerRun(10, func() {
+				for index := range g.LineSeq(center, geom.Pt(1, 9)) {
+					sinkPoint = index
+				}
+			}), 0.0, name+": ")
+			assert.Equal(t, testing.AllocsPerRun(10, func() {
+				sinkPoints = slices.AppendSeq(buffer[:0], g.LineSeq(center, geom.Pt(1, 9)))
+			}), 0.0, name+": ")
+		}
+	})
 }
 
 // testSearch runs the sections every search shares, from testStart to testGoal.
@@ -2526,8 +2562,8 @@ func TestGrid_FieldOfView(t *testing.T) {
 			}), 1.0, name+": ")
 		}
 	})
-	t.Run("allocates twice more where a cell is refused, for the marks and the sight past them, and once more on a hexagonal grid for its sweep", func(t *testing.T) {
-		allocs := map[string]float64{"cardinal": 3, "diagonal": 3, "flat-top": 4, "pointy-top": 4}
+	t.Run("allocates once more where a cell is refused, for the marks, and once more on a hexagonal grid for its sweep", func(t *testing.T) {
+		allocs := map[string]float64{"cardinal": 2, "diagonal": 2, "flat-top": 3, "pointy-top": 3}
 
 		for name, g := range grids {
 			assert.Equal(t, testing.AllocsPerRun(10, func() {
@@ -2597,8 +2633,7 @@ func FuzzGrid_FieldOfView(f *testing.F) {
 		blocked := scatteredWalls(int(seed))
 		seen := g.FieldOfView(index, radius, blocked)
 
-		assert.True(t, Reg(g.AppendFieldOfView(nil, index, radius, blocked)).Equal(seen))
-		assert.True(t, slices.IsSortedFunc(g.AppendFieldOfView(nil, index, radius, blocked), Index.Compare))
+		assert.True(t, Reg(slices.Collect(g.FieldOfViewSeq(index, radius, blocked))).Equal(seen))
 
 		if !g.Contains(index) {
 			assert.True(t, seen.IsEmpty())
@@ -2617,40 +2652,67 @@ func FuzzGrid_FieldOfView(f *testing.F) {
 	})
 }
 
-func TestGrid_AppendFieldOfView(t *testing.T) {
+func TestGrid_FieldOfViewSeq(t *testing.T) {
 	grids, center := ruleGrids(geom.Sz(11, 11)), geom.Pt(5, 5)
-	wall := wallAt(geom.Pt(5, 6))
 
 	for name, g := range grids {
 		t.Run(name, func(t *testing.T) {
-			t.Run("appends the indices of FieldOfView", func(t *testing.T) {
-				appended := g.AppendFieldOfView([]Index{geom.Pt(-9, -9)}, center, 3, wall)
+			t.Run("yields what FieldOfView holds", func(t *testing.T) {
+				assert.True(t, Reg(slices.Collect(g.FieldOfViewSeq(center, 4, scatteredWalls(0)))).Equal(g.FieldOfView(center, 4, scatteredWalls(0))))
+			})
+			t.Run("a nil blocked yields the range", func(t *testing.T) {
+				assert.True(t, Reg(slices.Collect(g.FieldOfViewSeq(center, 3, nil))).Equal(g.Range(center, 3)))
+			})
+			t.Run("yields no index outside the grid", func(t *testing.T) {
+				for index := range g.FieldOfViewSeq(geom.Pt(0, 0), 3, nil) {
+					assert.True(t, g.Contains(index), index.String()+": ")
+				}
+			})
+			t.Run("a radius beyond the grid yields what one across it does", func(t *testing.T) {
+				assert.True(t, Reg(slices.Collect(g.FieldOfViewSeq(center, math.MaxInt, wallAt(geom.Pt(5, 6))))).Equal(g.FieldOfView(center, g.Width()+g.Height(), wallAt(geom.Pt(5, 6)))))
+			})
+			t.Run("yields nothing for a negative radius or from outside the grid", func(t *testing.T) {
+				assert.Length(t, slices.Collect(g.FieldOfViewSeq(center, -1, nil)), 0)
+				assert.Length(t, slices.Collect(g.FieldOfViewSeq(geom.Pt(-1, 5), 3, nil)), 0)
+			})
+			t.Run("stops at the break, with walls and without", func(t *testing.T) {
+				for _, blocked := range []func(Cell[int]) bool{nil, scatteredWalls(0)} {
+					count := 0
+					for range g.FieldOfViewSeq(center, 4, blocked) {
+						count++
 
-				assert.Equal(t, appended[0], geom.Pt(-9, -9))
-				assert.Equal(t, appended[1:], g.FieldOfView(center, 3, wall).Elements())
-			})
-			t.Run("a radius beyond the grid appends what one across it does", func(t *testing.T) {
-				assert.Equal(t, g.AppendFieldOfView(nil, center, math.MaxInt, wall), g.AppendFieldOfView(nil, center, g.Width()+g.Height(), wall))
-			})
-			t.Run("a negative radius appends nothing and asks nothing", func(t *testing.T) {
-				asked := 0
+						break
+					}
 
-				assert.Length(t, g.AppendFieldOfView(nil, center, -1, func(Cell[int]) bool {
-					asked++
+					assert.Equal(t, count, 1)
+				}
+			})
+			t.Run("asks about every cell at most once", func(t *testing.T) {
+				asked := map[Index]int{}
+				sinkPoints = slices.Collect(g.FieldOfViewSeq(center, 4, func(cell Cell[int]) bool {
+					asked[cell.Index()]++
 
-					return true
-				}), 0)
-				assert.Equal(t, asked, 0)
+					return scatteredWalls(0)(cell)
+				}))
+
+				for index, times := range asked {
+					assert.Equal(t, times, 1, index.String()+": ")
+				}
 			})
-			t.Run("an index outside the grid appends nothing", func(t *testing.T) {
-				assert.Length(t, g.AppendFieldOfView(nil, geom.Pt(-1, 5), 3, nil), 0)
-			})
-			t.Run("allocates nothing with room for a nil blocked", func(t *testing.T) {
-				buffer := make([]Index, 0, 128)
+			t.Run("allocates nothing for a nil blocked, and once for what it remembers otherwise", func(t *testing.T) {
+				assert.Equal(t, testing.AllocsPerRun(10, func() {
+					for index := range g.FieldOfViewSeq(center, 4, nil) {
+						sinkPoint = index
+					}
+				}), 0.0)
+
+				wall := wallAt(geom.Pt(5, 6))
 
 				assert.Equal(t, testing.AllocsPerRun(10, func() {
-					sinkPoints = g.AppendFieldOfView(buffer[:0], center, 4, nil)
-				}), 0.0)
+					for index := range g.FieldOfViewSeq(center, 4, wall) {
+						sinkPoint = index
+					}
+				}), 1.0)
 			})
 		})
 	}

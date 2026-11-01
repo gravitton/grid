@@ -173,8 +173,8 @@ func (k kind) orientation() geom.Orientation {
 	}
 }
 
-// system returns the offset coordinate system the indices of a hexagonal kind are in. A square
-// kind is never asked, since its indices reach its lattice with no conversion.
+// system returns the offset coordinate system the indices of a hexagonal kind are in, and none
+// for a square kind, whose indices reach its lattice with no conversion.
 func (k kind) system() hex.CoordinateSystem {
 	switch k {
 	case kindHexFlatTop:
@@ -183,8 +183,10 @@ func (k kind) system() hex.CoordinateSystem {
 		return hex.OffsetEvenQ
 	case kindHexPointyTop:
 		return hex.OffsetOddR
-	default:
+	case kindHexPointyTopEven:
 		return hex.OffsetEvenR
+	default:
+		return hex.CoordinateSystemNone
 	}
 }
 

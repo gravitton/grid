@@ -411,28 +411,30 @@ func (g *Grid[T]) Neighbors(index Index) []Index {
 		return nil
 	}
 
-	return g.appendNeighbors(make([]Index, 0, len(g.topology.offsets(index))), index)
+	return slices.AppendSeq(make([]Index, 0, len(g.topology.offsets(index))), g.NeighborsSeq(index))
 }
 
-// AppendNeighbors appends the indices of Neighbors to dst and returns the extended slice.
-func (g *Grid[T]) AppendNeighbors(dst []Index, index Index) []Index {
+// NeighborsSeq returns an iterator over the indices of Neighbors, in the same order.
+func (g *Grid[T]) NeighborsSeq(index Index) iter.Seq[Index] {
+	return func(yield func(Index) bool) {
+		g.walkNeighbors(index, yield)
+	}
+}
+
+// walkNeighbors yields the indices of Neighbors and reports whether it yielded them all. It checks
+// the index itself, so NeighborsSeq only builds its closure and stays small enough to inline.
+func (g *Grid[T]) walkNeighbors(index Index, yield func(Index) bool) bool {
 	if !g.Contains(index) {
-		return dst
+		return true
 	}
 
-	return g.appendNeighbors(dst, index)
-}
-
-// appendNeighbors appends the neighbors of an index the caller knows to be inside the grid.
-func (g *Grid[T]) appendNeighbors(dst []Index, index Index) []Index {
 	for _, offset := range g.topology.offsets(index) {
-		next := index.Add(offset)
-		if g.Contains(next) {
-			dst = append(dst, next)
+		if next := index.Add(offset); g.Contains(next) && !yield(next) {
+			return false
 		}
 	}
 
-	return dst
+	return true
 }
 
 // Range returns the cells within radius of the index. It is empty for a negative radius.
@@ -441,24 +443,31 @@ func (g *Grid[T]) Range(index Index, radius int) Region {
 		return Region{}
 	}
 
-	radius = g.clampRadius(index, radius)
-
-	return container.SetFrom(g.appendRange(make([]Index, 0, g.topology.rangeLen(radius)), index, radius))
+	return container.SetFrom(g.gatherRange(index, g.clampRadius(index, radius)))
 }
 
-// AppendRange appends the indices of Range to dst, in no order to rely on, and returns the
-// extended slice.
-func (g *Grid[T]) AppendRange(dst []Index, index Index, radius int) []Index {
+// RangeSeq returns an iterator over the indices of Range, in the order of a region.
+func (g *Grid[T]) RangeSeq(index Index, radius int) iter.Seq[Index] {
+	return func(yield func(Index) bool) {
+		g.walkRange(index, radius, yield)
+	}
+}
+
+// gatherRange returns the indices in range of an index the caller knows to be inside the grid,
+// at a radius it knows to be cut to the grid.
+func (g *Grid[T]) gatherRange(index Index, radius int) []Index {
+	return slices.AppendSeq(make([]Index, 0, g.topology.rangeLen(radius)), g.RangeSeq(index, radius))
+}
+
+// walkRange yields the indices of Range and reports whether it yielded them all.
+func (g *Grid[T]) walkRange(index Index, radius int, yield func(Index) bool) bool {
 	if radius < 0 || !g.Contains(index) {
-		return dst
+		return true
 	}
 
-	return g.appendRange(dst, index, g.clampRadius(index, radius))
-}
-
-// appendRange appends the indices in range of an index the caller knows to be inside the grid.
-func (g *Grid[T]) appendRange(dst []Index, index Index, radius int) []Index {
-	return g.keepInside(g.topology.appendWithin(dst, index, radius), len(dst))
+	return g.topology.walkWithin(index, g.clampRadius(index, radius), func(found Index) bool {
+		return !g.Contains(found) || yield(found)
+	})
 }
 
 // clampRadius returns the radius cut to the distance from the index to the farthest cell of
@@ -487,21 +496,25 @@ func (g *Grid[T]) Ring(index Index, radius int) []Index {
 		return nil
 	}
 
-	return g.appendRing(make([]Index, 0, g.topology.ringLen(radius)), index, radius)
+	return slices.AppendSeq(make([]Index, 0, g.topology.ringLen(radius)), g.RingSeq(index, radius))
 }
 
-// AppendRing appends the indices of Ring to dst and returns the extended slice.
-func (g *Grid[T]) AppendRing(dst []Index, index Index, radius int) []Index {
+// RingSeq returns an iterator over the indices of Ring, in the same order.
+func (g *Grid[T]) RingSeq(index Index, radius int) iter.Seq[Index] {
+	return func(yield func(Index) bool) {
+		g.walkRing(index, radius, yield)
+	}
+}
+
+// walkRing yields the indices of Ring and reports whether it yielded them all.
+func (g *Grid[T]) walkRing(index Index, radius int, yield func(Index) bool) bool {
 	if !g.hasRing(index, radius) {
-		return dst
+		return true
 	}
 
-	return g.appendRing(dst, index, radius)
-}
-
-// appendRing appends the ring of an index the caller knows to have one.
-func (g *Grid[T]) appendRing(dst []Index, index Index, radius int) []Index {
-	return g.keepInside(g.topology.appendRing(dst, index, radius), len(dst))
+	return g.topology.walkRing(index, radius, func(found Index) bool {
+		return !g.Contains(found) || yield(found)
+	})
 }
 
 // hasRing reports whether the index is inside the grid and a cell of it can be at radius steps
@@ -517,35 +530,19 @@ func (g *Grid[T]) Spiral(index Index, radius int) []Index {
 		return nil
 	}
 
-	radius = g.clampRadius(index, radius)
+	size := g.topology.rangeLen(g.clampRadius(index, radius))
 
-	return g.appendSpiral(make([]Index, 0, g.topology.rangeLen(radius)), index, radius)
+	return slices.AppendSeq(make([]Index, 0, size), g.SpiralSeq(index, radius))
 }
 
-// AppendSpiral appends the indices of Spiral to dst and returns the extended slice.
-func (g *Grid[T]) AppendSpiral(dst []Index, index Index, radius int) []Index {
-	if radius < 0 || !g.Contains(index) {
-		return dst
-	}
-
-	return g.appendSpiral(dst, index, g.clampRadius(index, radius))
-}
-
-// SpiralSeq returns an iterator over the indices of Spiral, in the same order, walking no further
-// than where it is stopped.
+// SpiralSeq returns an iterator over the indices of Spiral, in the same order.
 func (g *Grid[T]) SpiralSeq(index Index, radius int) iter.Seq[Index] {
 	return func(yield func(Index) bool) {
 		g.walkSpiral(index, radius, yield)
 	}
 }
 
-// appendSpiral appends the spiral of an index the caller knows to be inside the grid.
-func (g *Grid[T]) appendSpiral(dst []Index, index Index, radius int) []Index {
-	return g.keepInside(g.topology.appendSpiral(dst, index, radius), len(dst))
-}
-
-// walkSpiral yields the indices of Spiral as it walks them and reports whether it yielded them
-// all. It checks the index itself, so SpiralSeq only builds its closure.
+// walkSpiral yields the indices of Spiral and reports whether it yielded them all.
 func (g *Grid[T]) walkSpiral(index Index, radius int, yield func(Index) bool) bool {
 	if radius < 0 || !g.Contains(index) {
 		return true
@@ -554,19 +551,6 @@ func (g *Grid[T]) walkSpiral(index Index, radius int, yield func(Index) bool) bo
 	return g.topology.walkSpiral(index, g.clampRadius(index, radius), func(found Index) bool {
 		return !g.Contains(found) || yield(found)
 	})
-}
-
-// keepInside returns dst with the indices from start on that lie outside the grid taken out,
-// in place and in their order.
-func (g *Grid[T]) keepInside(dst []Index, start int) []Index {
-	kept := dst[:start]
-	for _, candidate := range dst[start:] {
-		if g.Contains(candidate) {
-			kept = append(kept, candidate)
-		}
-	}
-
-	return kept
 }
 
 // Border returns the indices of the region with a neighbor outside it: its outline, around a
@@ -725,12 +709,14 @@ func (g *Grid[T]) Distance(from, to Index) int {
 // indices, whether or not they lie in the grid, and between two cells on a zigzag edge of a
 // hexagonal grid it may pass through an index outside it.
 func (g *Grid[T]) Line(from, to Index) []Index {
-	return g.topology.appendLine(make([]Index, 0, g.topology.distance(from, to)+1), from, to)
+	return slices.AppendSeq(make([]Index, 0, g.topology.distance(from, to)+1), g.LineSeq(from, to))
 }
 
-// AppendLine appends the indices of Line to dst and returns the extended slice.
-func (g *Grid[T]) AppendLine(dst []Index, from, to Index) []Index {
-	return g.topology.appendLine(dst, from, to)
+// LineSeq returns an iterator over the indices of Line, in the same order.
+func (g *Grid[T]) LineSeq(from, to Index) iter.Seq[Index] {
+	return func(yield func(Index) bool) {
+		g.topology.walkLine(from, to, yield)
+	}
 }
 
 // HasLineOfSight reports whether from sees to past the cells blocked reports, asking it only
@@ -739,50 +725,51 @@ func (g *Grid[T]) HasLineOfSight(from, to Index, blocked func(Cell[T]) bool) boo
 	return g.Contains(from) && g.Contains(to) && g.topology.sees(from, to, g.blockedIndex(blocked))
 }
 
-// FieldOfView returns the cells of Range the index sees past the cells blocked reports,
-// asking it about each cell at most once. A blocked cell in sight is in the result, and the cell
-// of the index is never asked about.
+// FieldOfView returns the cells of Range the index sees past the cells blocked reports, asking it
+// about each cell at most once. A blocked cell in sight is in the result, and the cell of the
+// index is never asked about.
 func (g *Grid[T]) FieldOfView(index Index, radius int, blocked func(Cell[T]) bool) Region {
 	if radius < 0 || !g.Contains(index) {
 		return Region{}
 	}
 
 	radius = g.clampRadius(index, radius)
+	points := g.gatherRange(index, radius)
 
-	return container.SetFrom(g.appendFieldOfView(make([]Index, 0, g.topology.rangeLen(radius)), index, radius, blocked))
-}
-
-// AppendFieldOfView appends the indices of Fi, eldOfViewRange to dst, in no order to rely on,
-// and returns the extended slice.
-func (g *Grid[T]) AppendFieldOfView(dst []Index, index Index, radius int, blocked func(Cell[T]) bool) []Index {
-	if radius < 0 || !g.Contains(index) {
-		return dst
-	}
-
-	return g.appendFieldOfView(dst, index, g.clampRadius(index, radius), blocked)
-}
-
-// appendFieldOfView appends the indices in sight of an index the caller knows to be inside
-// the grid. Only where a cell was refused can anything be hidden, so only then does the topology
-// look for sight.
-func (g *Grid[T]) appendFieldOfView(dst []Index, index Index, radius int, blocked func(Cell[T]) bool) []Index {
-	start := len(dst)
-	dst = g.appendRange(dst, index, radius)
-
-	marks := askSight(index, radius, dst[start:], g.blockedIndex(blocked))
+	// Only where a cell was refused can anything be hidden, so only then is sight looked for.
+	marks := askSight(index, radius, points, g.blockedIndex(blocked))
 	if marks.isEmpty() {
-		return dst
+		return container.SetFrom(points)
 	}
 
-	return g.keepInSight(dst, start, index, radius, marks)
+	return container.SetFrom(g.keepInSight(points, index, radius, marks))
 }
 
-// keepInSight returns dst with the indices from start on that center does not see taken out. It
-// takes the marks by value, so only a range refused a cell puts them on the heap.
-func (g *Grid[T]) keepInSight(dst []Index, start int, center Index, radius int, marks sightMarks) []Index {
-	g.topology.sight(center, radius, dst[start:], &marks)
+// FieldOfViewSeq returns an iterator over the indices of FieldOfView, in no order to rely on.
+func (g *Grid[T]) FieldOfViewSeq(index Index, radius int, blocked func(Cell[T]) bool) iter.Seq[Index] {
+	return func(yield func(Index) bool) {
+		g.walkFieldOfView(index, radius, blocked, yield)
+	}
+}
 
-	return marks.keepSeen(dst, start)
+// keepInSight returns the indices center sees. It takes the marks by value, so only a range
+// refused a cell puts them on the heap.
+func (g *Grid[T]) keepInSight(indices []Index, center Index, radius int, marks sightMarks) []Index {
+	g.topology.sight(center, radius, indices, &marks)
+
+	return marks.keepSeen(indices)
+}
+
+// walkFieldOfView yields the indices of FieldOfView as it finds them and reports whether it
+// yielded them all.
+func (g *Grid[T]) walkFieldOfView(index Index, radius int, blocked func(Cell[T]) bool, yield func(Index) bool) bool {
+	if radius < 0 || !g.Contains(index) {
+		return true
+	}
+
+	return g.topology.walkFieldOfView(index, g.clampRadius(index, radius), g.blockedIndex(blocked), func(found Index) bool {
+		return !g.Contains(found) || yield(found)
+	})
 }
 
 // blockedIndex returns blocked over indices, nil where it is nil. What lies outside the grid
@@ -1035,8 +1022,8 @@ func (g *Grid[T]) Contains(index Index) bool {
 // its cell scale and origin, and its size and values.
 func (g Grid[T]) MarshalJSON() ([]byte, error) {
 	var movement *Movement
-	if rule := g.topology.rule(); !rule.IsNone() {
-		movement = &rule
+	if !g.topology.isHex() {
+		movement = &g.topology.movement
 	}
 
 	return json.Marshal(struct {

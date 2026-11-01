@@ -65,11 +65,10 @@
 //
 // # Allocations
 //
-// A slice or region result is allocated once, at its final size. A slice result of a [Grid] has
-// an Append form that allocates nothing once the caller's slice has room, and one of a [Square]
-// a Seq form that allocates nothing and walks no further than where it is stopped, which
-// slices.AppendSeq puts in a buffer. A search allocates its scratch
-// once per call, sized by the grid, and its path has the Append form of [Field.PathTo]. What
+// A slice or region result is allocated once, at its final size. A traversal has a Seq form that
+// allocates nothing and walks no further than where it is stopped, and slices.AppendSeq puts one
+// in a buffer. A search allocates its scratch once per call, sized by the grid, and its path has
+// the Append form of [Field.PathTo]. What
 // depends on which cells of a region are adjacent builds its result in steps: [Grid.Grow]
 // marks the cells of the grid and gathers what it adds as it goes, [Grid.Shrink] builds a
 // region at every step, and [Grid.IsConnected] and [Grid.Components] mark the indices of the

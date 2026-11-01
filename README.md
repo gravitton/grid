@@ -221,7 +221,7 @@ opaque := func(cell grid.Cell[Tile]) bool {
 }
 
 g.HasLineOfSight(from, to, opaque)       // whether one sees the other
-g.FieldOfView(index, 8, opaque)     // a Region: the cells within 8 steps in sight; also Append
+g.FieldOfView(index, 8, opaque)     // a Region: the cells within 8 steps in sight; also FieldOfViewSeq
 cell.FieldOfView(8, opaque)         // the same, from a cell
 ```
 
@@ -343,9 +343,9 @@ g.Spiral(index, 2) // the cells within two steps, nearest first, ring by ring
 g.Line(from, to)   // the straight line between two indices, both included
 ```
 
-Each has its `Append` form, and `SpiralSeq` stops where you break, for the nearest match. A ring and
-a spiral keep the cells inside the grid; a line is measured between any two indices, as `Distance`
-is.
+Each has a `Seq` form, `RingSeq`, `SpiralSeq` and `LineSeq`, which allocates nothing and stops
+where you break, and `slices.AppendSeq` puts one in a buffer of yours. A ring and a spiral keep
+the cells inside the grid; a line is measured between any two indices, as `Distance` is.
 
 What depends on which cells are adjacent is asked of the grid, which knows:
 
@@ -356,7 +356,7 @@ g.IsConnected(reach) // whether it is one piece
 g.Components(reach)  // its pieces, as regions
 ```
 
-`Range` also has `AppendRange`, for a caller who wants the indices without a region.
+`Range` and `Neighbors` have their `Seq` forms too, `RangeSeq` and `NeighborsSeq`.
 
 ### Saving
 

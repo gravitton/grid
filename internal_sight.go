@@ -57,11 +57,10 @@ func (m *sightMarks) blocks(index Index) bool {
 	return x >= 0 && x < m.side && y >= 0 && y < m.side && m.marks[x+y*m.side]&markRefused != 0
 }
 
-// keepSeen returns dst with the indices from start on that were not marked as in sight taken
-// out, in place and in their order.
-func (m *sightMarks) keepSeen(dst []Index, start int) []Index {
-	kept := dst[:start]
-	for _, candidate := range dst[start:] {
+// keepSeen returns the indices marked as in sight, in place and in their order.
+func (m *sightMarks) keepSeen(indices []Index) []Index {
+	kept := indices[:0]
+	for _, candidate := range indices {
 		if m.marks[m.slot(candidate)]&markSeen != 0 {
 			kept = append(kept, candidate)
 		}
