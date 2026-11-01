@@ -49,7 +49,7 @@ func layoutGrids() map[string]*Grid[int] {
 // kindGrids returns one grid of each kind and offset, of the given size in cells and cell
 // scale, at the given origin.
 func kindGrids(size geom.Size[int], cellScale geom.Size[float64], origin geom.Point[float64]) map[string]*Grid[int] {
-	rect := func(options *RectOptions) {
+	rect := func(options *SquareOptions) {
 		options.Origin = origin
 	}
 	odd := func(options *HexOptions) {
@@ -82,7 +82,7 @@ func benchmarkGrids(b *testing.B, run func(b *testing.B, g *Grid[int])) {
 	}
 }
 
-func withDiagonalMovement(options *RectOptions) {
+func withDiagonalMovement(options *SquareOptions) {
 	options.Movement = MovementDiagonal
 }
 
@@ -181,7 +181,7 @@ func stepCost(_, next Cell[int]) float64 {
 }
 
 // testNewRect runs the sections the two square constructors share.
-func testNewRect(t *testing.T, construct func(opts ...func(*RectOptions)) *Grid[int]) {
+func testNewRect(t *testing.T, construct func(opts ...func(*SquareOptions)) *Grid[int]) {
 	g := construct()
 	inner := geom.Pt(2, 2)
 
@@ -202,7 +202,7 @@ func testNewRect(t *testing.T, construct func(opts ...func(*RectOptions)) *Grid[
 		assert.Length(t, diagonal.Cell(inner).Neighbors(), 8)
 	})
 	t.Run("Origin moves every cell", func(t *testing.T) {
-		moved := construct(func(options *RectOptions) {
+		moved := construct(func(options *SquareOptions) {
 			options.Origin = geom.Pt(100.0, 50.0)
 		})
 
@@ -211,7 +211,7 @@ func testNewRect(t *testing.T, construct func(opts ...func(*RectOptions)) *Grid[
 		}
 	})
 	t.Run("every callback is applied, in order", func(t *testing.T) {
-		cardinal := construct(withDiagonalMovement, func(options *RectOptions) {
+		cardinal := construct(withDiagonalMovement, func(options *SquareOptions) {
 			options.Movement = MovementCardinal
 		})
 
@@ -222,7 +222,7 @@ func testNewRect(t *testing.T, construct func(opts ...func(*RectOptions)) *Grid[
 
 		t.Run("panics for the movement "+number, func(t *testing.T) {
 			assert.PanicsWith(t, func() {
-				construct(func(options *RectOptions) {
+				construct(func(options *SquareOptions) {
 					options.Movement = movement
 				})
 			}, "grid: unknown movement "+number)
@@ -231,7 +231,7 @@ func testNewRect(t *testing.T, construct func(opts ...func(*RectOptions)) *Grid[
 }
 
 func TestNewRect(t *testing.T) {
-	construct := func(opts ...func(*RectOptions)) *Grid[int] {
+	construct := func(opts ...func(*SquareOptions)) *Grid[int] {
 		return NewRect[int](geom.Sz(10, 5), geom.Sz(32.0, 32.0), opts...)
 	}
 
@@ -240,7 +240,7 @@ func TestNewRect(t *testing.T) {
 		geomtest.AssertPoint(t, construct().Bounds().Min, geom.Pt(0.0, 0.0))
 	})
 	t.Run("Origin places the top-left corner", func(t *testing.T) {
-		moved := construct(func(options *RectOptions) {
+		moved := construct(func(options *SquareOptions) {
 			options.Origin = geom.Pt(100.0, 50.0)
 		})
 
@@ -251,7 +251,7 @@ func TestNewRect(t *testing.T) {
 }
 
 func TestNewIsometric(t *testing.T) {
-	construct := func(opts ...func(*RectOptions)) *Grid[int] {
+	construct := func(opts ...func(*SquareOptions)) *Grid[int] {
 		return NewIsometric[int](geom.Sz(10, 5), geom.Sz(64.0, 32.0), opts...)
 	}
 
@@ -486,7 +486,7 @@ func TestGrid_CellScale(t *testing.T) {
 	for name, g := range kindGrids(geom.Sz(3, 3), geom.Sz(32.0, 20.0), geom.Pt(0.0, 0.0)) {
 		assert.Equal(t, g.CellScale(), geom.Sz(32.0, 20.0), name+": ")
 
-		g.Resize(geom.Sz(8.0, 4.0))
+		g.Rescale(geom.Sz(8.0, 4.0))
 
 		assert.Equal(t, g.CellScale(), geom.Sz(8.0, 4.0), name+": ")
 	}
@@ -586,7 +586,7 @@ func TestGrid_Cell(t *testing.T) {
 
 	t.Run("is a handle on the index", func(t *testing.T) {
 		assert.Equal(t, g.Cell(geom.Pt(1, 2)).Index(), geom.Pt(1, 2))
-		assert.True(t, g.Cell(geom.Pt(1, 2)).IsValid())
+		assert.True(t, g.Cell(geom.Pt(1, 2)).IsContained())
 	})
 	t.Run("two cells of one index share the value", func(t *testing.T) {
 		g.Cell(geom.Pt(1, 2)).Set(42)
@@ -595,7 +595,7 @@ func TestGrid_Cell(t *testing.T) {
 	})
 	t.Run("outside the grid keeps the index and is not valid", func(t *testing.T) {
 		assert.Equal(t, g.Cell(geom.Pt(99, -1)).Index(), geom.Pt(99, -1))
-		assert.False(t, g.Cell(geom.Pt(99, -1)).IsValid())
+		assert.False(t, g.Cell(geom.Pt(99, -1)).IsContained())
 	})
 }
 
@@ -616,10 +616,10 @@ func ExampleGrid_Cell() {
 	outside.Set(tile{Cost: 9})
 
 	fmt.Println(g.Contains(index), g.Size())
-	fmt.Println(cell, cell.IsValid(), cell.Value().Cost)
+	fmt.Println(cell, cell.IsContained(), cell.Value().Cost)
 	fmt.Println(cell.Neighbors())
 	fmt.Println(cell.DistanceTo(geom.Pt(0, 0)))
-	fmt.Println(outside, outside.IsValid(), outside.Value() == nil)
+	fmt.Println(outside, outside.IsContained(), outside.Value() == nil)
 	// Output:
 	// true 100x100
 	// Cell(3,4) true 5
@@ -840,7 +840,7 @@ func FuzzGrid_IndexAt(f *testing.F) {
 			}
 		}
 
-		assert.Equal(t, NewRect[int](geom.Sz(6, 5), geom.Sz(width, height), func(options *RectOptions) {
+		assert.Equal(t, NewRect[int](geom.Sz(6, 5), geom.Sz(width, height), func(options *SquareOptions) {
 			options.Origin = geom.Pt(x, y)
 		}).IndexAt(geom.Pt(x, y)), geom.Pt(0, 0), "the corner of the bounds: ")
 
@@ -1299,14 +1299,14 @@ func ExampleGrid_MoveTo() {
 	g.MoveTo(geom.Pt(100.0, 50.0))
 	fmt.Println(g.Bounds(), g.Cell(geom.Pt(0, 0)).Center())
 
-	g.Resize(RectCellScale(48))
+	g.Rescale(RectCellScale(48))
 	fmt.Println(g.Bounds(), g.Cell(geom.Pt(0, 0)).Center())
 	// Output:
 	// (100.00,50.00)-(420.00,370.00) (116.00,66.00)
 	// (100.00,50.00)-(580.00,530.00) (124.00,74.00)
 }
 
-func TestGrid_Resize(t *testing.T) {
+func TestGrid_Rescale(t *testing.T) {
 	origin := geom.Pt(10.0, 20.0)
 	scale := geom.Sz(20.0, 12.0)
 	grids := func() map[string]*Grid[int] {
@@ -1315,14 +1315,14 @@ func TestGrid_Resize(t *testing.T) {
 
 	t.Run("replaces the size of a square", func(t *testing.T) {
 		g := grids()["rectangular"]
-		g.Resize(geom.Sz(128.0, 64.0))
+		g.Rescale(geom.Sz(128.0, 64.0))
 
 		geomtest.AssertSize(t, g.CellSize(), geom.Sz(128.0, 64.0))
 		geomtest.AssertSize(t, g.CellSpacing(), geom.Sz(128.0, 64.0))
 	})
 	t.Run("replaces the circumradius of a hexagon", func(t *testing.T) {
 		g := grids()["flat-top"]
-		g.Resize(geom.Sz(10.0, 10.0))
+		g.Rescale(geom.Sz(10.0, 10.0))
 
 		geomtest.AssertSize(t, g.CellSize(), geom.Sz(20.0, geom.Sqrt3*10))
 	})
@@ -1330,7 +1330,7 @@ func TestGrid_Resize(t *testing.T) {
 		built := kindGrids(geom.Sz(6, 5), scale, origin)
 
 		for name, g := range grids() {
-			g.Resize(scale)
+			g.Rescale(scale)
 
 			assert.Equal(t, g.Bounds(), built[name].Bounds(), name+": ")
 			assert.Equal(t, g.CellSize(), built[name].CellSize(), name+": ")
@@ -1341,7 +1341,7 @@ func TestGrid_Resize(t *testing.T) {
 	})
 	t.Run("keeps the origin", func(t *testing.T) {
 		for name, g := range grids() {
-			g.Resize(scale)
+			g.Rescale(scale)
 
 			assert.Equal(t, g.Bounds().Min, origin, name+": ")
 		}
@@ -1349,14 +1349,14 @@ func TestGrid_Resize(t *testing.T) {
 	t.Run("keeps the values", func(t *testing.T) {
 		g := grids()["rectangular"]
 		g.Fill(5)
-		g.Resize(scale)
+		g.Rescale(scale)
 
 		assert.Equal(t, *g.Cell(geom.Pt(2, 3)).Value(), 5)
 	})
 	t.Run("leaves a clone at its size", func(t *testing.T) {
 		g := grids()["rectangular"]
 		clone := g.Clone()
-		g.Resize(scale)
+		g.Rescale(scale)
 
 		geomtest.AssertSize(t, clone.CellSize(), geom.Sz(64.0, 32.0))
 	})
@@ -1364,7 +1364,7 @@ func TestGrid_Resize(t *testing.T) {
 		g := grids()["rectangular"]
 
 		assert.Panics(t, func() {
-			g.Resize(geom.Sz(-1.0, 2.0))
+			g.Rescale(geom.Sz(-1.0, 2.0))
 		})
 		geomtest.AssertSize(t, g.CellSize(), geom.Sz(64.0, 32.0))
 	})
@@ -1377,7 +1377,7 @@ func TestGrid_Resize(t *testing.T) {
 		t.Run("panics for a "+name+" size", func(t *testing.T) {
 			for _, g := range grids() {
 				assert.PanicsWith(t, func() {
-					g.Resize(bad)
+					g.Rescale(bad)
 				}, "grid: cell scale "+bad.String()+" is not positive and finite")
 			}
 		})
@@ -1385,7 +1385,7 @@ func TestGrid_Resize(t *testing.T) {
 	t.Run("allocates nothing", func(t *testing.T) {
 		for name, g := range grids() {
 			allocs := testing.AllocsPerRun(100, func() {
-				g.Resize(scale)
+				g.Rescale(scale)
 			})
 
 			assert.Equal(t, allocs, 0.0, name+": ")
@@ -1393,10 +1393,10 @@ func TestGrid_Resize(t *testing.T) {
 	})
 }
 
-func BenchmarkGrid_Resize(b *testing.B) {
+func BenchmarkGrid_Rescale(b *testing.B) {
 	benchmarkGrids(b, func(b *testing.B, g *Grid[int]) {
 		for i := range b.N {
-			g.Resize(geom.Sz(float64(i&7+8), 20.0))
+			g.Rescale(geom.Sz(float64(i&7+8), 20.0))
 		}
 	})
 }
@@ -2421,7 +2421,7 @@ func TestGrid_HasLineOfSight(t *testing.T) {
 			for from := range g.All() {
 				for to := range g.All() {
 					assert.True(t, g.HasLineOfSight(from.Index(), to.Index(), func(cell Cell[int]) bool {
-						assert.True(t, cell.IsValid(), name+": ")
+						assert.True(t, cell.IsContained(), name+": ")
 
 						return false
 					}), name+": ")
@@ -3282,7 +3282,7 @@ func FuzzGrid_JSON(f *testing.F) {
 }
 
 func ExampleGrid_MarshalJSON() {
-	g := NewRect[int](geom.Sz(2, 1), RectCellScale(32), func(options *RectOptions) {
+	g := NewRect[int](geom.Sz(2, 1), RectCellScale(32), func(options *SquareOptions) {
 		options.Movement = MovementDiagonal
 	})
 	g.Cell(geom.Pt(1, 0)).Set(7)

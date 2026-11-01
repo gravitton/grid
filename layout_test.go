@@ -286,19 +286,19 @@ func TestHexLayout_CellScale(t *testing.T) {
 
 	assert.Equal(t, layout.CellScale(), geom.Sz(32.0, 20.0))
 
-	layout.Resize(geom.Sz(8.0, 4.0))
+	layout.Rescale(geom.Sz(8.0, 4.0))
 
 	assert.Equal(t, layout.CellScale(), geom.Sz(8.0, 4.0))
 }
 
-func TestHexLayout_Resize(t *testing.T) {
+func TestHexLayout_Rescale(t *testing.T) {
 	origin := geom.Pt(100.0, 50.0)
 	scale := geom.Sz(10.0, 12.0)
 
 	t.Run("is the layout built at that scale and moved", func(t *testing.T) {
 		resized := NewHexFlatTopLayout(geom.Sz(32.0, 20.0), hex.Axial)
 		resized.MoveTo(origin)
-		resized.Resize(scale)
+		resized.Rescale(scale)
 		built := NewHexFlatTopLayout(scale, hex.Axial)
 		built.MoveTo(origin)
 
@@ -311,7 +311,7 @@ func TestHexLayout_Resize(t *testing.T) {
 		layout := NewHexFlatTopLayout(geom.Sz(32.0, 20.0), hex.Axial)
 
 		assert.PanicsWith(t, func() {
-			layout.Resize(geom.Sz(-1.0, 2.0))
+			layout.Rescale(geom.Sz(-1.0, 2.0))
 		}, "grid: cell scale "+geom.Sz(-1.0, 2.0).String()+" is not positive and finite")
 		assert.Equal(t, layout.CellSize(), NewHexFlatTopLayout(geom.Sz(32.0, 20.0), hex.Axial).CellSize())
 	})

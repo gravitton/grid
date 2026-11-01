@@ -353,16 +353,16 @@ func TestCell_Reachable(t *testing.T) {
 	}
 }
 
-func TestCell_IsValid(t *testing.T) {
+func TestCell_IsContained(t *testing.T) {
 	g := NewRect[int](geom.Sz(4, 4), geom.Sz(32.0, 32.0))
 
 	t.Run("a cell of the grid is valid", func(t *testing.T) {
-		assert.True(t, g.Cell(geom.Pt(0, 0)).IsValid())
-		assert.True(t, g.Cell(geom.Pt(3, 3)).IsValid())
+		assert.True(t, g.Cell(geom.Pt(0, 0)).IsContained())
+		assert.True(t, g.Cell(geom.Pt(3, 3)).IsContained())
 	})
 	t.Run("a cell outside it is not", func(t *testing.T) {
-		assert.False(t, g.Cell(geom.Pt(4, 0)).IsValid())
-		assert.False(t, g.Cell(geom.Pt(0, -1)).IsValid())
+		assert.False(t, g.Cell(geom.Pt(4, 0)).IsContained())
+		assert.False(t, g.Cell(geom.Pt(0, -1)).IsContained())
 	})
 }
 
@@ -403,10 +403,10 @@ func ExampleCell() {
 
 	cell.Set(7)
 
-	fmt.Println(cell, *cell.Value(), cell.Center(), cell.IsValid())
+	fmt.Println(cell, *cell.Value(), cell.Center(), cell.IsContained())
 	fmt.Println(cell.Neighbors(), cell.DistanceTo(geom.Pt(2, 2)))
 	fmt.Println(cell.PathTo(geom.Pt(2, 1), nil, nil), cell.Reachable(1, nil, nil).Len())
-	fmt.Println(g.Cell(geom.Pt(9, 9)).IsValid(), g.Cell(geom.Pt(9, 9)).Value() == nil)
+	fmt.Println(g.Cell(geom.Pt(9, 9)).IsContained(), g.Cell(geom.Pt(9, 9)).Value() == nil)
 	// Output:
 	// Cell(1,1) 7 (48.00,48.00) true
 	// [(2,1) (1,2) (0,1) (1,0)] 2

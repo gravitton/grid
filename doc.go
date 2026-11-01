@@ -95,7 +95,7 @@
 //     from another under it. Every other method answers as for no neighbors.
 //   - [Grid.IndexAt], [Grid.CellAt] and [HexLayout.IndexAt] for a point with a NaN or infinite
 //     coordinate, and the iterator of [Grid.DrawOrder] for such bounds: no cell is at it.
-//   - Every constructor, [Grid.Resize] and [HexLayout.Resize] for a cell scale that is not
+//   - Every constructor, [Grid.Rescale] and [HexLayout.Rescale] for a cell scale that is not
 //     positive and finite on both axes: no cell can be drawn at it.
 //   - The constructors of a grid, [Grid.MoveTo] and [HexLayout.MoveTo] for an origin with a NaN
 //     or infinite coordinate: no cell can be drawn from it.

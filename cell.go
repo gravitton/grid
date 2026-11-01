@@ -112,8 +112,8 @@ func (c Cell[T]) Reachable(budget float64, passable func(Cell[T]) bool, cost fun
 	return c.grid.Reachable(c.index, budget, passable, cost)
 }
 
-// IsValid reports whether the grid contains the cell, as Grid.Contains does of its index.
-func (c Cell[T]) IsValid() bool {
+// IsContained reports whether the grid contains the cell, as Grid.Contains does of its index.
+func (c Cell[T]) IsContained() bool {
 	return c.grid.Contains(c.index)
 }
 

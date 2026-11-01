@@ -48,7 +48,7 @@ func (l *HexLayout) Origin() geom.Point[float64] {
 	return l.layout.origin
 }
 
-// CellScale returns the cell scale the constructor or Resize took.
+// CellScale returns the cell scale the constructor or Rescale took.
 func (l *HexLayout) CellScale() geom.Size[float64] {
 	return l.layout.cellScale
 }
@@ -99,9 +99,9 @@ func (l *HexLayout) MoveTo(origin geom.Point[float64]) {
 	l.layout.moveTo(origin)
 }
 
-// Resize replaces the cell scale the constructor took, the center of the cell at index zero
+// Rescale replaces the cell scale the constructor took, the center of the cell at index zero
 // staying where it is. It panics for a cell scale that is not positive and finite on both
 // axes.
-func (l *HexLayout) Resize(cellScale geom.Size[float64]) {
-	l.layout.resize(cellScale)
+func (l *HexLayout) Rescale(cellScale geom.Size[float64]) {
+	l.layout.rescale(cellScale)
 }

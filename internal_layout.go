@@ -19,7 +19,7 @@ type layout struct {
 	latticeStep   geom.Size[float64]
 	latticeBounds geom.Box[int]
 
-	// derived from the fields above, by moveTo and resize
+	// derived from the fields above, by moveTo and rescale
 	bounds      geom.Box[float64]
 	cellSize    geom.Size[float64]
 	cellSpacing geom.Size[float64]
@@ -28,13 +28,13 @@ type layout struct {
 
 // newLayout returns the layout of a grid of the given kind and size in cells, its cells
 // at the given scale and the top-left corner of its bounds at origin. It panics where
-// resize and moveTo do.
+// rescale and moveTo do.
 func newLayout(kind kind, size geom.Size[int], cellScale geom.Size[float64], origin geom.Point[float64]) layout {
 	l := layout{
 		kind:          kind,
 		latticeBounds: kind.latticeBounds(size),
 	}
-	l.resize(cellScale)
+	l.rescale(cellScale)
 	l.moveTo(origin)
 
 	return l
@@ -51,9 +51,9 @@ func (l *layout) moveTo(origin geom.Point[float64]) {
 	l.bounds = geom.BoxFromMinMax(origin, l.latticeToWorld(l.latticeBounds.Max))
 }
 
-// resize replaces the scale the constructor took and leaves the origin where it is. It panics
+// rescale replaces the scale the constructor took and leaves the origin where it is. It panics
 // for a scale that is not positive and finite on both axes.
-func (l *layout) resize(cellScale geom.Size[float64]) {
+func (l *layout) rescale(cellScale geom.Size[float64]) {
 	if err := checkCellScale(cellScale); err != nil {
 		panic(err)
 	}

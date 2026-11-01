@@ -11,9 +11,9 @@ import (
 	geom "github.com/gravitton/geometry"
 )
 
-// RectOptions configures a grid of square cells. The zero value is the default: the four
+// SquareOptions configures a grid of square cells. The zero value is the default: the four
 // neighbors of [MovementCardinal], and the top-left corner of the bounds at the world origin.
-type RectOptions struct {
+type SquareOptions struct {
 	// Movement chooses the neighbors of a cell.
 	Movement Movement
 
@@ -44,25 +44,25 @@ type Grid[T any] struct {
 }
 
 // NewRect returns a grid of square cells of the given size in cells, each cell of the given
-// cell scale in the world. Each opts function sets the fields of the [RectOptions] it is given.
+// cell scale in the world. Each opts function sets the fields of the [SquareOptions] it is given.
 // It panics for a movement outside the constants, for a cell scale that is not positive and
 // finite on both axes, and for an origin with a NaN or infinite coordinate.
-func NewRect[T any](size geom.Size[int], cellScale geom.Size[float64], opts ...func(*RectOptions)) *Grid[T] {
+func NewRect[T any](size geom.Size[int], cellScale geom.Size[float64], opts ...func(*SquareOptions)) *Grid[T] {
 	return newSquare[T](size, cellScale, kindRect, opts)
 }
 
 // NewIsometric returns a grid of square cells drawn as diamonds, of the given size in cells,
 // each diamond of the given cell scale in the world, the first cell at the top corner. Each
-// opts function sets the fields of the [RectOptions] it is given. It panics for a movement
+// opts function sets the fields of the [SquareOptions] it is given. It panics for a movement
 // outside the constants, for a cell scale that is not positive and finite on both axes, and for
 // an origin with a NaN or infinite coordinate.
-func NewIsometric[T any](size geom.Size[int], cellScale geom.Size[float64], opts ...func(*RectOptions)) *Grid[T] {
+func NewIsometric[T any](size geom.Size[int], cellScale geom.Size[float64], opts ...func(*SquareOptions)) *Grid[T] {
 	return newSquare[T](size, cellScale, kindIsometric, opts)
 }
 
 // newSquare returns a grid of square cells of the kind, with the options the callbacks set.
-func newSquare[T any](size geom.Size[int], cellScale geom.Size[float64], kind kind, opts []func(*RectOptions)) *Grid[T] {
-	var options RectOptions
+func newSquare[T any](size geom.Size[int], cellScale geom.Size[float64], kind kind, opts []func(*SquareOptions)) *Grid[T] {
+	var options SquareOptions
 	for _, opt := range opts {
 		opt(&options)
 	}
@@ -189,7 +189,7 @@ func (g *Grid[T]) Bounds() geom.Box[float64] {
 	return g.layout.bounds
 }
 
-// CellScale returns the cell scale the constructor or Resize took.
+// CellScale returns the cell scale the constructor or Rescale took.
 func (g *Grid[T]) CellScale() geom.Size[float64] {
 	return g.layout.cellScale
 }
@@ -253,7 +253,7 @@ func (g *Grid[T]) Clone() *Grid[T] {
 
 // Layer returns a grid of zero values of type U over the same cells: of the size, the layout and
 // the neighbor rule of the grid, in the same place, an index of one an index of the other. It
-// moves and resizes apart from the grid.
+// moves and rescales apart from the grid.
 func (g *Grid[T]) Layer[U any]() *Grid[U] {
 	return newGrid[U](g.Size(), g.layout, g.topology)
 }
@@ -397,11 +397,11 @@ func (g *Grid[T]) MoveTo(origin geom.Point[float64]) {
 	g.layout.moveTo(origin)
 }
 
-// Resize replaces the cell scale the constructor of the grid took, the origin staying where it
+// Rescale replaces the cell scale the constructor of the grid took, the origin staying where it
 // is and every cell keeping its value. It panics for a cell scale that is not positive and
 // finite on both axes.
-func (g *Grid[T]) Resize(cellScale geom.Size[float64]) {
-	g.layout.resize(cellScale)
+func (g *Grid[T]) Rescale(cellScale geom.Size[float64]) {
+	g.layout.rescale(cellScale)
 }
 
 // Neighbors returns the indices adjacent to the index that lie in the grid, by increasing
