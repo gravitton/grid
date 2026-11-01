@@ -2782,7 +2782,7 @@ func testSearchField(t *testing.T, field func(g *Grid[int], passable func(Cell[i
 
 		for index := range reached.Region().All() {
 			path := reached.PathTo(index)
-			shortest := g.BreadthFirstSearch(testStart, index, walkable)
+			shortest := g.PathBreadthFirst(testStart, index, walkable)
 
 			assert.Length(t, path, len(shortest), index.String()+": ")
 			assert.Equal(t, path[0], testStart, index.String()+": ")
@@ -2855,33 +2855,33 @@ func ExampleGrid_Path() {
 	// true
 }
 
-func TestGrid_BreadthFirstSearch(t *testing.T) {
+func TestGrid_PathBreadthFirst(t *testing.T) {
 	testSearch(t, func(g *Grid[int], passable func(Cell[int]) bool) []Index {
-		return g.BreadthFirstSearch(testStart, testGoal, passable)
+		return g.PathBreadthFirst(testStart, testGoal, passable)
 	})
 }
 
-func BenchmarkGrid_BreadthFirstSearch(b *testing.B) {
+func BenchmarkGrid_PathBreadthFirst(b *testing.B) {
 	benchmarkSearch(b, func(g *Grid[int], start, goal Index) []Index {
-		return g.BreadthFirstSearch(start, goal, nil)
+		return g.PathBreadthFirst(start, goal, nil)
 	})
 }
 
-func TestGrid_UniformCostSearch(t *testing.T) {
+func TestGrid_PathUniformCost(t *testing.T) {
 	testCost(t, func(g *Grid[int], cost func(current, next Cell[int]) float64) []Index {
-		return g.UniformCostSearch(geom.Pt(0, 0), geom.Pt(3, 0), nil, cost)
+		return g.PathUniformCost(geom.Pt(0, 0), geom.Pt(3, 0), nil, cost)
 	})
 	t.Run("pays the least, around what is dear", func(t *testing.T) {
-		path := weightedGrid().UniformCostSearch(testStart, geom.Pt(4, 0), nil, stepCost)
+		path := weightedGrid().PathUniformCost(testStart, geom.Pt(4, 0), nil, stepCost)
 
 		assert.Length(t, path, 13)
 		assert.NotContains(t, path, geom.Pt(2, 0))
 	})
 	testSearch(t, func(g *Grid[int], passable func(Cell[int]) bool) []Index {
-		return g.UniformCostSearch(testStart, testGoal, passable, nil)
+		return g.PathUniformCost(testStart, testGoal, passable, nil)
 	})
 	t.Run("cost is never asked about a cell that is not passable", func(t *testing.T) {
-		walledGrid().UniformCostSearch(testStart, testGoal, walkable, func(current, next Cell[int]) float64 {
+		walledGrid().PathUniformCost(testStart, testGoal, walkable, func(current, next Cell[int]) float64 {
 			assert.NotEqual(t, next.Index(), testWall)
 
 			return 1
@@ -2889,27 +2889,27 @@ func TestGrid_UniformCostSearch(t *testing.T) {
 	})
 }
 
-func BenchmarkGrid_UniformCostSearch(b *testing.B) {
+func BenchmarkGrid_PathUniformCost(b *testing.B) {
 	benchmarkSearch(b, func(g *Grid[int], start, goal Index) []Index {
-		return g.UniformCostSearch(start, goal, nil, nil)
+		return g.PathUniformCost(start, goal, nil, nil)
 	})
 }
 
-func TestGrid_GreedyBestFirstSearch(t *testing.T) {
+func TestGrid_PathGreedyBestFirst(t *testing.T) {
 	testSearch(t, func(g *Grid[int], passable func(Cell[int]) bool) []Index {
-		return g.GreedyBestFirstSearch(testStart, testGoal, passable)
+		return g.PathGreedyBestFirst(testStart, testGoal, passable)
 	})
 }
 
-func BenchmarkGrid_GreedyBestFirstSearch(b *testing.B) {
+func BenchmarkGrid_PathGreedyBestFirst(b *testing.B) {
 	benchmarkSearch(b, func(g *Grid[int], start, goal Index) []Index {
-		return g.GreedyBestFirstSearch(start, goal, nil)
+		return g.PathGreedyBestFirst(start, goal, nil)
 	})
 }
 
-func TestGrid_AStar(t *testing.T) {
+func TestGrid_PathAStar(t *testing.T) {
 	testCost(t, func(g *Grid[int], cost func(current, next Cell[int]) float64) []Index {
-		return g.AStar(geom.Pt(0, 0), geom.Pt(3, 0), nil, cost)
+		return g.PathAStar(geom.Pt(0, 0), geom.Pt(3, 0), nil, cost)
 	})
 	t.Run("pays what uniform cost search pays", func(t *testing.T) {
 		for name, g := range ruleGrids(geom.Sz(9, 9)) {
@@ -2918,8 +2918,8 @@ func TestGrid_AStar(t *testing.T) {
 			}
 
 			for cell := range g.All() {
-				expected, _ := g.UniformCostSearchField(testStart, nil, stepCost).CostTo(cell.Index())
-				path := g.AStar(testStart, cell.Index(), nil, stepCost)
+				expected, _ := g.FieldUniformCost(testStart, nil, stepCost).CostTo(cell.Index())
+				path := g.PathAStar(testStart, cell.Index(), nil, stepCost)
 
 				paid := 0.0
 				for i := 1; i < len(path); i++ {
@@ -2931,10 +2931,10 @@ func TestGrid_AStar(t *testing.T) {
 		}
 	})
 	testSearch(t, func(g *Grid[int], passable func(Cell[int]) bool) []Index {
-		return g.AStar(testStart, testGoal, passable, nil)
+		return g.PathAStar(testStart, testGoal, passable, nil)
 	})
 	t.Run("cost is never asked about a cell that is not passable", func(t *testing.T) {
-		walledGrid().AStar(testStart, testGoal, walkable, func(current, next Cell[int]) float64 {
+		walledGrid().PathAStar(testStart, testGoal, walkable, func(current, next Cell[int]) float64 {
 			assert.NotEqual(t, next.Index(), testWall)
 
 			return 1
@@ -2942,13 +2942,13 @@ func TestGrid_AStar(t *testing.T) {
 	})
 }
 
-func BenchmarkGrid_AStar(b *testing.B) {
+func BenchmarkGrid_PathAStar(b *testing.B) {
 	benchmarkSearch(b, func(g *Grid[int], start, goal Index) []Index {
-		return g.AStar(start, goal, nil, nil)
+		return g.PathAStar(start, goal, nil, nil)
 	})
 }
 
-func FuzzGrid_AStar(f *testing.F) {
+func FuzzGrid_PathAStar(f *testing.F) {
 	for kind := range uint8(7) {
 		f.Add(kind, uint8(8), uint8(8), uint8(2), uint8(2), uint8(9), uint8(9), uint8(3))
 		f.Add(kind, uint8(4), uint8(9), uint8(0), uint8(0), uint8(4), uint8(9), uint8(11))
@@ -2968,7 +2968,7 @@ func FuzzGrid_AStar(f *testing.F) {
 		}
 		start, goal := fuzzIndex(g, x0, y0), fuzzIndex(g, x1, y1)
 
-		path, shortest := g.AStar(start, goal, passable, cost), g.BreadthFirstSearch(start, goal, passable)
+		path, shortest := g.PathAStar(start, goal, passable, cost), g.PathBreadthFirst(start, goal, passable)
 
 		assert.Equal(t, path == nil, shortest == nil)
 		if path == nil {
@@ -2987,40 +2987,40 @@ func FuzzGrid_AStar(f *testing.F) {
 			}
 		}
 
-		cheapest, _ := g.UniformCostSearchField(start, passable, cost).CostTo(goal)
+		cheapest, _ := g.FieldUniformCost(start, passable, cost).CostTo(goal)
 		assert.Equal(t, paid, cheapest)
-		assert.Length(t, g.AStar(start, goal, passable, nil), len(shortest))
-		assert.Length(t, g.UniformCostSearch(start, goal, passable, nil), len(shortest))
+		assert.Length(t, g.PathAStar(start, goal, passable, nil), len(shortest))
+		assert.Length(t, g.PathUniformCost(start, goal, passable, nil), len(shortest))
 	})
 }
 
 func TestGrid_Field(t *testing.T) {
-	t.Run("a nil cost counts the steps of BreadthFirstSearchField, on every layout", func(t *testing.T) {
+	t.Run("a nil cost counts the steps of FieldBreadthFirst, on every layout", func(t *testing.T) {
 		for name, g := range layoutGrids() {
-			field, expected := g.Field(geom.Pt(1, 1), nil, nil), g.BreadthFirstSearchField(geom.Pt(1, 1), nil)
+			field, expected := g.Field(geom.Pt(1, 1), nil, nil), g.FieldBreadthFirst(geom.Pt(1, 1), nil)
 
 			assert.True(t, field.Region().Equal(expected.Region()), name+": ")
 			assert.Equal(t, field.PathTo(geom.Pt(2, 2)), expected.PathTo(geom.Pt(2, 2)), name+": ")
 		}
 	})
-	t.Run("a cost weighs the steps of UniformCostSearchField, on every layout", func(t *testing.T) {
+	t.Run("a cost weighs the steps of FieldUniformCost, on every layout", func(t *testing.T) {
 		for name, g := range layoutGrids() {
-			field, expected := g.Field(geom.Pt(1, 1), nil, stepCost), g.UniformCostSearchField(geom.Pt(1, 1), nil, stepCost)
+			field, expected := g.Field(geom.Pt(1, 1), nil, stepCost), g.FieldUniformCost(geom.Pt(1, 1), nil, stepCost)
 
 			assert.Equal(t, field.PathTo(geom.Pt(2, 2)), expected.PathTo(geom.Pt(2, 2)), name+": ")
 		}
 	})
 }
 
-func TestGrid_BreadthFirstSearchField(t *testing.T) {
+func TestGrid_FieldBreadthFirst(t *testing.T) {
 	testSearchField(t, func(g *Grid[int], passable func(Cell[int]) bool) Field {
-		return g.BreadthFirstSearchField(testStart, passable)
+		return g.FieldBreadthFirst(testStart, passable)
 	})
 }
 
-func TestGrid_UniformCostSearchField(t *testing.T) {
+func TestGrid_FieldUniformCost(t *testing.T) {
 	testSearchField(t, func(g *Grid[int], passable func(Cell[int]) bool) Field {
-		return g.UniformCostSearchField(testStart, passable, nil)
+		return g.FieldUniformCost(testStart, passable, nil)
 	})
 }
 
@@ -3033,7 +3033,7 @@ func TestGrid_Reachable(t *testing.T) {
 				}
 			}
 			start := geom.Pt(4, 5)
-			field := g.BreadthFirstSearchField(start, walkable)
+			field := g.FieldBreadthFirst(start, walkable)
 
 			for steps := range 6 {
 				var expected []Index

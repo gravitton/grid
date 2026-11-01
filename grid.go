@@ -797,33 +797,33 @@ func (g *Grid[T]) blockedIndex(blocked func(Cell[T]) bool) func(Index) bool {
 	}
 }
 
-// Path returns the path of AStar from start to goal, both included, or nil where none is found.
+// Path returns the path of PathAStar from start to goal, both included, or nil where none is found.
 func (g *Grid[T]) Path(start, goal Index, passable func(Cell[T]) bool, cost func(current, next Cell[T]) float64) []Index {
 	return g.astar(start, goal, passable, cost).PathTo(goal)
 }
 
-// BreadthFirstSearch returns the path of the fewest steps from start to goal, both included,
+// PathBreadthFirst returns the path of the fewest steps from start to goal, both included,
 // or nil where none is found.
-func (g *Grid[T]) BreadthFirstSearch(start, goal Index, passable func(Cell[T]) bool) []Index {
+func (g *Grid[T]) PathBreadthFirst(start, goal Index, passable func(Cell[T]) bool) []Index {
 	return g.breadthFirstSearch(start, &goal, math.Inf(1), passable).PathTo(goal)
 }
 
-// UniformCostSearch returns the cheapest path from start to goal, both included, or nil where
+// PathUniformCost returns the cheapest path from start to goal, both included, or nil where
 // none is found. Uniform cost search is also known as Dijkstra's algorithm.
-func (g *Grid[T]) UniformCostSearch(start, goal Index, passable func(Cell[T]) bool, cost func(current, next Cell[T]) float64) []Index {
+func (g *Grid[T]) PathUniformCost(start, goal Index, passable func(Cell[T]) bool, cost func(current, next Cell[T]) float64) []Index {
 	return g.uniformCostSearch(start, &goal, math.Inf(1), passable, cost).PathTo(goal)
 }
 
-// GreedyBestFirstSearch returns a path from start to goal, both included, or nil where none is
+// PathGreedyBestFirst returns a path from start to goal, both included, or nil where none is
 // found, heading for the cell nearest to the goal at every step. The path is not always the
 // shortest.
-func (g *Grid[T]) GreedyBestFirstSearch(start, goal Index, passable func(Cell[T]) bool) []Index {
+func (g *Grid[T]) PathGreedyBestFirst(start, goal Index, passable func(Cell[T]) bool) []Index {
 	return g.greedyBestFirstSearch(start, goal, passable).PathTo(goal)
 }
 
-// AStar returns the cheapest path from start to goal, both included, or nil where none is
+// PathAStar returns the cheapest path from start to goal, both included, or nil where none is
 // found. A cost below one per step can make the path dearer than the cheapest.
-func (g *Grid[T]) AStar(start, goal Index, passable func(Cell[T]) bool, cost func(current, next Cell[T]) float64) []Index {
+func (g *Grid[T]) PathAStar(start, goal Index, passable func(Cell[T]) bool, cost func(current, next Cell[T]) float64) []Index {
 	return g.astar(start, goal, passable, cost).PathTo(goal)
 }
 
@@ -836,15 +836,15 @@ func (g *Grid[T]) Field(start Index, passable func(Cell[T]) bool, cost func(curr
 	return g.uniformCostSearch(start, nil, math.Inf(1), passable, cost)
 }
 
-// BreadthFirstSearchField returns the field of every cell reached from start, with the fewest
+// FieldBreadthFirst returns the field of every cell reached from start, with the fewest
 // steps to each, whatever a step costs.
-func (g *Grid[T]) BreadthFirstSearchField(start Index, passable func(Cell[T]) bool) Field {
+func (g *Grid[T]) FieldBreadthFirst(start Index, passable func(Cell[T]) bool) Field {
 	return g.breadthFirstSearch(start, nil, math.Inf(1), passable)
 }
 
-// UniformCostSearchField returns the field of every cell reached from start, with the cheapest
+// FieldUniformCost returns the field of every cell reached from start, with the cheapest
 // way to each. Uniform cost search is also known as Dijkstra's algorithm.
-func (g *Grid[T]) UniformCostSearchField(start Index, passable func(Cell[T]) bool, cost func(current, next Cell[T]) float64) Field {
+func (g *Grid[T]) FieldUniformCost(start Index, passable func(Cell[T]) bool, cost func(current, next Cell[T]) float64) Field {
 	return g.uniformCostSearch(start, nil, math.Inf(1), passable, cost)
 }
 

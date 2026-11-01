@@ -11,7 +11,7 @@ import (
 
 func TestField_Start(t *testing.T) {
 	t.Run("is where the search started", func(t *testing.T) {
-		assert.Equal(t, walledGrid().BreadthFirstSearchField(testGoal, walkable).Start(), testGoal)
+		assert.Equal(t, walledGrid().FieldBreadthFirst(testGoal, walkable).Start(), testGoal)
 	})
 	t.Run("the empty field starts at the origin", func(t *testing.T) {
 		assert.Equal(t, Field{}.Start(), geom.Pt(0, 0))
@@ -20,7 +20,7 @@ func TestField_Start(t *testing.T) {
 
 func TestField_Len(t *testing.T) {
 	t.Run("counts the cells reached, the start included", func(t *testing.T) {
-		assert.Equal(t, walledGrid().BreadthFirstSearchField(testStart, walkable).Len(), 24)
+		assert.Equal(t, walledGrid().FieldBreadthFirst(testStart, walkable).Len(), 24)
 	})
 	t.Run("the empty field reaches nothing", func(t *testing.T) {
 		assert.Equal(t, Field{}.Len(), 0)
@@ -29,7 +29,7 @@ func TestField_Len(t *testing.T) {
 
 func TestField_Next(t *testing.T) {
 	g := walledGrid()
-	field := g.BreadthFirstSearchField(testStart, walkable)
+	field := g.FieldBreadthFirst(testStart, walkable)
 
 	t.Run("is a neighbor one step closer to the start", func(t *testing.T) {
 		for index := range field.Region().All() {
@@ -69,7 +69,7 @@ func TestField_Next(t *testing.T) {
 
 func TestField_CostTo(t *testing.T) {
 	t.Run("a search that counts steps costs the steps", func(t *testing.T) {
-		field := walledGrid().BreadthFirstSearchField(testStart, walkable)
+		field := walledGrid().FieldBreadthFirst(testStart, walkable)
 
 		for index := range field.Region().All() {
 			cost, found := field.CostTo(index)
@@ -80,7 +80,7 @@ func TestField_CostTo(t *testing.T) {
 	})
 	t.Run("a weighted search costs what its path costs", func(t *testing.T) {
 		g := weightedGrid()
-		field := g.UniformCostSearchField(testStart, nil, stepCost)
+		field := g.FieldUniformCost(testStart, nil, stepCost)
 
 		for index := range field.Region().All() {
 			path := field.PathTo(index)
@@ -94,18 +94,18 @@ func TestField_CostTo(t *testing.T) {
 		}
 	})
 	t.Run("goes around what is dear", func(t *testing.T) {
-		cost, _ := weightedGrid().UniformCostSearchField(testStart, nil, stepCost).CostTo(geom.Pt(4, 0))
+		cost, _ := weightedGrid().FieldUniformCost(testStart, nil, stepCost).CostTo(geom.Pt(4, 0))
 
 		assert.Equal(t, cost, 12.0)
 	})
 	t.Run("the start costs nothing", func(t *testing.T) {
-		cost, found := weightedGrid().UniformCostSearchField(testStart, nil, stepCost).CostTo(testStart)
+		cost, found := weightedGrid().FieldUniformCost(testStart, nil, stepCost).CostTo(testStart)
 
 		assert.True(t, found)
 		assert.Equal(t, cost, 0.0)
 	})
 	t.Run("a cell not reached has no cost", func(t *testing.T) {
-		_, found := walledGrid().BreadthFirstSearchField(testStart, walkable).CostTo(testWall)
+		_, found := walledGrid().FieldBreadthFirst(testStart, walkable).CostTo(testWall)
 
 		assert.False(t, found)
 	})
@@ -113,7 +113,7 @@ func TestField_CostTo(t *testing.T) {
 
 func TestField_PathTo(t *testing.T) {
 	g := walledGrid()
-	field := g.BreadthFirstSearchField(testStart, walkable)
+	field := g.FieldBreadthFirst(testStart, walkable)
 
 	t.Run("runs from the start to the index by neighbors", func(t *testing.T) {
 		path := field.PathTo(testGoal)
@@ -144,7 +144,7 @@ func TestField_PathTo(t *testing.T) {
 
 func BenchmarkField_PathTo(b *testing.B) {
 	benchmarkGrids(b, func(b *testing.B, g *Grid[int]) {
-		field := g.BreadthFirstSearchField(geom.Pt(0, 0), nil)
+		field := g.FieldBreadthFirst(geom.Pt(0, 0), nil)
 
 		for b.Loop() {
 			sinkPoints = field.PathTo(geom.Pt(63, 63))
@@ -153,7 +153,7 @@ func BenchmarkField_PathTo(b *testing.B) {
 }
 
 func TestField_AppendPathTo(t *testing.T) {
-	field := walledGrid().BreadthFirstSearchField(testStart, walkable)
+	field := walledGrid().FieldBreadthFirst(testStart, walkable)
 
 	t.Run("appends the indices of PathTo", func(t *testing.T) {
 		prefix := []Index{geom.Pt(-9, -9)}
@@ -173,7 +173,7 @@ func TestField_AppendPathTo(t *testing.T) {
 }
 
 func TestField_Contains(t *testing.T) {
-	field := walledGrid().BreadthFirstSearchField(testStart, walkable)
+	field := walledGrid().FieldBreadthFirst(testStart, walkable)
 
 	t.Run("a cell reached", func(t *testing.T) {
 		assert.True(t, field.Contains(testStart))
@@ -194,10 +194,10 @@ func TestField_Contains(t *testing.T) {
 
 func TestField_IsEmpty(t *testing.T) {
 	t.Run("a search that started is not", func(t *testing.T) {
-		assert.False(t, walledGrid().BreadthFirstSearchField(testStart, walkable).IsEmpty())
+		assert.False(t, walledGrid().FieldBreadthFirst(testStart, walkable).IsEmpty())
 	})
 	t.Run("a search from outside the grid is", func(t *testing.T) {
-		assert.True(t, walledGrid().BreadthFirstSearchField(geom.Pt(-1, 0), walkable).IsEmpty())
+		assert.True(t, walledGrid().FieldBreadthFirst(geom.Pt(-1, 0), walkable).IsEmpty())
 	})
 	t.Run("the zero value is", func(t *testing.T) {
 		assert.True(t, Field{}.IsEmpty())
@@ -205,7 +205,7 @@ func TestField_IsEmpty(t *testing.T) {
 }
 
 func TestField_All(t *testing.T) {
-	field := NewRect[int](geom.Sz(3, 3), geom.SzU(32.0)).BreadthFirstSearchField(geom.Pt(1, 1), nil)
+	field := NewRect[int](geom.Sz(3, 3), geom.SzU(32.0)).FieldBreadthFirst(geom.Pt(1, 1), nil)
 
 	t.Run("yields what Region holds, in its order", func(t *testing.T) {
 		assert.Equal(t, slices.Collect(field.All()), field.Region().Elements())
@@ -226,7 +226,7 @@ func TestField_All(t *testing.T) {
 }
 
 func TestField_Region(t *testing.T) {
-	field := sealedGrid().BreadthFirstSearchField(testStart, walkable)
+	field := sealedGrid().FieldBreadthFirst(testStart, walkable)
 
 	t.Run("is the cells reached", func(t *testing.T) {
 		region := field.Region()
@@ -259,7 +259,7 @@ func ExampleField() {
 		return *cell.Value()
 	}
 
-	field := g.BreadthFirstSearchField(geom.Pt(4, 0), walkable)
+	field := g.FieldBreadthFirst(geom.Pt(4, 0), walkable)
 
 	fmt.Println(field.Next(geom.Pt(0, 0)))
 	fmt.Println(field.CostTo(geom.Pt(0, 0)))
