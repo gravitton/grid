@@ -10,7 +10,7 @@ import (
 	geom "github.com/gravitton/geometry"
 )
 
-var testPoint = Sq(3, -2)
+var testSquare = Sq(3, -2)
 
 func TestSquare_Constructor(t *testing.T) {
 	assert.Equal(t, Sq(3, -2).Point(), geom.Pt(3, -2))
@@ -20,7 +20,7 @@ func TestRangeLen(t *testing.T) {
 	t.Run("is the length of Range", func(t *testing.T) {
 		for _, movement := range Movements() {
 			for n := -1; n < 6; n++ {
-				assert.Equal(t, RangeLen(n, movement), len(testPoint.Range(n, movement)), movement.String()+" at "+strconv.Itoa(n)+": ")
+				assert.Equal(t, RangeLen(n, movement), len(testSquare.Range(n, movement)), movement.String()+" at "+strconv.Itoa(n)+": ")
 			}
 		}
 	})
@@ -34,13 +34,42 @@ func TestRingLen(t *testing.T) {
 	t.Run("is the length of Ring", func(t *testing.T) {
 		for _, movement := range Movements() {
 			for n := -1; n < 6; n++ {
-				assert.Equal(t, RingLen(n, movement), len(testPoint.Ring(n, movement)), movement.String()+" at "+strconv.Itoa(n)+": ")
+				assert.Equal(t, RingLen(n, movement), len(testSquare.Ring(n, movement)), movement.String()+" at "+strconv.Itoa(n)+": ")
 			}
 		}
 	})
 	t.Run("counts nothing past the index itself outside the constants", func(t *testing.T) {
 		assert.Equal(t, RingLen(0, MovementNone), 1)
 		assert.Equal(t, RingLen(3, MovementNone), 0)
+	})
+}
+
+func TestSectorLen(t *testing.T) {
+	for _, movement := range Movements() {
+		t.Run(movement.String(), func(t *testing.T) {
+			t.Run("is the length of Sector", func(t *testing.T) {
+				for turns := range 10 {
+					for radius := range 9 {
+						assert.Equal(t, SectorLen(radius, turns, movement), len(testSquare.Sector(radius, geom.DirectionUp, turns, movement)), strconv.Itoa(turns)+": ")
+					}
+				}
+			})
+			t.Run("is zero for a negative radius or negative turns", func(t *testing.T) {
+				assert.Equal(t, SectorLen(-1, 1, movement), 0)
+				assert.Equal(t, SectorLen(3, -1, movement), 0)
+			})
+		})
+	}
+	t.Run("is r+t·r(r+1)/2, less ⌈r/2⌉ for odd t", func(t *testing.T) {
+		assert.Equal(t, SectorLen(4, 1, MovementCardinal), 12)
+		assert.Equal(t, SectorLen(4, 2, MovementDiagonal), 24)
+	})
+	t.Run("is every ring from as many turns as directions on", func(t *testing.T) {
+		assert.Equal(t, SectorLen(3, 4, MovementCardinal), RangeLen(3, MovementCardinal)-1)
+		assert.Equal(t, SectorLen(3, 99, MovementDiagonal), RangeLen(3, MovementDiagonal)-1)
+	})
+	t.Run("is zero for a movement outside the constants", func(t *testing.T) {
+		assert.Equal(t, SectorLen(3, 1, MovementNone), 0)
 	})
 }
 
@@ -51,21 +80,21 @@ func TestSquare_Turn(t *testing.T) {
 	})
 	t.Run("negative steps turn the other way", func(t *testing.T) {
 		assert.Equal(t, Sq(1, 0).Turn(-1), Sq(0, -1))
-		assert.Equal(t, testPoint.Turn(-1), testPoint.Turn(3))
+		assert.Equal(t, testSquare.Turn(-1), testSquare.Turn(3))
 	})
 	t.Run("four steps are a full turn", func(t *testing.T) {
 		for steps := -8; steps <= 8; steps++ {
-			assert.Equal(t, testPoint.Turn(steps).Turn(4-steps), testPoint, strconv.Itoa(steps)+": ")
+			assert.Equal(t, testSquare.Turn(steps).Turn(4-steps), testSquare, strconv.Itoa(steps)+": ")
 		}
 	})
 	t.Run("turns a neighbor as geom turns its direction", func(t *testing.T) {
 		for _, direction := range geom.Directions() {
-			assert.Equal(t, Square(Sq(0, 0).Neighbor(direction)).Turn(1).Point(), Sq(0, 0).Neighbor(direction.Turn(2)), direction.String()+": ")
+			assert.Equal(t, Sq(0, 0).Neighbor(direction).Turn(1), Sq(0, 0).Neighbor(direction.Turn(2)), direction.String()+": ")
 		}
 	})
 	t.Run("keeps the distance from the origin", func(t *testing.T) {
 		for _, movement := range Movements() {
-			assert.Equal(t, testPoint.Turn(1).DistanceTo(geom.Pt(0, 0), movement), testPoint.DistanceTo(geom.Pt(0, 0), movement), movement.String()+": ")
+			assert.Equal(t, testSquare.Turn(1).DistanceTo(geom.Pt(0, 0), movement), testSquare.DistanceTo(geom.Pt(0, 0), movement), movement.String()+": ")
 		}
 	})
 }
@@ -81,7 +110,7 @@ func TestSquare_TurnAround(t *testing.T) {
 		assert.Equal(t, Square(center).TurnAround(center, 3), Square(center))
 	})
 	t.Run("around the origin is Turn", func(t *testing.T) {
-		assert.Equal(t, testPoint.TurnAround(geom.Pt(0, 0), 3), testPoint.Turn(3))
+		assert.Equal(t, testSquare.TurnAround(geom.Pt(0, 0), 3), testSquare.Turn(3))
 	})
 }
 
@@ -90,7 +119,7 @@ func TestSquare_ReflectX(t *testing.T) {
 		assert.Equal(t, Sq(3, -2).ReflectX(), Sq(3, 2))
 	})
 	t.Run("twice is the point", func(t *testing.T) {
-		assert.Equal(t, testPoint.ReflectX().ReflectX(), testPoint)
+		assert.Equal(t, testSquare.ReflectX().ReflectX(), testSquare)
 	})
 }
 
@@ -99,17 +128,17 @@ func TestSquare_ReflectY(t *testing.T) {
 		assert.Equal(t, Sq(3, -2).ReflectY(), Sq(-3, -2))
 	})
 	t.Run("both reflections are a half turn", func(t *testing.T) {
-		assert.Equal(t, testPoint.ReflectX().ReflectY(), testPoint.Turn(2))
+		assert.Equal(t, testSquare.ReflectX().ReflectY(), testSquare.Turn(2))
 	})
 }
 
 func TestSquare_Neighbor(t *testing.T) {
 	t.Run("steps once in the direction", func(t *testing.T) {
-		assert.Equal(t, testPoint.Neighbor(geom.DirectionRight), geom.Pt(4, -2))
-		assert.Equal(t, testPoint.Neighbor(geom.DirectionUpLeft), geom.Pt(2, -3))
+		assert.Equal(t, testSquare.Neighbor(geom.DirectionRight), Sq(4, -2))
+		assert.Equal(t, testSquare.Neighbor(geom.DirectionUpLeft), Sq(2, -3))
 	})
 	t.Run("none stays", func(t *testing.T) {
-		assert.Equal(t, testPoint.Neighbor(geom.DirectionNone), testPoint.Point())
+		assert.Equal(t, testSquare.Neighbor(geom.DirectionNone), testSquare)
 	})
 }
 
@@ -121,8 +150,8 @@ func TestSquare_Neighbors(t *testing.T) {
 		assert.Length(t, Sq(3, -2).Neighbors(MovementDiagonal), 8)
 	})
 	t.Run("has none outside the constants", func(t *testing.T) {
-		assert.Nil(t, testPoint.Neighbors(MovementNone))
-		assert.Length(t, slices.Collect(testPoint.NeighborsSeq(Movement(99))), 0)
+		assert.Nil(t, testSquare.Neighbors(MovementNone))
+		assert.Length(t, slices.Collect(testSquare.NeighborsSeq(Movement(99))), 0)
 	})
 }
 
@@ -130,13 +159,13 @@ func TestSquare_NeighborsSeq(t *testing.T) {
 	for _, movement := range Movements() {
 		t.Run(movement.String(), func(t *testing.T) {
 			t.Run("yields what Neighbors returns", func(t *testing.T) {
-				assert.Equal(t, slices.Collect(testPoint.NeighborsSeq(movement)), testPoint.Neighbors(movement))
+				assert.Equal(t, slices.Collect(testSquare.NeighborsSeq(movement)), testSquare.Neighbors(movement))
 			})
 			t.Run("allocates nothing into a buffer with room", func(t *testing.T) {
 				buffer := make([]Index, 0, 8)
 
 				assert.Equal(t, testing.AllocsPerRun(10, func() {
-					sinkPoints = slices.AppendSeq(buffer[:0], testPoint.NeighborsSeq(movement))
+					sinkPoints = slices.AppendSeq(buffer[:0], testSquare.NeighborsSeq(movement))
 				}), 0.0)
 			})
 		})
@@ -195,7 +224,7 @@ func BenchmarkSquare_Range(b *testing.B) {
 	for _, movement := range Movements() {
 		b.Run(movement.String(), func(b *testing.B) {
 			for b.Loop() {
-				sinkPoints = testPoint.Range(8, movement)
+				sinkPoints = testSquare.Range(8, movement)
 			}
 		})
 	}
@@ -205,11 +234,11 @@ func TestSquare_RangeSeq(t *testing.T) {
 	for _, movement := range Movements() {
 		t.Run(movement.String(), func(t *testing.T) {
 			t.Run("yields what Range returns", func(t *testing.T) {
-				assert.Equal(t, slices.Collect(testPoint.RangeSeq(3, movement)), testPoint.Range(3, movement))
+				assert.Equal(t, slices.Collect(testSquare.RangeSeq(3, movement)), testSquare.Range(3, movement))
 			})
 			t.Run("stops at the break", func(t *testing.T) {
 				count := 0
-				for range testPoint.RangeSeq(3, movement) {
+				for range testSquare.RangeSeq(3, movement) {
 					count++
 
 					break
@@ -219,7 +248,7 @@ func TestSquare_RangeSeq(t *testing.T) {
 			})
 			t.Run("allocates nothing", func(t *testing.T) {
 				assert.Equal(t, testing.AllocsPerRun(10, func() {
-					for index := range testPoint.RangeSeq(3, movement) {
+					for index := range testSquare.RangeSeq(3, movement) {
 						sinkPoint = index
 					}
 				}), 0.0)
@@ -230,10 +259,10 @@ func TestSquare_RangeSeq(t *testing.T) {
 
 func TestSquare_Ring(t *testing.T) {
 	t.Run("a negative radius is nil", func(t *testing.T) {
-		assert.Equal(t, testPoint.Ring(-1, MovementCardinal), nil)
+		assert.Equal(t, testSquare.Ring(-1, MovementCardinal), nil)
 	})
 	t.Run("a zero radius is the point alone", func(t *testing.T) {
-		assert.Equal(t, testPoint.Ring(0, MovementDiagonal), []Index{testPoint.Point()})
+		assert.Equal(t, testSquare.Ring(0, MovementDiagonal), []Index{testSquare.Point()})
 	})
 	t.Run("cardinal walks the diamond by increasing angle", func(t *testing.T) {
 		assert.Equal(t, Sq(0, 0).Ring(2, MovementCardinal), []Index{
@@ -248,31 +277,31 @@ func TestSquare_Ring(t *testing.T) {
 	for _, movement := range Movements() {
 		t.Run(movement.String(), func(t *testing.T) {
 			t.Run("a radius of one is the neighbors", func(t *testing.T) {
-				assert.Equal(t, testPoint.Ring(1, movement), testPoint.Neighbors(movement))
+				assert.Equal(t, testSquare.Ring(1, movement), testSquare.Neighbors(movement))
 			})
 			t.Run("holds exactly the indices at the distance", func(t *testing.T) {
 				for n := range 6 {
-					ring := testPoint.Ring(n, movement)
+					ring := testSquare.Ring(n, movement)
 
 					assert.Equal(t, Reg(ring).Len(), len(ring), strconv.Itoa(n)+": ")
-					for _, index := range testPoint.Range(n+1, movement) {
-						assert.Equal(t, slices.Contains(ring, index), testPoint.DistanceTo(index, movement) == n, strconv.Itoa(n)+" at "+index.String()+": ")
+					for _, index := range testSquare.Range(n+1, movement) {
+						assert.Equal(t, slices.Contains(ring, index), testSquare.DistanceTo(index, movement) == n, strconv.Itoa(n)+" at "+index.String()+": ")
 					}
 				}
 			})
 			t.Run("allocates once at its length", func(t *testing.T) {
-				ring := testPoint.Ring(4, movement)
+				ring := testSquare.Ring(4, movement)
 
 				assert.Equal(t, cap(ring), len(ring))
 				assert.Equal(t, testing.AllocsPerRun(10, func() {
-					sinkPoints = testPoint.Ring(4, movement)
+					sinkPoints = testSquare.Ring(4, movement)
 				}), 1.0)
 			})
 		})
 	}
 	t.Run("is the index alone at radius zero outside the constants, and empty beyond", func(t *testing.T) {
-		assert.Equal(t, testPoint.Ring(0, MovementNone), []Index{testPoint.Point()})
-		assert.Length(t, testPoint.Ring(3, MovementNone), 0)
+		assert.Equal(t, testSquare.Ring(0, MovementNone), []Index{testSquare.Point()})
+		assert.Length(t, testSquare.Ring(3, MovementNone), 0)
 	})
 }
 
@@ -281,13 +310,13 @@ func TestSquare_RingSeq(t *testing.T) {
 		t.Run(movement.String(), func(t *testing.T) {
 			t.Run("yields what Ring returns", func(t *testing.T) {
 				for n := -1; n < 4; n++ {
-					assert.Equal(t, slices.Collect(testPoint.RingSeq(n, movement)), testPoint.Ring(n, movement), strconv.Itoa(n)+": ")
+					assert.Equal(t, slices.Collect(testSquare.RingSeq(n, movement)), testSquare.Ring(n, movement), strconv.Itoa(n)+": ")
 				}
 			})
 			t.Run("stops at the break", func(t *testing.T) {
 				for n := range 3 {
 					count := 0
-					for range testPoint.RingSeq(n, movement) {
+					for range testSquare.RingSeq(n, movement) {
 						count++
 
 						break
@@ -298,7 +327,7 @@ func TestSquare_RingSeq(t *testing.T) {
 			})
 			t.Run("allocates nothing", func(t *testing.T) {
 				assert.Equal(t, testing.AllocsPerRun(10, func() {
-					for index := range testPoint.RingSeq(3, movement) {
+					for index := range testSquare.RingSeq(3, movement) {
 						sinkPoint = index
 					}
 				}), 0.0)
@@ -309,36 +338,36 @@ func TestSquare_RingSeq(t *testing.T) {
 
 func TestSquare_Spiral(t *testing.T) {
 	t.Run("a negative radius is nil", func(t *testing.T) {
-		assert.Equal(t, testPoint.Spiral(-1, MovementCardinal), nil)
+		assert.Equal(t, testSquare.Spiral(-1, MovementCardinal), nil)
 	})
 	for _, movement := range Movements() {
 		t.Run(movement.String(), func(t *testing.T) {
 			t.Run("starts at the point", func(t *testing.T) {
-				assert.Equal(t, testPoint.Spiral(3, movement)[0], testPoint.Point())
+				assert.Equal(t, testSquare.Spiral(3, movement)[0], testSquare.Point())
 			})
 			t.Run("holds what Range holds", func(t *testing.T) {
-				assert.True(t, Reg(testPoint.Spiral(4, movement)).Equal(Reg(testPoint.Range(4, movement))))
+				assert.True(t, Reg(testSquare.Spiral(4, movement)).Equal(Reg(testSquare.Range(4, movement))))
 			})
 			t.Run("never steps back toward the point", func(t *testing.T) {
 				previous := 0
-				for _, index := range testPoint.Spiral(4, movement) {
-					distance := testPoint.DistanceTo(index, movement)
+				for _, index := range testSquare.Spiral(4, movement) {
+					distance := testSquare.DistanceTo(index, movement)
 					assert.GreaterOrEqual(t, distance, previous, index.String()+": ")
 					previous = distance
 				}
 			})
 			t.Run("allocates once at its length", func(t *testing.T) {
-				spiral := testPoint.Spiral(4, movement)
+				spiral := testSquare.Spiral(4, movement)
 
 				assert.Equal(t, cap(spiral), len(spiral))
 				assert.Equal(t, testing.AllocsPerRun(10, func() {
-					sinkPoints = testPoint.Spiral(4, movement)
+					sinkPoints = testSquare.Spiral(4, movement)
 				}), 1.0)
 			})
 		})
 	}
 	t.Run("is the index alone outside the constants", func(t *testing.T) {
-		assert.Equal(t, testPoint.Spiral(3, MovementNone), []Index{testPoint.Point()})
+		assert.Equal(t, testSquare.Spiral(3, MovementNone), []Index{testSquare.Point()})
 	})
 }
 
@@ -346,7 +375,7 @@ func BenchmarkSquare_Spiral(b *testing.B) {
 	for _, movement := range Movements() {
 		b.Run(movement.String(), func(b *testing.B) {
 			for b.Loop() {
-				sinkPoints = testPoint.Spiral(8, movement)
+				sinkPoints = testSquare.Spiral(8, movement)
 			}
 		})
 	}
@@ -356,11 +385,11 @@ func TestSquare_SpiralSeq(t *testing.T) {
 	for _, movement := range Movements() {
 		t.Run(movement.String(), func(t *testing.T) {
 			t.Run("yields what Spiral returns", func(t *testing.T) {
-				assert.Equal(t, slices.Collect(testPoint.SpiralSeq(3, movement)), testPoint.Spiral(3, movement))
+				assert.Equal(t, slices.Collect(testSquare.SpiralSeq(3, movement)), testSquare.Spiral(3, movement))
 			})
 			t.Run("stops at the break, inside a ring too", func(t *testing.T) {
 				count := 0
-				for range testPoint.SpiralSeq(3, movement) {
+				for range testSquare.SpiralSeq(3, movement) {
 					count++
 					if count == 3 {
 						break
@@ -368,6 +397,128 @@ func TestSquare_SpiralSeq(t *testing.T) {
 				}
 
 				assert.Equal(t, count, 3)
+			})
+		})
+	}
+}
+
+func TestSquare_Sector(t *testing.T) {
+	for _, movement := range Movements() {
+		t.Run(movement.String(), func(t *testing.T) {
+			t.Run("sectors of one turn cover the range but s, sharing only their borders", func(t *testing.T) {
+				covered := map[Index]int{}
+				for _, direction := range movement.Directions() {
+					for _, index := range testSquare.Sector(6, direction, 1, movement) {
+						covered[index]++
+					}
+				}
+
+				for _, index := range testSquare.Range(6, movement) {
+					times := covered[index]
+					if index == testSquare.Point() {
+						assert.Equal(t, times, 0)
+
+						continue
+					}
+
+					assert.True(t, times == 1 || times == 2 && testSquare.DistanceTo(index, movement)%2 == 0, index.String()+": ")
+				}
+			})
+			t.Run("zero turns is the ray along the direction", func(t *testing.T) {
+				for _, direction := range movement.Directions() {
+					var ray []Index
+					for ring := 1; ring <= 4; ring++ {
+						ray = append(ray, geom.Pt(testSquare.X+direction.Offset[int]().X*ring, testSquare.Y+direction.Offset[int]().Y*ring))
+					}
+
+					assert.Equal(t, testSquare.Sector(4, direction, 0, movement), ray, direction.String()+": ")
+				}
+			})
+			t.Run("as many turns as directions is the range but s, each ring from the index opposite", func(t *testing.T) {
+				full := testSquare.Sector(4, geom.DirectionRight, movement.neighborsLen(), movement)
+
+				assert.True(t, Reg(full).Equal(Reg(testSquare.Range(4, movement)).Difference(Reg([]Index{testSquare.Point()}))))
+				assert.Equal(t, full[0], testSquare.Neighbor(geom.DirectionLeft).Point())
+				assert.Equal(t, testSquare.Sector(4, geom.DirectionRight, 99, movement), full)
+			})
+			t.Run("widens with its turns", func(t *testing.T) {
+				for turns := range movement.neighborsLen() {
+					narrow, wide := Reg(testSquare.Sector(5, geom.DirectionDown, turns, movement)), Reg(testSquare.Sector(5, geom.DirectionDown, turns+1, movement))
+
+					assert.True(t, wide.Encloses(narrow), strconv.Itoa(turns)+": ")
+				}
+			})
+			t.Run("is ring by ring outward", func(t *testing.T) {
+				previous := 0
+				for _, index := range testSquare.Sector(6, geom.DirectionUp, 2, movement) {
+					distance := testSquare.DistanceTo(index, movement)
+					assert.GreaterOrEqual(t, distance, previous)
+					previous = distance
+				}
+			})
+			t.Run("turns with its direction", func(t *testing.T) {
+				for _, direction := range movement.Directions() {
+					var turned []Index
+					for _, index := range Sq(0, 0).Sector(5, direction, 3, movement) {
+						turned = append(turned, Square(index).Turn(1).Point())
+					}
+
+					assert.Equal(t, turned, Sq(0, 0).Sector(5, direction.Turn(2), 3, movement), direction.String()+": ")
+				}
+			})
+			t.Run("is nil for a radius under one, negative turns and a direction not of the movement", func(t *testing.T) {
+				assert.Nil(t, testSquare.Sector(0, geom.DirectionRight, 1, movement))
+				assert.Nil(t, testSquare.Sector(3, geom.DirectionRight, -1, movement))
+				assert.Nil(t, testSquare.Sector(3, geom.DirectionNone, 1, movement))
+			})
+			t.Run("allocates once, at its length", func(t *testing.T) {
+				assert.Equal(t, cap(testSquare.Sector(7, geom.DirectionUp, 2, movement)), SectorLen(7, 2, movement))
+				assert.Equal(t, testing.AllocsPerRun(10, func() {
+					sinkPoints = testSquare.Sector(7, geom.DirectionUp, 2, movement)
+				}), 1.0)
+			})
+		})
+	}
+	t.Run("a cardinal sector of one turn is a cone by increasing angle", func(t *testing.T) {
+		assert.Equal(t, Sq(0, 0).Sector(2, geom.DirectionRight, 1, MovementCardinal), []Index{geom.Pt(1, 0), geom.Pt(1, -1), geom.Pt(2, 0), geom.Pt(1, 1)})
+	})
+	t.Run("a diagonal sector of one turn walks around the corner of its direction", func(t *testing.T) {
+		assert.Equal(t, Sq(0, 0).Sector(2, geom.DirectionDownRight, 1, MovementDiagonal), []Index{geom.Pt(1, 1), geom.Pt(2, 1), geom.Pt(2, 2), geom.Pt(1, 2)})
+	})
+	t.Run("is nil for a diagonal direction under MovementCardinal", func(t *testing.T) {
+		assert.Nil(t, testSquare.Sector(3, geom.DirectionDownRight, 1, MovementCardinal))
+	})
+}
+
+func TestSquare_SectorSeq(t *testing.T) {
+	for _, movement := range Movements() {
+		t.Run(movement.String(), func(t *testing.T) {
+			t.Run("yields what Sector returns", func(t *testing.T) {
+				assert.Equal(t, slices.Collect(testSquare.SectorSeq(4, geom.DirectionLeft, 2, movement)), testSquare.Sector(4, geom.DirectionLeft, 2, movement))
+			})
+			t.Run("yields nothing for negative turns or a direction not of the movement", func(t *testing.T) {
+				assert.Length(t, slices.Collect(testSquare.SectorSeq(4, geom.DirectionLeft, -1, movement)), 0)
+				assert.Length(t, slices.Collect(testSquare.SectorSeq(4, geom.DirectionNone, 1, movement)), 0)
+			})
+			t.Run("stops at the break wherever it comes", func(t *testing.T) {
+				for stop := 1; stop <= SectorLen(4, 3, movement); stop++ {
+					count := 0
+					for range testSquare.SectorSeq(4, geom.DirectionLeft, 3, movement) {
+						count++
+						if count == stop {
+							break
+						}
+					}
+
+					assert.Equal(t, count, stop)
+				}
+			})
+			t.Run("allocates nothing into a buffer with room", func(t *testing.T) {
+				buffer := make([]Index, 0, 128)
+
+				assert.Equal(t, testing.AllocsPerRun(10, func() {
+					sinkPoints = slices.AppendSeq(buffer[:0], testSquare.SectorSeq(7, geom.DirectionUp, 2, movement))
+				}), 0.0)
 			})
 		})
 	}
@@ -385,13 +536,13 @@ func TestSquare_DistanceTo(t *testing.T) {
 func TestSquare_DirectionTo(t *testing.T) {
 	t.Run("the point itself has no direction", func(t *testing.T) {
 		for _, movement := range Movements() {
-			assert.Equal(t, testPoint.DirectionTo(testPoint.Point(), movement), geom.DirectionNone, movement.String()+": ")
+			assert.Equal(t, testSquare.DirectionTo(testSquare.Point(), movement), geom.DirectionNone, movement.String()+": ")
 		}
 	})
 	t.Run("a neighbor is in its own direction", func(t *testing.T) {
 		for _, movement := range Movements() {
 			for _, direction := range movement.Directions() {
-				assert.Equal(t, testPoint.DirectionTo(testPoint.Neighbor(direction), movement), direction, movement.String()+" "+direction.String()+": ")
+				assert.Equal(t, testSquare.DirectionTo(testSquare.Neighbor(direction).Point(), movement), direction, movement.String()+" "+direction.String()+": ")
 			}
 		}
 	})
@@ -411,14 +562,14 @@ func TestSquare_DirectionTo(t *testing.T) {
 		assert.Equal(t, Sq(0, 0).DirectionTo(geom.Pt(-3, 3), MovementCardinal), geom.DirectionLeft)
 	})
 	t.Run("has no direction outside the constants", func(t *testing.T) {
-		assert.Equal(t, testPoint.DirectionTo(geom.Pt(0, 0), MovementNone), geom.DirectionNone)
+		assert.Equal(t, testSquare.DirectionTo(geom.Pt(0, 0), MovementNone), geom.DirectionNone)
 	})
 }
 
 func TestSquare_LineTo(t *testing.T) {
 	t.Run("to the point itself is the point alone", func(t *testing.T) {
 		for _, movement := range Movements() {
-			assert.Equal(t, testPoint.LineTo(testPoint.Point(), movement), []Index{testPoint.Point()}, movement.String()+": ")
+			assert.Equal(t, testSquare.LineTo(testSquare.Point(), movement), []Index{testSquare.Point()}, movement.String()+": ")
 		}
 	})
 	t.Run("diagonal steps across corners", func(t *testing.T) {
@@ -430,33 +581,33 @@ func TestSquare_LineTo(t *testing.T) {
 	for _, movement := range Movements() {
 		t.Run(movement.String(), func(t *testing.T) {
 			t.Run("runs from the point to the target by neighbors", func(t *testing.T) {
-				for _, target := range testPoint.Range(5, MovementDiagonal) {
-					line := testPoint.LineTo(target, movement)
+				for _, target := range testSquare.Range(5, MovementDiagonal) {
+					line := testSquare.LineTo(target, movement)
 
-					assert.Equal(t, line[0], testPoint.Point(), target.String()+": ")
+					assert.Equal(t, line[0], testSquare.Point(), target.String()+": ")
 					assert.Equal(t, line[len(line)-1], target, target.String()+": ")
-					assert.Length(t, line, testPoint.DistanceTo(target, movement)+1, target.String()+": ")
+					assert.Length(t, line, testSquare.DistanceTo(target, movement)+1, target.String()+": ")
 					for i := 1; i < len(line); i++ {
 						assert.Equal(t, Square(line[i-1]).DistanceTo(line[i], movement), 1, target.String()+": ")
 					}
 				}
 			})
 			t.Run("allocates once at its length", func(t *testing.T) {
-				line := testPoint.LineTo(geom.Pt(-4, 7), movement)
+				line := testSquare.LineTo(geom.Pt(-4, 7), movement)
 
 				assert.Equal(t, cap(line), len(line))
 				assert.Equal(t, testing.AllocsPerRun(10, func() {
-					sinkPoints = testPoint.LineTo(geom.Pt(-4, 7), movement)
+					sinkPoints = testSquare.LineTo(geom.Pt(-4, 7), movement)
 				}), 1.0)
 			})
 		})
 	}
 	t.Run("panics for a movement outside the constants, which draws no line", func(t *testing.T) {
 		assert.PanicsWith(t, func() {
-			testPoint.LineTo(geom.Pt(0, 0), MovementNone)
+			testSquare.LineTo(geom.Pt(0, 0), MovementNone)
 		}, "grid: unknown movement -1")
 		assert.PanicsWith(t, func() {
-			sinkPoints = slices.Collect(testPoint.LineToSeq(geom.Pt(0, 0), Movement(99)))
+			sinkPoints = slices.Collect(testSquare.LineToSeq(geom.Pt(0, 0), Movement(99)))
 		}, "grid: unknown movement 99")
 	})
 }
@@ -465,7 +616,7 @@ func BenchmarkSquare_LineTo(b *testing.B) {
 	for _, movement := range Movements() {
 		b.Run(movement.String(), func(b *testing.B) {
 			for b.Loop() {
-				sinkPoints = testPoint.LineTo(geom.Pt(40, 17), movement)
+				sinkPoints = testSquare.LineTo(geom.Pt(40, 17), movement)
 			}
 		})
 	}
@@ -475,12 +626,12 @@ func TestSquare_LineToSeq(t *testing.T) {
 	for _, movement := range Movements() {
 		t.Run(movement.String(), func(t *testing.T) {
 			t.Run("yields what Line returns", func(t *testing.T) {
-				assert.Equal(t, slices.Collect(testPoint.LineToSeq(geom.Pt(-4, 7), movement)), testPoint.LineTo(geom.Pt(-4, 7), movement))
+				assert.Equal(t, slices.Collect(testSquare.LineToSeq(geom.Pt(-4, 7), movement)), testSquare.LineTo(geom.Pt(-4, 7), movement))
 			})
 			t.Run("stops at the break, at the first index and after it", func(t *testing.T) {
 				for stop := 1; stop <= 2; stop++ {
 					count := 0
-					for range testPoint.LineToSeq(geom.Pt(-4, 7), movement) {
+					for range testSquare.LineToSeq(geom.Pt(-4, 7), movement) {
 						count++
 						if count == stop {
 							break
@@ -492,7 +643,7 @@ func TestSquare_LineToSeq(t *testing.T) {
 			})
 			t.Run("allocates nothing", func(t *testing.T) {
 				assert.Equal(t, testing.AllocsPerRun(10, func() {
-					for index := range testPoint.LineToSeq(geom.Pt(-4, 7), movement) {
+					for index := range testSquare.LineToSeq(geom.Pt(-4, 7), movement) {
 						sinkPoint = index
 					}
 				}), 0.0)
@@ -628,14 +779,14 @@ func TestSquare_FieldOfView(t *testing.T) {
 				assert.False(t, slices.Contains(seen, geom.Pt(5, 7)))
 				assert.Equal(t, seen[0], center.Point())
 			})
-			t.Run("agrees with HasLineOfSight, an adjacent index always in sight", func(t *testing.T) {
+			t.Run("is exactly the indices of Spiral HasLineOfSight sees", func(t *testing.T) {
 				every := func(index Index) bool {
 					return (index.X*7+index.Y*13)%5 == 2
 				}
 
 				var expected []Index
 				for _, index := range center.Spiral(4, movement) {
-					if center.Point().ChebyshevDistanceTo(index) <= 1 || center.HasLineOfSight(index, every) {
+					if center.HasLineOfSight(index, every) {
 						expected = append(expected, index)
 					}
 				}
@@ -704,6 +855,11 @@ func TestSquare_Point(t *testing.T) {
 	assert.Equal(t, Sq(3, -2).Point(), geom.Pt(3, -2))
 }
 
+func TestSquare_String(t *testing.T) {
+	assert.Equal(t, Sq(3, -2).String(), "(3,-2)")
+	assert.Equal(t, fmt.Sprint(Sq(3, -2)), "(3,-2)")
+}
+
 func ExampleSquare() {
 	s := Sq(5, 5)
 
@@ -717,5 +873,5 @@ func ExampleSquare() {
 	// [(6,5) (5,6) (4,5) (5,4)]
 	// [(5,5) (6,5) (7,6) (8,6)]
 	// false
-	// {-5 5} {5 -5}
+	// (-5,5) (5,-5)
 }

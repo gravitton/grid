@@ -99,6 +99,21 @@ func (m Movement) neighborsLen() int {
 	}
 }
 
+// corners returns the steps to the neighbors of the movement by increasing angle from the right,
+// in the first neighborsLen places of an array, so a walk around a ring reads them in place.
+func (m Movement) corners() [8]geom.Vector[int] {
+	switch m {
+	case MovementCardinal:
+		cardinals := geom.CardinalOffsets[int]()
+
+		return [8]geom.Vector[int]{cardinals[0], cardinals[1], cardinals[2], cardinals[3]}
+	case MovementDiagonal:
+		return geom.DirectionOffsets[int]()
+	default:
+		return [8]geom.Vector[int]{}
+	}
+}
+
 // Distance returns the number of steps between two indices under the movement: the
 // Manhattan distance for MovementCardinal, the Chebyshev distance for MovementDiagonal. It
 // panics for a movement outside the constants.

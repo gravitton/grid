@@ -171,7 +171,7 @@ func TestMovement_Distance(t *testing.T) {
 	t.Run("is symmetric", func(t *testing.T) {
 		for _, movement := range Movements() {
 			for _, target := range targets {
-				assert.Equal(t, movement.Distance(target, testPoint.Point()), movement.Distance(testPoint.Point(), target), fmt.Sprintf("%s %v: ", movement, target))
+				assert.Equal(t, movement.Distance(target, testSquare.Point()), movement.Distance(testSquare.Point(), target), fmt.Sprintf("%s %v: ", movement, target))
 			}
 		}
 	})
@@ -185,7 +185,7 @@ func TestMovement_Distance(t *testing.T) {
 	t.Run("every offset of the movement is one step away", func(t *testing.T) {
 		for _, movement := range Movements() {
 			for _, offset := range movement.Offsets() {
-				assert.Equal(t, movement.Distance(testPoint.Point(), testPoint.Point().Add(offset)), 1, fmt.Sprintf("%s %v: ", movement, offset))
+				assert.Equal(t, movement.Distance(testSquare.Point(), testSquare.Point().Add(offset)), 1, fmt.Sprintf("%s %v: ", movement, offset))
 			}
 		}
 	})

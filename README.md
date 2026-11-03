@@ -242,13 +242,14 @@ adjacent takes the `Movement`:
 s := grid.Sq(5, 5)
 
 s.Neighbors(grid.MovementDiagonal)           // all 8, by increasing angle
-s.Neighbor(geom.DirectionUp)                 // Square{5, 4}
+s.Neighbor(geom.DirectionUp)                 // (5,4)
 s.DistanceTo(target, grid.MovementCardinal)  // Manhattan; MovementDiagonal gives Chebyshev
 s.DirectionTo(target, grid.MovementCardinal) // the nearest of the four directions
 
 s.Range(2, grid.MovementCardinal)     // the indices within 2 steps: a diamond, or a square for MovementDiagonal
 s.Ring(2, grid.MovementCardinal)      // the indices exactly 2 steps away, by increasing angle
 s.Spiral(2, grid.MovementCardinal)    // the same set as Range, ordered outward
+s.Sector(3, geom.DirectionUp, 1, grid.MovementCardinal) // the cone a quarter-turn wide toward up, ring by ring; also SectorLen
 s.LineTo(target, grid.MovementDiagonal) // the indices to target, each a neighbor of the last
 ```
 
@@ -276,9 +277,9 @@ s.FieldOfView(8, movement, blocked) // the cells within 8 steps in sight; also F
 A quarter turn and a mirror keep a shape on the lattice:
 
 ```go
-s.Turn(1)                       // Square{-5, 5}, a quarter turn around the origin, clockwise on a screen
+s.Turn(1)                       // (-5,5), a quarter turn around the origin, clockwise on a screen
 s.TurnAround(geom.Pt(4, 4), -1) // the other way, around another index
-s.ReflectX()                    // Square{5, -5}, mirrored across the x-axis; also ReflectY
+s.ReflectX()                    // (5,-5), mirrored across the x-axis; also ReflectY
 ```
 
 ### Drawing

@@ -2493,12 +2493,13 @@ func TestGrid_FieldOfView(t *testing.T) {
 			assert.True(t, seen.Contains(geom.Pt(5, 4)), name+": ")
 		}
 	})
-	t.Run("a cell beside the center is in sight whatever blocks", func(t *testing.T) {
+	t.Run("a diagonal neighbor behind two blockers is hidden, as HasLineOfSight says", func(t *testing.T) {
 		walls := func(cell Cell[int]) bool {
 			return cell.Index() == geom.Pt(6, 5) || cell.Index() == geom.Pt(5, 6)
 		}
 
-		assert.True(t, grids["diagonal"].FieldOfView(center, 2, walls).Contains(geom.Pt(6, 6)))
+		assert.False(t, grids["diagonal"].FieldOfView(center, 2, walls).Contains(geom.Pt(6, 6)))
+		assert.False(t, grids["diagonal"].HasLineOfSight(center, geom.Pt(6, 6), walls))
 	})
 	t.Run("the cell of the center is never asked about, so it sees from a wall", func(t *testing.T) {
 		for name, g := range grids {

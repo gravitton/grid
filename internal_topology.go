@@ -188,7 +188,7 @@ func (t *topology) sees(from, to Index, blocked func(Index) bool) bool {
 		})
 	}
 
-	return Square(from).sees(to, blocked)
+	return Square(from).hasLineOfSight(to, blocked)
 }
 
 // walkFieldOfView yields the indices within radius of center it sees past the indices blocked

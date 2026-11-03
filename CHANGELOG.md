@@ -71,6 +71,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - `Cell.Ring`, `Cell.Spiral` and `Cell.LineTo`
 - `Grid.Field(start, passable, cost)` and `Cell.Field` — the field of every cell reached from start, counting steps for a nil cost; with `Path` and `Reachable` it is one of the defaults, and the searches named for their algorithm are there to ask for one
 - `Field.All()` — the indices the search reached
+- `Square.Sector(radius, direction, turns, movement)`, with `SectorSeq`, and `SectorLen(radius, turns, movement)` — the cone of indices within a radius and a number of steps between directions about a direction, ring by ring, the counterpart of `hex.Hex.Sector`
+- `Square.String` prints a square as `(x,y)`, as `hex.Hex` does
 - `Square.FieldOfView(radius, movement, blocked)`, with `FieldOfViewSeq`, the counterpart of `hex.Hex.FieldOfView`
 - `Grid.All()` — an iterator over every cell of the grid, row by row
 - `MovementNone`, `Movement.IsNone()`, `Movements()` and `ParseMovement(name)`, and text marshalling, so a `Movement` is stored in JSON and as a map key by the name `String` prints, as the `geom` and `hex` enums are
