@@ -56,6 +56,52 @@ func (f Field) Len() int {
 	return f.reached
 }
 
+// Region returns the indices the search reached.
+func (f Field) Region() Region {
+	if f.reached == 0 {
+		return Region{}
+	}
+
+	return container.SetFrom(slices.AppendSeq(make([]Index, 0, f.reached), f.All()))
+}
+
+// All returns an iterator over the indices the search reached, in the order of a region.
+func (f Field) All() iter.Seq[Index] {
+	return func(yield func(Index) bool) {
+		if f.reached == 0 {
+			return
+		}
+
+		for x := range f.size.Width {
+			for y := range f.size.Height {
+				if index := geom.Pt(x, y); f.from[f.slot(index)] != 0 && !yield(index) {
+					return
+				}
+			}
+		}
+	}
+}
+
+// improve records that index is reached from the slot at the given cost, where the cost is
+// finite and the search had not reached it or had paid more, and reports whether it did.
+func (f *Field) improve(index Index, from int32, cost float64) bool {
+	slot := f.slot(index)
+
+	switch {
+	case math.IsInf(cost, 1):
+		return false
+	case f.from[slot] == 0:
+		f.reached++
+	case cost >= f.costs[slot]:
+		return false
+	}
+
+	f.from[slot] = from + 1
+	f.costs[slot] = cost
+
+	return true
+}
+
 // Next returns the index one step closer to the start, and false for the start itself and for
 // an index the search did not reach.
 func (f Field) Next(index Index) (Index, bool) {
@@ -128,52 +174,6 @@ func (f Field) Contains(index Index) bool {
 // IsEmpty reports whether the search reached nothing, not even its start.
 func (f Field) IsEmpty() bool {
 	return f.reached == 0
-}
-
-// All returns an iterator over the indices the search reached, in the order of a region.
-func (f Field) All() iter.Seq[Index] {
-	return func(yield func(Index) bool) {
-		if f.reached == 0 {
-			return
-		}
-
-		for x := range f.size.Width {
-			for y := range f.size.Height {
-				if index := geom.Pt(x, y); f.from[f.slot(index)] != 0 && !yield(index) {
-					return
-				}
-			}
-		}
-	}
-}
-
-// Region returns the indices the search reached.
-func (f Field) Region() Region {
-	if f.reached == 0 {
-		return Region{}
-	}
-
-	return container.SetFrom(slices.AppendSeq(make([]Index, 0, f.reached), f.All()))
-}
-
-// improve records that index is reached from the slot at the given cost, where the cost is
-// finite and the search had not reached it or had paid more, and reports whether it did.
-func (f *Field) improve(index Index, from int32, cost float64) bool {
-	slot := f.slot(index)
-
-	switch {
-	case math.IsInf(cost, 1):
-		return false
-	case f.from[slot] == 0:
-		f.reached++
-	case cost >= f.costs[slot]:
-		return false
-	}
-
-	f.from[slot] = from + 1
-	f.costs[slot] = cost
-
-	return true
 }
 
 // slot returns the place of an index inside the grid in the slices of the field.
