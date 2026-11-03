@@ -20,17 +20,28 @@ Generic 2D grid library for game development
 
 </div>
 
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/hero-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/hero-light.svg">
+  <img alt="An isometric map: the field of view of a scout among walls, the cells within its range it cannot see, and its cheapest path to a goal around a patch of rough ground" src="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/hero-light.svg">
+</picture>
+</p>
+
+Every picture in this README is drawn from the package's own results: the cells coloured are the
+ones the code beside them returns.
 
 ## Features
 
-- **Generic** – `Grid[T]` holds any cell type, in one flat array.
+- **Generic** – `Grid[T]` holds a value of any type per cell, in one flat array.
 - **Four layouts** – rectangular, isometric, hexagonal flat-top and pointy-top, behind one API.
-- **World space** – a pixel to its cell and back, with the center, bounds and polygon of every cell.
-- **Pathfinding** – A*, Dijkstra, greedy best-first and breadth-first search, with flow fields.
-- **Visibility** – line of sight and field of view on every layout, reading the same from either end.
-- **Draw order** – a viewport iterated back to front, whatever the layout.
-- **Regions** – immutable sets of cells with union, intersection and difference.
-- **Neighbors** – four or eight on a square grid, six on a hexagonal one.
+- **World space** – the cell under a point, and the center, bounds and polygon of every cell.
+- **Neighbors** – four or eight on a square grid, six on a hexagonal one, with range, ring, spiral and line.
+- **Visibility** – line of sight and field of view on every layout, the same from either end.
+- **Pathfinding** – A*, Dijkstra, greedy best-first and breadth-first, with fields for movement ranges and flow.
+- **Regions** – immutable sets of cells with set operations, borders, growth and components.
+- **Draw order** – the cells in view, back to front, whatever the layout.
+- **Extras** – `Square` lattice queries, JSON, and `Seq` forms that allocate nothing.
 
 The rules behind them are in the [package documentation][link-go-dev-reference].
 
@@ -40,8 +51,6 @@ The rules behind them are in the [package documentation][link-go-dev-reference].
 go get github.com/gravitton/grid
 ```
 
-## Usage
-
 ```go
 import (
 	geom "github.com/gravitton/geometry"
@@ -49,45 +58,77 @@ import (
 )
 ```
 
+## Usage
+
+A grid stores a value per cell, and every question it answers takes a callback reading that value.
+The figures below use one tile type:
+
 ```go
 type Tile struct {
-	Walkable bool
-	Opaque   bool
-	Cost     float64
+	Wall bool    // blocks the way and the view
+	Cost float64 // what a step onto the tile costs
 }
-
-g := grid.NewRect[Tile](geom.Sz(100, 100), grid.RectCellScale(32))
-g.Fill(Tile{Walkable: true, Cost: 1})
-g.CellAt(cursor).Set(Tile{}) // a wall under the cursor
 
 walkable := func(cell grid.Cell[Tile]) bool {
-	return cell.Value().Walkable
+	return !cell.Value().Wall
 }
 
-path := g.Path(geom.Pt(0, 0), geom.Pt(10, 10), walkable, nil) // the indices from start to goal
+opaque := func(cell grid.Cell[Tile]) bool {
+	return cell.Value().Wall
+}
+
+cost := func(current, next grid.Cell[Tile]) float64 {
+	return next.Value().Cost
+}
 ```
+
+The map at the top, call by call:
+
+```go
+g := grid.NewIsometric[Tile](geom.Sz(18, 12), grid.IsometricPixelCellScale(30))
+g.Fill(Tile{Cost: 1})
+g.Cell(geom.Pt(8, 0)).Set(Tile{Wall: true}) // and the other walls; rough ground is Tile{Cost: 5}
+
+scout, goal := geom.Pt(4, 5), geom.Pt(16, 4)
+g.FieldOfView(scout, 7, opaque)     // the 87 cells the scout sees, the walls in front included
+g.Path(scout, goal, walkable, cost) // 18 cells around the walls and the rough ground, at a cost of 17
+```
+
+In every figure a wall is a solid cell, and rough ground, costing five, is green.
 
 ### Grids
 
-```go
-size := geom.Sz(100, 100)
+Four constructors, one for each layout, return the same `*Grid[T]`, so everything below holds on
+all of them. An index is a `grid.Index`, the `geom.Point[int]` of a column and a row, on every
+layout. The origin, the dot, is the top-left corner of the bounds, the dashed box.
 
-grid.NewRect[Tile](size, grid.RectCellScale(32))                 // squares, 4 neighbors
-grid.NewIsometric[Tile](size, grid.IsometricPixelCellScale(64))  // 2:1 diamonds
-grid.NewHexFlatTop[Tile](size, grid.HexFlatTopCellScale(64))     // odd columns shifted down
-grid.NewHexPointyTop[Tile](size, grid.HexPointyTopCellScale(64)) // odd rows shifted right
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/grids-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/grids-light.svg">
+  <img alt="A grid of five columns and four rows in each layout, rectangular, isometric, flat-top and pointy-top, each cell labelled with its column and row, with the bounds of each grid dashed and its origin at the top-left corner" src="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/grids-light.svg">
+</picture>
+</p>
+
+```go
+size := geom.Sz(5, 4)
+
+grid.NewRect[Tile](size, grid.RectCellScale(28))                 // squares
+grid.NewIsometric[Tile](size, grid.IsometricPixelCellScale(48))  // 2:1 diamonds, (0,0) at the top
+grid.NewHexFlatTop[Tile](size, grid.HexFlatTopCellScale(32))     // odd columns shifted down
+grid.NewHexPointyTop[Tile](size, grid.HexPointyTopCellScale(30)) // odd rows shifted right
 ```
 
 Options are set in a callback, on [`SquareOptions`][link-go-dev-reference] for the square grids and
 `HexOptions` for the hexagonal ones:
 
 ```go
-grid.NewRect[Tile](size, grid.RectCellScale(32), func(options *grid.SquareOptions) {
+grid.NewRect[Tile](size, grid.RectCellScale(28), func(options *grid.SquareOptions) {
 	options.Movement = grid.MovementDiagonal // 8 neighbors
 	options.Origin = geom.Pt(100.0, 50.0)    // the top-left corner of the grid in the world
 })
 
-grid.NewHexFlatTop[Tile](size, grid.HexFlatTopCellScale(64), func(options *grid.HexOptions) {
+grid.NewHexFlatTop[Tile](size, grid.HexFlatTopCellScale(32), func(options *grid.HexOptions) {
 	options.EvenOffset = true // even columns shifted instead
 })
 ```
@@ -105,100 +146,251 @@ of a hexagon. The helpers give it from the width a tile is drawn at:
 | `HexFlatTopPixelCellScale`   | Squashed hex, `w·3/4` tall     |
 | `HexPointyTopPixelCellScale` | Squashed hex, `w` tall         |
 
-Every constructor returns the same `*Grid[T]`, so everything below holds for all four layouts.
-
 ### Cells
 
-An index is a `grid.Index`, the `geom.Point[int]` of a column and a row, on every layout:
+A `Cell` is a handle on one index of a grid, two words passed by value. What belongs to one cell
+is asked of the cell; what relates cells, of the grid.
 
 ```go
-index := geom.Pt(3, 4)
+g := grid.NewRect[Tile](geom.Sz(7, 7), grid.RectCellScale(20))
+g.Fill(Tile{Cost: 1})
 
-g.Contains(index) // true, inside the grid
-g.Size()          // Size{100, 100}; also Width and Height
-
-cell := g.Cell(index)          // a Cell[Tile], a handle on the index
-cell.Set(Tile{Cost: 3})        // a write outside the grid does nothing
-cell.Value().Cost = 5          // a pointer into the grid, nil outside it
-cell.IsContained()             // true, the same answer as g.Contains
-cell.Neighbors()               // the adjacent indices inside the grid; also g.Neighbors(index)
-cell.DistanceTo(geom.Pt(0, 0)) // 7, in steps of the grid's movement
-fmt.Println(cell)              // Cell(3,4)
-
-g.Clone()          // a copy with storage of its own; also Fill and Clear
-g.Layer[bool]()    // a grid of another type over the same cells, an index of one an index of the other
-g.Select(walkable) // a Region of the cells a callback picks
+cell := g.Cell(geom.Pt(3, 4)) // Cell(3,4)
+cell.Value().Cost = 5         // a pointer into the grid, nil outside it
+cell.Set(Tile{Wall: true})    // a write outside the grid does nothing
+cell.IsContained()            // true; also g.Contains(index)
+g.Size()                      // 7x7; also Width and Height
 
 for cell := range g.All() { // every cell, row by row
 	cell.Value().Cost = 1
 }
+
+g.Select(walkable) // a Region of the cells a callback picks
+g.Clone()          // a copy with storage of its own; also Fill and Clear
+g.Layer[bool]()    // a grid of another type over the same cells, an index of one an index of the other
 ```
+
+Outside the grid nothing panics: a read gives the zero answer, a write does nothing, and a query
+from an index outside is empty.
 
 ### World space
 
-```go
-g.IndexAt(geom.Pt(499.0, 123.4)) // the index of the cell under a pixel
-g.CellAt(geom.Pt(499.0, 123.4))  // the same, as a cell
+`IndexAt` gives the cell under a point, for the cursor or a unit moving freely. Every dot below
+is coloured by the cell it gives: a point on an edge goes to the same side in every cell, so the
+cells tile the bounds with no gap and no overlap.
 
-cell.Center()  // the pixel at the middle of the tile
-cell.Bounds()  // the geom.Box around the tile
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/world-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/world-light.svg">
+  <img alt="Points across a grid in each of the four layouts, each coloured by the cell IndexAt gives it, with the outlines of the cells drawn over them" src="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/world-light.svg">
+</picture>
+</p>
+
+```go
+g := grid.NewRect[Tile](geom.Sz(4, 3), grid.RectCellScale(32))
+
+g.IndexAt(geom.Pt(50.0, 40.0)) // (1,1), the cell under a point; CellAt gives it as a cell
+
+cell := g.Cell(geom.Pt(1, 1))
+cell.Center()  // (48,48)
+cell.Bounds()  // (32,32)-(64,64), the geom.Box around the tile
 cell.Polygon() // the square, diamond or hexagon to draw or hit-test
 
-g.Bounds()      // the geom.Box around the whole grid
-g.CellSize()    // the size of one tile as drawn
+g.Bounds()      // (0,0)-(128,96)
+g.CellSize()    // 32x32, one tile as drawn
 g.CellSpacing() // the step between two tiles, smaller than the tile where they interlock
-g.CellScale()   // the scale of a tile; also Origin
+g.CellScale()   // what the constructor took; also Origin
 
 g.MoveTo(geom.Pt(100.0, 50.0))    // the top-left corner of the bounds, to scroll the grid
 g.Rescale(grid.RectCellScale(48)) // the scale of a tile, to zoom it
 ```
 
-A `HexLayout` places hexagonal cells with no grid around them, for a map whose data lives
-elsewhere, on an unbounded plane. Its indices are in the coordinate system it is built with,
-axial or any other of `hex`:
+### Hex layout
+
+A `HexLayout` places hexagonal cells with no grid around them, on an unbounded plane, for a map
+whose data lives elsewhere: in a `map[hex.Hex]T`, a `container.Set`, a chunked world. It is the
+world space of [`gravitton/hexagon`][link-hexagon], which does the coordinate math and draws
+nothing. Its indices are in the coordinate system it is built with, and the center of index zero
+is its origin.
+
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/hex-layout-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/hex-layout-light.svg">
+  <img alt="The hexes within two steps of the center, placed by a pointy-top and a flat-top layout and labelled with their axial coordinates, and by a pointy-top layout in the odd-r offset system, labelled with their offset coordinates; on the first, a point and the hex it falls in" src="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/hex-layout-light.svg">
+</picture>
+</p>
 
 ```go
-layout := grid.NewHexFlatTopLayout(grid.HexFlatTopCellScale(32), hex.Axial)
-layout.MoveTo(geom.Pt(400.0, 300.0)) // the center of index zero
+import hex "github.com/gravitton/hexagon"
 
-layout.Polygon(h.Point())              // where to draw a hex
-hex.Axial.From(layout.IndexAt(cursor)) // the hex under the cursor
+layout := grid.NewHexPointyTopLayout(grid.HexPointyTopCellScale(34), hex.Axial)
+
+h := hex.Pt(2, -1)
+layout.Center(h.Point())  // (51,-29.44), from the center of index zero at the origin
+layout.Polygon(h.Point()) // the hexagon to draw or hit-test
+layout.Bounds(h.Point())  // the geom.Box around it
+
+hex.Axial.From(layout.IndexAt(geom.Pt(60.0, -40.0))) // Hex{2, -1}, the hex under a point
+
+layout.CellSize()                              // 34x39.26, one hex as drawn; also CellSpacing and CellScale
+layout.MoveTo(geom.Pt(400.0, 300.0))           // the center of index zero, to scroll the map
+layout.Rescale(grid.HexPointyTopCellScale(48)) // the scale of a hex, to zoom it
 ```
 
-It places a cell exactly where a hexagonal grid of the same scale and system places it, and
-puts a point on an edge on the same side.
+Built with another system, the same hexes keep their places and take its indices: `hex.OffsetOddR`
+numbers them as a pointy-top grid does. Moved to the center of a grid's index zero, a layout of the
+grid's scale and system places every cell exactly where the grid does, and puts a point on an edge
+on the same side.
+
+### Neighbors and distance
+
+A square grid moves in four directions or eight, as its `Movement` says, and a hexagonal one in
+six. Neighbors come by increasing angle, clockwise on a screen from the right, and a neighbor is
+exactly a cell at distance one.
+
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/movement-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/movement-light.svg">
+  <img alt="The neighbors of a cell numbered in order, four with cardinal movement and eight with diagonal movement, and the distance from that cell to every other, Manhattan with cardinal movement and Chebyshev with diagonal movement" src="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/movement-light.svg">
+</picture>
+</p>
+
+```go
+c := geom.Pt(3, 3)
+
+g.Neighbors(c)               // [(4,3) (3,4) (2,3) (3,2)], inside the grid; also NeighborsSeq
+g.Distance(c, geom.Pt(5, 1)) // 4, Manhattan; 2 with MovementDiagonal, Chebyshev
+cell.Neighbors()             // the same, from a cell; also DistanceTo
+```
+
+`Distance` alone measures between any two indices, inside the grid or not.
+
+### Range, ring, spiral and line
+
+`Range` is exactly the cells within a radius by `Distance`, so its shape follows the movement:
+a diamond, a square, a hexagon.
+
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/range-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/range-light.svg">
+  <img alt="The range of radius 2 around a cell: a diamond with cardinal movement, a square with diagonal movement, and a hexagon on a flat-top and a pointy-top grid" src="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/range-light.svg">
+</picture>
+</p>
+
+```go
+g.Range(c, 2) // a Region of the 13 cells within two steps; 25 with MovementDiagonal, 19 on a hexagonal grid
+cell.Range(2) // the same, from a cell
+```
+
+What a hex walks, the grid walks in its own indices, on every layout. On a grid with
+`MovementDiagonal`:
+
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/traversal-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/traversal-light.svg">
+  <img alt="On a grid with diagonal movement, the ring of radius 2 numbered in order, the spiral of radius 2 numbered from the center outward, and a line between two cells; and the same line on a grid with cardinal movement" src="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/traversal-light.svg">
+</picture>
+</p>
+
+```go
+g.Ring(c, 2)   // the 16 cells exactly two steps away, by increasing angle from the right
+g.Spiral(c, 2) // the 25 cells of Range, nearest first, ring by ring
+
+a, b := geom.Pt(0, 5), geom.Pt(6, 1)
+g.Line(a, b) // the 7 cells from a to b, each a neighbor of the last; 11 with MovementCardinal
+```
+
+A ring and a spiral keep the cells inside the grid; a line is measured between any two indices, as
+`Distance` is. Each has a `Seq` form, `RangeSeq`, `RingSeq`, `SpiralSeq` and `LineSeq`, that walks
+the cells without a buffer and stops where you break:
+
+```go
+for index := range g.SpiralSeq(c, 5) { // nearest first, stops at the break
+	if free(index) {
+		break
+	}
+}
+```
+
+To reuse a buffer, collect a `Seq` form with the standard library's `slices.AppendSeq`.
+
+### Line of sight
+
+Sight runs between the centers of two cells. A wall it passes through blocks it; where it passes
+exactly through a corner, it takes both cells beside the corner to block: a diagonal wall is
+opaque, a single pillar is not.
+
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/corners-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/corners-light.svg">
+  <img alt="Three cases of a line of sight from a to b on a square grid: through a wall is hidden, past the corner of a single pillar is seen, through the corner between two walls is hidden" src="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/corners-light.svg">
+</picture>
+</p>
+
+```go
+a, b := geom.Pt(0, 0), geom.Pt(3, 3)
+
+g.HasLineOfSight(a, b, opaque) // false with a wall at (1,1), in the way
+                               // true with a wall at (1,0) alone, a pillar
+                               // false with walls at (1,0) and (0,1), a diagonal wall
+```
+
+The rule reads the same from either end, so two cells always see each other or neither does, and
+neither end blocks. A hexagonal grid uses the rule of [`gravitton/hexagon`][link-hexagon].
+
+### Field of view
+
+`FieldOfView` is the cells within a radius that a cell sees: what a unit sees, or what a blast
+reaches. A wall is in sight and hides what lies behind it, and what lies outside the grid blocks
+nothing.
+
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/sight-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/sight-light.svg">
+  <img alt="The field of view of radius 6 of a cell among walls, on a grid with cardinal movement, one with diagonal movement and a pointy-top grid: the cells it sees, and the cells within the radius it does not" src="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/sight-light.svg">
+</picture>
+</p>
+
+```go
+g.FieldOfView(c, 6, opaque) // the 76 of the 85 cells within six steps that c sees; also FieldOfViewSeq
+cell.FieldOfView(6, opaque) // the same, from a cell
+```
+
+It asks `opaque` about each cell once and never about `c`. What blocks the view is apart from what
+blocks the way, so each is its own callback: water is seen across, and a unit can stand where it
+hides.
 
 ### Pathfinding
 
-```go
-cost := func(current, next grid.Cell[Tile]) float64 {
-	return next.Value().Cost
-}
+`Path` is the cheapest path, both ends included, or nil where there is none.
 
-g.Path(from, to, walkable, cost)        // the cheapest path as indices, both ends included; nil where there is none
-g.Reachable(unit, 12.5, walkable, cost) // a Field of the cells within the budget
-g.Field(goal, walkable, cost)           // a Field of every cell reached
-
-cell.PathTo(to, walkable, cost)      // the same, from a cell; also Reachable and Field
-```
-
-A nil callback means no constraint: every cell is passable, every step costs one, so a budget
-counts steps. A cost of +Inf is a step never taken; a negative cost or a NaN panics.
-
-A `Field` is what a search reached, with the step back toward its start and the cost of getting
-there. `Reachable` is where a unit can move, with the way to where it is sent. A `Field` searched
-from a goal serves many units heading there, where a step costs the same both ways:
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/paths-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/paths-light.svg">
+  <img alt="Two paths between a and b past a wall and a band of rough ground: breadth-first takes the fewest steps, 18, through the rough ground at a cost of 30; Path goes around it in 20 steps at a cost of 20" src="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/paths-light.svg">
+</picture>
+</p>
 
 ```go
-reach := g.Reachable(unit, 4, walkable, nil)
+a, b := geom.Pt(1, 4), geom.Pt(13, 4)
 
-reach.Region()        // the cells to highlight, going around what stands in the way; also All
-reach.PathTo(picked)  // the way there, from the unit to the cell; also AppendPathTo
-reach.CostTo(picked)  // what it costs, and whether there is a way
-reach.Next(picked)    // one step back toward the unit; false at the unit and where it is not reached
+g.PathBreadthFirst(a, b, walkable) // 19 cells, the fewest steps, through the rough ground: a cost of 30
+g.Path(a, b, walkable, cost)       // 21 cells around it, the cheapest: a cost of 20
+cell.PathTo(b, walkable, cost)     // the same, from a cell
 ```
 
-`Path` is A*, and `Field` picks a search by whether a cost is given. To ask for one by name:
+A nil callback means no constraint: every cell is passable, every step costs one. A cost of +Inf
+is a step never taken; a negative cost or a NaN panics.
+
+`Path` is A*. To ask for a search by name:
 
 | Method                                         | Algorithm         | Weighted | Shortest |
 |------------------------------------------------|-------------------|----------|----------|
@@ -207,90 +399,101 @@ reach.Next(picked)    // one step back toward the unit; false at the unit and wh
 | `PathGreedyBestFirst(start, goal, passable)`   | Greedy best-first | no       | no       |
 | `PathAStar(start, goal, passable, cost)`       | A*                | yes      | yes      |
 
-The two exhaustive ones also come as `FieldUniformCost` and `FieldBreadthFirst`.
+### Fields
 
-### Range and visibility
+A `Field` is what a search reached: every cell, the step back toward its start and the cost of
+getting there. `Reachable` is where a unit can move on a budget, with the way to each cell. A field
+searched from a goal serves every unit heading there, each following `Next`, where a step costs
+the same both ways.
+
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/fields-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/fields-light.svg">
+  <img alt="On a pointy-top grid, the cells a unit reaches on a budget of 6, each labelled with its cost, and the path to one of them; on a square grid, an arrow in every cell pointing one step toward a goal around the walls" src="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/fields-light.svg">
+</picture>
+</p>
 
 ```go
-g.Distance(from, to) // in steps of the grid's movement
-g.Range(index, 3)    // a Region: the cells within 3 steps
-cell.Range(3)        // the same, from a cell
+reach := g.Reachable(u, 6, walkable, cost) // the 71 cells u reaches for 6 or less
 
-opaque := func(cell grid.Cell[Tile]) bool {
-	return cell.Value().Opaque
+reach.CostTo(p) // 4, true: what it costs to get there
+reach.PathTo(p) // [(5,4) (6,4) (6,5) (7,6) (7,7)], from u to p; also AppendPathTo
+reach.Next(p)   // (7,6), true: one step back toward u
+reach.Region()  // the cells to highlight; also All, Len and Contains
+
+flow := g.Field(goal, walkable, nil) // every cell with a way to the goal
+flow.Next(geom.Pt(3, 3))             // (3,4), true: the step to take toward the goal
+```
+
+`Field` is breadth-first with a nil cost and Dijkstra with one; `FieldBreadthFirst` and
+`FieldUniformCost` ask for them by name.
+
+### Regions
+
+`Region` is an immutable set of indices, held once each and sorted. Every query that returns a
+set of cells returns one, and what depends on which cells are adjacent is asked of the grid:
+
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/regions-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/regions-light.svg">
+  <img alt="A region of two pieces, one with a hole: its border, around the hole as well; the region grown by one step; the region shrunk by one step; and its two components" src="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/regions-light.svg">
+</picture>
+</p>
+
+```go
+g.Border(r)      // the 25 cells of r with a neighbor outside it, around the hole as well
+g.Grow(r, 1)     // the 60 cells of r and within one step of it
+g.Shrink(r, 1)   // the 6 cells of r more than one step from its outside
+g.Components(r)  // its 2 pieces, as regions
+g.IsConnected(r) // false
+```
+
+A region knows nothing of the grid it came from, so the set operations serve every layout:
+
+```go
+blast := g.Range(geom.Pt(9, 3), 1) // what a blast hits
+
+r.Intersection(blast)     // the 3 cells in both; also Union, Difference and SymmetricDifference, one pass each
+r.Intersects(blast)       // true, without building it; also Encloses
+r.Contains(geom.Pt(3, 2)) // false, the hole; a binary search
+r.Len()                   // 31; also IsEmpty and Equal
+
+for index := range r.All() { // by x, then by y
+	highlight(g.Cell(index))
 }
 
-g.HasLineOfSight(from, to, opaque)       // whether one sees the other
-g.FieldOfView(index, 8, opaque)     // a Region: the cells within 8 steps in sight; also FieldOfViewSeq
-cell.FieldOfView(8, opaque)         // the same, from a cell
+grid.Reg(indices) // a region of any slice, in any order, with repeats
+json.Marshal(r)   // an array of points
 ```
 
-What blocks sight is apart from what can be walked on: water can be seen across, and a unit can
-stand on what hides it. A blocked cell is in sight and hides what lies behind it, neither end
-blocks, and what lies outside the grid blocks nothing. Two cells always see each other or neither
-does. On a square grid a sightline across a corner is blocked only when
-both cells beside the corner block: a diagonal wall is opaque, a single pillar is not. A
-hexagonal grid uses the rule of [`gravitton/hexagon`][link-hexagon].
-
-### Squares
-
-`grid.Square` is to a square grid what `hex.Hex` is to a hexagonal one: an index with the
-lattice queries `geom.Point` does not have. A method whose answer depends on which cells are
-adjacent takes the `Movement`:
+It is `container.Set` over `grid.Index`, from [`gravitton/container`][link-container]. The same
+set over hexes is `container.SetOf`, with no grid and no conversion:
 
 ```go
-s := grid.Sq(5, 5)
-
-s.Neighbors(grid.MovementDiagonal)           // all 8, by increasing angle
-s.Neighbor(geom.DirectionUp)                 // (5,4)
-s.DistanceTo(target, grid.MovementCardinal)  // Manhattan; MovementDiagonal gives Chebyshev
-s.DirectionTo(target, grid.MovementCardinal) // the nearest of the four directions
-
-s.Range(2, grid.MovementCardinal)     // the indices within 2 steps: a diamond, or a square for MovementDiagonal
-s.Ring(2, grid.MovementCardinal)      // the indices exactly 2 steps away, by increasing angle
-s.Spiral(2, grid.MovementCardinal)    // the same set as Range, ordered outward
-s.Sector(3, geom.DirectionUp, 1, grid.MovementCardinal) // the cone a quarter-turn wide toward up, ring by ring; also SectorLen
-s.LineTo(target, grid.MovementDiagonal) // the indices to target, each a neighbor of the last
-```
-
-Each traversal has a `Seq` form, which allocates nothing and stops where you break, and
-`slices.AppendSeq` puts one in a buffer of yours:
-
-```go
-buffer := make([]grid.Index, 0, grid.RangeLen(2, grid.MovementDiagonal)) // 25; RingLen sizes a ring
-buffer = slices.AppendSeq(buffer[:0], s.RangeSeq(2, grid.MovementDiagonal))
-
-for near := range s.SpiralSeq(5, grid.MovementCardinal) { // nearest first, stops at the break
-	if occupied[near] {
-		break
-	}
-}
-```
-
-Sight takes a function saying what blocks, for a map or a grid to answer:
-
-```go
-s.HasLineOfSight(target, blocked)   // blocked is a func(grid.Index) bool
-s.FieldOfView(8, movement, blocked) // the cells within 8 steps in sight; also FieldOfViewSeq
-```
-
-A quarter turn and a mirror keep a shape on the lattice:
-
-```go
-s.Turn(1)                       // (-5,5), a quarter turn around the origin, clockwise on a screen
-s.TurnAround(geom.Pt(4, 4), -1) // the other way, around another index
-s.ReflectX()                    // (5,-5), mirrored across the x-axis; also ReflectY
+seen := container.SetOf(hex.Pt(0, 0).Range(3)...) // a set of hex.Hex
+seen.Intersection(container.SetOf(hex.Pt(3, -1).Range(1)...))
 ```
 
 ### Drawing
+
+`DrawOrder` yields the cells in view back to front, in the order the layout needs, so a tile is
+never drawn over one in front of it.
+
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/draw-order-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/draw-order-light.svg">
+  <img alt="A grid of four by four cells in each layout, numbered in the order DrawOrder yields them: row by row on a rectangular and a pointy-top grid, by the sum of column and row on an isometric one, and row by row with the higher columns first on a flat-top one" src="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/draw-order-light.svg">
+</picture>
+</p>
 
 ```go
 for cell := range g.DrawOrder(viewport) { // a zero box walks the whole grid
 	draw(cell.Polygon(), cell.Value())
 }
 ```
-
-`DrawOrder` yields the tiles back to front, in the order the layout needs:
 
 | Layout         | Order                                      |
 |----------------|--------------------------------------------|
@@ -301,74 +504,47 @@ for cell := range g.DrawOrder(viewport) { // a zero box walks the whole grid
 
 A tile partly in view is included; a cell outside the grid never is.
 
-### Regions
+### Squares
 
-`Region` is an immutable set of indices, held once each and sorted. It knows nothing of the
-grid they came from, so it serves square and hexagonal grids alike:
+`grid.Square` is to a square grid what `hex.Hex` is to a hexagonal one: an index with the lattice
+queries `geom.Point` does not have, with no grid around it. A method whose answer depends on which
+cells are adjacent takes the `Movement`.
+
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/squares-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/squares-light.svg">
+  <img alt="The sector of radius 3 toward up around a square, numbered ring by ring, a quarter-turn wide with cardinal movement and an eighth-turn wide with diagonal movement; and a square turned around another in four quarter-turns" src="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/squares-light.svg">
+</picture>
+</p>
 
 ```go
-reach := g.Reachable(unit, 3, walkable, nil).Region() // where the unit can move
-blast := g.Range(target, 1)                           // what a blast at the target hits
+s, a := grid.Sq(3, 3), grid.Sq(5, 2)
 
-reach.Intersection(blast)     // also Union, Difference and SymmetricDifference, each one pass and one allocation
-reach.Intersects(blast)       // whether they share a cell, without building it; also Encloses
-reach.Contains(geom.Pt(4, 4)) // a binary search
-reach.Len()                   // also IsEmpty and Equal
+s.Neighbor(geom.DirectionUp)                            // (3,2)
+s.Neighbors(grid.MovementDiagonal)                      // all 8, by increasing angle from the right
+s.DistanceTo(a.Point(), grid.MovementCardinal)          // 3, Manhattan; 2 with MovementDiagonal, Chebyshev
+s.DirectionTo(a.Point(), grid.MovementCardinal)         // Right, the nearest of the four; UpRight of the eight
+s.Range(2, grid.MovementCardinal)                       // the 13 indices within two steps; also Ring, Spiral and LineTo
+s.Sector(3, geom.DirectionUp, 1, grid.MovementCardinal) // the 7 indices of the cone a quarter-turn wide, ring by ring
 
-for index := range reach.All() { // by x, then by y
-	highlight(g.Cell(index))
-}
-
-reach.Elements()    // the indices as a fresh slice; also AppendElements
-json.Marshal(reach) // an array of points
+a.TurnAround(s.Point(), 1) // (4,5), a quarter-turn around s, clockwise on a screen; negative steps go the other way
+a.Turn(1)                  // (-2,5), around the origin
+a.ReflectX()               // (5,-2), across the x-axis; also ReflectY
 ```
 
-It is `container.Set` over `grid.Index`, from [`gravitton/container`][link-container],
-and `grid.Reg` builds one from any slice of indices, in any order, with repeats. The same set
-over hexes is `container.SetOf`, with no grid and no conversion to points:
+Each traversal has a `Seq` form, and the length functions size a buffer for it:
 
 ```go
-seen := container.SetOf(hex.Pt(0, 0).Range(3)...) // a set of hex.Hex
-hit := container.SetOf(hex.Pt(3, -1).Range(1)...)
-
-seen.Intersection(hit) // the hexes in both
-seen.Encloses(hit)     // false: the blast reaches past what is seen
+buffer := make([]grid.Index, 0, grid.RangeLen(2, grid.MovementDiagonal)) // 25; RingLen and SectorLen size the others
+buffer = slices.AppendSeq(buffer[:0], s.RangeSeq(2, grid.MovementDiagonal))
 ```
 
-A set of hexes and a `Region` are different types, since a hexagonal `Grid` numbers its cells
-by offset coordinates. What a hex walks, the grid walks in its own indices, on every layout:
+Sight takes a function saying what blocks, for a map or a grid to answer:
 
 ```go
-g.Ring(index, 2)   // the cells exactly two steps away, around the index
-g.Spiral(index, 2) // the cells within two steps, nearest first, ring by ring
-g.Line(from, to)   // the straight line between two indices, both included
-```
-
-Each has a `Seq` form, `RingSeq`, `SpiralSeq` and `LineSeq`, which allocates nothing and stops
-where you break, and `slices.AppendSeq` puts one in a buffer of yours. A ring and a spiral keep
-the cells inside the grid; a line is measured between any two indices, as `Distance` is.
-
-What depends on which cells are adjacent is asked of the grid, which knows:
-
-```go
-g.Border(reach)      // the cells of the region with a neighbor outside it, around a hole as well
-g.Grow(reach, 1)     // the region and every cell within one step of it; Shrink wears it away
-g.IsConnected(reach) // whether it is one piece
-g.Components(reach)  // its pieces, as regions
-```
-
-`Range` and `Neighbors` have their `Seq` forms too, `RangeSeq` and `NeighborsSeq`.
-
-### Saving
-
-A grid is written as JSON with its layout and its values, so a save file can hold one in a struct
-of its own. A value is written as its type writes it:
-
-```go
-data, err := json.Marshal(g)
-
-var loaded grid.Grid[Tile]
-err = json.Unmarshal(data, &loaded) // the same grid; what no constructor builds is an error
+s.HasLineOfSight(a.Point(), blocked) // blocked is a func(grid.Index) bool
+s.FieldOfView(8, movement, blocked)  // the indices within 8 steps in sight; also FieldOfViewSeq
 ```
 
 ### Movement
@@ -377,15 +553,27 @@ A square grid moves in one of two ways, over the directions of
 [`gravitton/geometry`][link-geometry]:
 
 ```go
-grid.MovementCardinal.Directions()                             // Right, Down, Left, Up
-grid.MovementDiagonal.Offsets()                                // the 8 steps as vectors, by increasing angle
-grid.MovementCardinal.Offset(geom.DirectionUp)                 // Vector{0, -1}, the zero vector for a direction it lacks
-grid.MovementCardinal.Contains(geom.DirectionUpRight)          // false
-grid.MovementDiagonal.Distance(geom.Pt(0, 0), geom.Pt(3, 5))   // 5, Chebyshev; MovementCardinal gives 8
+grid.MovementCardinal.Directions()                           // Right, Down, Left, Up
+grid.MovementDiagonal.Offsets()                              // the 8 steps as vectors, by increasing angle
+grid.MovementCardinal.Offset(geom.DirectionUp)               // ⟨0,-1⟩, the zero vector for a direction it lacks
+grid.MovementCardinal.Contains(geom.DirectionUpRight)        // false
+grid.MovementDiagonal.Distance(geom.Pt(0, 0), geom.Pt(3, 5)) // 5, Chebyshev; MovementCardinal gives 8
 
 grid.Movements()                    // both, as a fresh array
 grid.ParseMovement("Diagonal")      // the name back to the constant, "None" to MovementNone
 json.Marshal(grid.MovementCardinal) // "Cardinal"
+```
+
+### Saving
+
+A grid is written as JSON with its layout and its values, a value as its type writes it, so a save
+file can hold one in a struct of its own:
+
+```go
+data, err := json.Marshal(g) // {"k":"Rect","m":"Cardinal","c":{"w":20,"h":20},"o":{"x":0,"y":0},"v":{…}}
+
+var loaded grid.Grid[Tile]
+err = json.Unmarshal(data, &loaded) // the same grid; what no constructor builds is an error
 ```
 
 Full reference: [pkg.go.dev][link-go-dev-reference].
