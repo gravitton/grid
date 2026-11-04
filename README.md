@@ -86,13 +86,18 @@ cost := func(current, next grid.Cell[Tile]) float64 {
 The map at the top, call by call:
 
 ```go
-g := grid.NewIsometric[Tile](geom.Sz(18, 12), grid.IsometricPixelCellScale(30))
+g := grid.NewIsometric[Tile](geom.Sz(40, 40), grid.IsometricPixelCellScale(40))
 g.Fill(Tile{Cost: 1})
-g.Cell(geom.Pt(8, 0)).Set(Tile{Wall: true}) // and the other walls; rough ground is Tile{Cost: 5}
+g.Cell(geom.Pt(21, 8)).Set(Tile{Wall: true}) // and the other walls; rough ground is Tile{Cost: 5}
 
-scout, goal := geom.Pt(4, 5), geom.Pt(16, 4)
-g.FieldOfView(scout, 7, opaque)     // the 87 cells the scout sees, the walls in front included
-g.Path(scout, goal, walkable, cost) // 18 cells around the walls and the rough ground, at a cost of 17
+scout, goal := geom.Pt(14, 24), geom.Pt(27, 12)
+g.FieldOfView(scout, 8, opaque)     // the 116 cells the scout sees, the walls in front included
+g.Path(scout, goal, walkable, cost) // 32 cells around the wall and the rough ground, at a cost of 31
+
+view := geom.BoxFromMin(g.Bounds().Center().Add(geom.Vec(-468.0, -140.0)), geom.Sz(936.0, 280.0))
+for cell := range g.DrawOrder(view) { // the cells in the window shown, back to front
+	// draw cell.Polygon()
+}
 ```
 
 In every figure a wall is a solid cell, and rough ground, costing five, is green.
