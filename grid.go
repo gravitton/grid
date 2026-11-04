@@ -878,8 +878,7 @@ func (g *Grid[T]) breadthFirstSearch(start Index, goal *Index, budget float64, p
 					continue
 				}
 
-				field.from[field.slot(next)] = queue[head] + 1
-				field.reached++
+				field.reach(next, queue[head])
 				queue = append(queue, field.slot(next))
 			}
 		}
@@ -952,8 +951,7 @@ func (g *Grid[T]) greedyBestFirstSearch(start, goal Index, passable func(Cell[T]
 				continue
 			}
 
-			field.from[field.slot(next)] = slot + 1
-			field.reached++
+			field.reach(next, slot)
 			open.push(field.slot(next), g.heuristic(next, goal))
 		}
 	}

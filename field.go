@@ -22,6 +22,9 @@ type Field struct {
 	// zero marks an index the search did not reach and the start holds its own slot.
 	from []int32
 
+	// steps holds the number of steps from the start to every index the search reached.
+	steps []int32
+
 	// costs holds the cost of reaching every index, and is nil for a search that counts steps.
 	costs []float64
 
@@ -29,16 +32,21 @@ type Field struct {
 }
 
 // newField returns a field over a grid of the given size, holding the start alone, with room
-// for costs where the search weighs its steps.
+// for costs where the search weighs its steps. The slots stepped from and the steps share one
+// allocation.
 func newField(size geom.Size[int], start Index, weighted bool) Field {
+	cells := size.Width * size.Height
+	links := make([]int32, 2*cells)
+
 	f := Field{
 		size:    size,
 		start:   start,
-		from:    make([]int32, size.Width*size.Height),
+		from:    links[:cells:cells],
+		steps:   links[cells:],
 		reached: 1,
 	}
 	if weighted {
-		f.costs = make([]float64, len(f.from))
+		f.costs = make([]float64, cells)
 	}
 
 	f.from[f.slot(start)] = f.slot(start) + 1
@@ -82,6 +90,15 @@ func (f Field) All() iter.Seq[Index] {
 	}
 }
 
+// reach records that index, which the search had not reached, is reached from the slot.
+func (f *Field) reach(index Index, from int32) {
+	slot := f.slot(index)
+
+	f.from[slot] = from + 1
+	f.steps[slot] = f.steps[from] + 1
+	f.reached++
+}
+
 // improve records that index is reached from the slot at the given cost, where the cost is
 // finite and the search had not reached it or had paid more, and reports whether it did.
 func (f *Field) improve(index Index, from int32, cost float64) bool {
@@ -97,6 +114,7 @@ func (f *Field) improve(index Index, from int32, cost float64) bool {
 	}
 
 	f.from[slot] = from + 1
+	f.steps[slot] = f.steps[from] + 1
 	f.costs[slot] = cost
 
 	return true
@@ -122,7 +140,7 @@ func (f Field) CostTo(index Index) (float64, bool) {
 		return f.costs[f.slot(index)], true
 	}
 
-	return float64(f.steps(index)), true
+	return float64(f.steps[f.slot(index)]), true
 }
 
 // PathTo returns the path the search found from the start to the index, both included, and nil
@@ -132,7 +150,7 @@ func (f Field) PathTo(index Index) []Index {
 		return nil
 	}
 
-	return f.AppendPathTo(make([]Index, 0, f.steps(index)+1), index)
+	return f.AppendPathTo(make([]Index, 0, f.steps[f.slot(index)]+1), index)
 }
 
 // AppendPathTo appends the indices of PathTo to dst and returns the extended slice.
@@ -141,7 +159,7 @@ func (f Field) AppendPathTo(dst []Index, index Index) []Index {
 		return dst
 	}
 
-	start, length := len(dst), f.steps(index)+1
+	start, length := len(dst), int(f.steps[f.slot(index)])+1
 	dst = slices.Grow(dst, length)[:start+length]
 	for i := len(dst) - 1; i > start; i-- {
 		dst[i] = index
@@ -150,16 +168,6 @@ func (f Field) AppendPathTo(dst []Index, index Index) []Index {
 	dst[start] = index
 
 	return dst
-}
-
-// steps returns the number of steps from the start to an index the search reached.
-func (f Field) steps(index Index) int {
-	steps := 0
-	for slot := f.slot(index); slot != f.slot(f.start); slot = f.from[slot] - 1 {
-		steps++
-	}
-
-	return steps
 }
 
 // Contains reports whether the search reached the index.
