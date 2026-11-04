@@ -156,6 +156,16 @@ func TestField_CostTo(t *testing.T) {
 	})
 }
 
+func BenchmarkField_CostTo(b *testing.B) {
+	benchmarkGrids(b, func(b *testing.B, g *Grid[int]) {
+		field := g.FieldBreadthFirst(geom.Pt(0, 0), nil)
+
+		for b.Loop() {
+			sinkFloat, _ = field.CostTo(geom.Pt(63, 63))
+		}
+	})
+}
+
 func TestField_PathTo(t *testing.T) {
 	g := walledGrid()
 	field := g.FieldBreadthFirst(testStart, walkable)

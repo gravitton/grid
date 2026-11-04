@@ -29,6 +29,8 @@ var (
 	sinkString    string
 	sinkHexLayout *HexLayout
 	sinkPolygon   geom.RegularPolygon[float64]
+	sinkFloat     float64
+	sinkField     Field
 )
 
 var (
@@ -179,6 +181,20 @@ func weightedGrid() *Grid[int] {
 
 func stepCost(_, next Cell[int]) float64 {
 	return float64(1 + *next.Value())
+}
+
+// climbCost charges one per step and one more per unit of height between the cells, so the
+// cost of a step depends on both of them.
+func climbCost(current, next Cell[int]) float64 {
+	return float64(1 + max(*current.Value()-*next.Value(), *next.Value()-*current.Value()))
+}
+
+// scatterHeights sets every cell of the grid to a height from zero to three that varies with
+// its index, so that climbCost makes a search find cheaper ways to cells it has reached.
+func scatterHeights(g *Grid[int]) {
+	for cell := range g.All() {
+		cell.Set((cell.Index().X*3 + cell.Index().Y*7) % 4)
+	}
 }
 
 // testNewRect runs the sections the two square constructors share.
@@ -2863,6 +2879,25 @@ func benchmarkSearch(b *testing.B, search func(g *Grid[int], start, goal Index) 
 	})
 }
 
+// benchmarkCostSearch runs the search corner to corner on each of the benchmarkGrids, every
+// step costing one and then climbCost over scatterHeights.
+func benchmarkCostSearch(b *testing.B, search func(g *Grid[int], start, goal Index, cost func(current, next Cell[int]) float64) []Index) {
+	benchmarkGrids(b, func(b *testing.B, g *Grid[int]) {
+		b.Run("unit", func(b *testing.B) {
+			for b.Loop() {
+				sinkPoints = search(g, geom.Pt(0, 0), geom.Pt(63, 63), nil)
+			}
+		})
+		b.Run("weighted", func(b *testing.B) {
+			scatterHeights(g)
+
+			for b.Loop() {
+				sinkPoints = search(g, geom.Pt(0, 0), geom.Pt(63, 63), climbCost)
+			}
+		})
+	})
+}
+
 func TestGrid_Path(t *testing.T) {
 	t.Run("to the cell itself is that cell alone", func(t *testing.T) {
 		path := walledGrid().Path(testStart, testStart, nil, nil)
@@ -2953,8 +2988,8 @@ func TestGrid_PathUniformCost(t *testing.T) {
 }
 
 func BenchmarkGrid_PathUniformCost(b *testing.B) {
-	benchmarkSearch(b, func(g *Grid[int], start, goal Index) []Index {
-		return g.PathUniformCost(start, goal, nil, nil)
+	benchmarkCostSearch(b, func(g *Grid[int], start, goal Index, cost func(current, next Cell[int]) float64) []Index {
+		return g.PathUniformCost(start, goal, nil, cost)
 	})
 }
 
@@ -3006,8 +3041,8 @@ func TestGrid_PathAStar(t *testing.T) {
 }
 
 func BenchmarkGrid_PathAStar(b *testing.B) {
-	benchmarkSearch(b, func(g *Grid[int], start, goal Index) []Index {
-		return g.PathAStar(start, goal, nil, nil)
+	benchmarkCostSearch(b, func(g *Grid[int], start, goal Index, cost func(current, next Cell[int]) float64) []Index {
+		return g.PathAStar(start, goal, nil, cost)
 	})
 }
 
@@ -3084,6 +3119,16 @@ func TestGrid_FieldBreadthFirst(t *testing.T) {
 func TestGrid_FieldUniformCost(t *testing.T) {
 	testSearchField(t, func(g *Grid[int], passable func(Cell[int]) bool) Field {
 		return g.FieldUniformCost(testStart, passable, nil)
+	})
+}
+
+func BenchmarkGrid_FieldUniformCost(b *testing.B) {
+	benchmarkGrids(b, func(b *testing.B, g *Grid[int]) {
+		scatterHeights(g)
+
+		for b.Loop() {
+			sinkField = g.FieldUniformCost(geom.Pt(0, 0), nil, climbCost)
+		}
 	})
 }
 
