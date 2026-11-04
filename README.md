@@ -234,43 +234,33 @@ g.MoveTo(geom.Pt(100.0, 50.0))    // the top-left corner of the bounds, to scrol
 g.Rescale(grid.RectCellScale(48)) // the scale of a tile, to zoom it
 ```
 
-### Hex layout
+### Drawing
 
-A `HexLayout` places hexagonal cells with no grid around them, on an unbounded plane, for a map
-whose data lives elsewhere: in a `map[hex.Hex]T`, a `container.Set`, a chunked world. It is the
-world space of [`gravitton/hexagon`][link-hexagon], which does the coordinate math and draws
-nothing. Its indices are in the coordinate system it is built with, and the center of index zero
-is its origin.
+`DrawOrder` yields the cells in view back to front, in the order the layout needs, so a tile is
+never drawn over one in front of it.
 
 <p align="center">
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/hex-layout-dark.svg">
-  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/hex-layout-light.svg">
-  <img alt="The hexes within two steps of the center, placed by a pointy-top and a flat-top layout and labelled with their axial coordinates, and by a pointy-top layout in the odd-r offset system, labelled with their offset coordinates; on the first, a point and the hex it falls in" src="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/hex-layout-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/draw-order-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/draw-order-light.svg">
+  <img alt="A grid of four by four cells in each layout, numbered in the order DrawOrder yields them: row by row on a rectangular and a pointy-top grid, by the sum of column and row on an isometric one, and row by row with the higher columns first on a flat-top one" src="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/draw-order-light.svg">
 </picture>
 </p>
 
 ```go
-import hex "github.com/gravitton/hexagon"
-
-layout := grid.NewHexPointyTopLayout(grid.HexPointyTopCellScale(34), hex.Axial)
-
-h := hex.Pt(2, -1)
-layout.Center(h.Point())  // (51,-29.44), from the center of index zero at the origin
-layout.Polygon(h.Point()) // the hexagon to draw or hit-test
-layout.Bounds(h.Point())  // the geom.Box around it
-
-hex.Axial.From(layout.IndexAt(geom.Pt(60.0, -40.0))) // Hex{2, -1}, the hex under a point
-
-layout.CellSize()                              // 34x39.26, one hex as drawn; also CellSpacing and CellScale
-layout.MoveTo(geom.Pt(400.0, 300.0))           // the center of index zero, to scroll the map
-layout.Rescale(grid.HexPointyTopCellScale(48)) // the scale of a hex, to zoom it
+for cell := range g.DrawOrder(viewport) { // a zero box walks the whole grid
+	draw(cell.Polygon(), cell.Value())
+}
 ```
 
-Built with another system, the same hexes keep their places and take its indices: `hex.OffsetOddR`
-numbers them as a pointy-top grid does. Moved to the center of a grid's index zero, a layout of the
-grid's scale and system places every cell exactly where the grid does, and puts a point on an edge
-on the same side.
+| Layout         | Order                                      |
+|----------------|--------------------------------------------|
+| Rectangular    | Row by row, top to bottom                  |
+| Isometric      | By depth, `column + row` ascending         |
+| Hex flat-top   | Row by row, the columns drawn higher first |
+| Hex pointy-top | Row by row                                 |
+
+A tile partly in view is included; a cell outside the grid never is.
 
 ### Neighbors and distance
 
@@ -295,6 +285,22 @@ cell.Neighbors()             // the same, from a cell; also DistanceTo
 ```
 
 `Distance` alone measures between any two indices, inside the grid or not.
+
+### Movement
+
+`Movement` names those two ways, over the directions of [`gravitton/geometry`][link-geometry]:
+
+```go
+grid.MovementCardinal.Directions()                           // Right, Down, Left, Up
+grid.MovementDiagonal.Offsets()                              // the 8 steps as vectors, by increasing angle
+grid.MovementCardinal.Offset(geom.DirectionUp)               // ⟨0,-1⟩, the zero vector for a direction it lacks
+grid.MovementCardinal.Contains(geom.DirectionUpRight)        // false
+grid.MovementDiagonal.Distance(geom.Pt(0, 0), geom.Pt(3, 5)) // 5, Chebyshev; MovementCardinal gives 8
+
+grid.Movements()                    // both, as a fresh array
+grid.ParseMovement("Diagonal")      // the name back to the constant, "None" to MovementNone
+json.Marshal(grid.MovementCardinal) // "Cardinal"
+```
 
 ### Range, ring, spiral and line
 
@@ -504,33 +510,17 @@ seen := container.SetOf(hex.Pt(0, 0).Range(3)...) // a set of hex.Hex
 seen.Intersection(container.SetOf(hex.Pt(3, -1).Range(1)...))
 ```
 
-### Drawing
+### Saving
 
-`DrawOrder` yields the cells in view back to front, in the order the layout needs, so a tile is
-never drawn over one in front of it.
-
-<p align="center">
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/draw-order-dark.svg">
-  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/draw-order-light.svg">
-  <img alt="A grid of four by four cells in each layout, numbered in the order DrawOrder yields them: row by row on a rectangular and a pointy-top grid, by the sum of column and row on an isometric one, and row by row with the higher columns first on a flat-top one" src="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/draw-order-light.svg">
-</picture>
-</p>
+A grid is written as JSON with its layout and its values, a value as its type writes it, so a save
+file can hold one in a struct of its own:
 
 ```go
-for cell := range g.DrawOrder(viewport) { // a zero box walks the whole grid
-	draw(cell.Polygon(), cell.Value())
-}
+data, err := json.Marshal(g) // {"k":"Rect","m":"Cardinal","c":{"w":20,"h":20},"o":{"x":0,"y":0},"v":{…}}
+
+var loaded grid.Grid[Tile]
+err = json.Unmarshal(data, &loaded) // the same grid; what no constructor builds is an error
 ```
-
-| Layout         | Order                                      |
-|----------------|--------------------------------------------|
-| Rectangular    | Row by row, top to bottom                  |
-| Isometric      | By depth, `column + row` ascending         |
-| Hex flat-top   | Row by row, the columns drawn higher first |
-| Hex pointy-top | Row by row                                 |
-
-A tile partly in view is included; a cell outside the grid never is.
 
 ### Squares
 
@@ -575,34 +565,43 @@ s.HasLineOfSight(a.Point(), blocked) // blocked is a func(grid.Index) bool
 s.FieldOfView(8, movement, blocked)  // the indices within 8 steps in sight; also FieldOfViewSeq
 ```
 
-### Movement
+### Hex layout
 
-A square grid moves in one of two ways, over the directions of
-[`gravitton/geometry`][link-geometry]:
+A `HexLayout` places hexagonal cells with no grid around them, on an unbounded plane, for a map
+whose data lives elsewhere: in a `map[hex.Hex]T`, a `container.Set`, a chunked world. It is the
+world space of [`gravitton/hexagon`][link-hexagon], which does the coordinate math and draws
+nothing. Its indices are in the coordinate system it is built with, and the center of index zero
+is its origin.
 
-```go
-grid.MovementCardinal.Directions()                           // Right, Down, Left, Up
-grid.MovementDiagonal.Offsets()                              // the 8 steps as vectors, by increasing angle
-grid.MovementCardinal.Offset(geom.DirectionUp)               // ⟨0,-1⟩, the zero vector for a direction it lacks
-grid.MovementCardinal.Contains(geom.DirectionUpRight)        // false
-grid.MovementDiagonal.Distance(geom.Pt(0, 0), geom.Pt(3, 5)) // 5, Chebyshev; MovementCardinal gives 8
-
-grid.Movements()                    // both, as a fresh array
-grid.ParseMovement("Diagonal")      // the name back to the constant, "None" to MovementNone
-json.Marshal(grid.MovementCardinal) // "Cardinal"
-```
-
-### Saving
-
-A grid is written as JSON with its layout and its values, a value as its type writes it, so a save
-file can hold one in a struct of its own:
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/hex-layout-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/hex-layout-light.svg">
+  <img alt="The hexes within two steps of the center, placed by a pointy-top and a flat-top layout and labelled with their axial coordinates, and by a pointy-top layout in the odd-r offset system, labelled with their offset coordinates; on the first, a point and the hex it falls in" src="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/hex-layout-light.svg">
+</picture>
+</p>
 
 ```go
-data, err := json.Marshal(g) // {"k":"Rect","m":"Cardinal","c":{"w":20,"h":20},"o":{"x":0,"y":0},"v":{…}}
+import hex "github.com/gravitton/hexagon"
 
-var loaded grid.Grid[Tile]
-err = json.Unmarshal(data, &loaded) // the same grid; what no constructor builds is an error
+layout := grid.NewHexPointyTopLayout(grid.HexPointyTopCellScale(34), hex.Axial)
+
+h := hex.Pt(2, -1)
+layout.Center(h.Point())  // (51,-29.44), from the center of index zero at the origin
+layout.Polygon(h.Point()) // the hexagon to draw or hit-test
+layout.Bounds(h.Point())  // the geom.Box around it
+
+hex.Axial.From(layout.IndexAt(geom.Pt(60.0, -40.0))) // Hex{2, -1}, the hex under a point
+
+layout.CellSize()                              // 34x39.26, one hex as drawn; also CellSpacing and CellScale
+layout.MoveTo(geom.Pt(400.0, 300.0))           // the center of index zero, to scroll the map
+layout.Rescale(grid.HexPointyTopCellScale(48)) // the scale of a hex, to zoom it
 ```
+
+Built with another system, the same hexes keep their places and take its indices: `hex.OffsetOddR`
+numbers them as a pointy-top grid does. Moved to the center of a grid's index zero, a layout of the
+grid's scale and system places every cell exactly where the grid does, and puts a point on an edge
+on the same side.
 
 Full reference: [pkg.go.dev][link-go-dev-reference].
 
