@@ -29,6 +29,16 @@ Generic 2D grid library for game development
 </picture>
 </p>
 
+One API on every layout: the same calls on one map, answered by each grid's own neighbors.
+
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/explorations-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/explorations-light.svg">
+  <img alt="One map of nine by eight cells on a rectangular, an isometric and a pointy-top grid: on each the field of view of radius 5 of a scout among walls, and its cheapest path to a goal around a patch of rough ground" src="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/explorations-light.svg">
+</picture>
+</p>
+
 Every picture in this README is drawn from the package's own results: the cells coloured are the
 ones the code beside them returns.
 
@@ -97,6 +107,18 @@ g.Path(scout, goal, walkable, cost) // 32 cells around the wall and the rough gr
 view := geom.BoxFromMin(g.Bounds().Center().Add(geom.Vec(-468.0, -140.0)), geom.Sz(936.0, 280.0))
 for cell := range g.DrawOrder(view) { // the cells in the window shown, back to front
 	// draw cell.Polygon()
+}
+```
+
+The three maps below it, painted into a `NewRect`, a `NewIsometric` and a `NewHexPointyTop` grid,
+run one function:
+
+```go
+scout, goal := geom.Pt(0, 2), geom.Pt(8, 4)
+
+explore := func(g *grid.Grid[Tile]) {
+	g.FieldOfView(scout, 5, opaque)     // 23 cells on a square grid, 24 on a hexagonal one
+	g.Path(scout, goal, walkable, cost) // a cost of 14 on a square grid, 12 on a hexagonal one
 }
 ```
 
@@ -416,15 +438,15 @@ the same both ways.
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/fields-dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/fields-light.svg">
-  <img alt="On a pointy-top grid, the cells a unit reaches on a budget of 6, each labelled with its cost, and the path to one of them; on a square grid, an arrow in every cell pointing one step toward a goal around the walls" src="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/fields-light.svg">
+  <img alt="The cells a unit reaches on a budget of 6, each labelled with its cost, and the path to one of them; an arrow in every cell pointing one step toward a goal around the walls" src="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/fields-light.svg">
 </picture>
 </p>
 
 ```go
-reach := g.Reachable(u, 6, walkable, cost) // the 71 cells u reaches for 6 or less
+reach := g.Reachable(u, 6, walkable, cost) // the 35 cells u reaches for 6 or less
 
-reach.CostTo(p) // 4, true: what it costs to get there
-reach.PathTo(p) // [(5,4) (6,4) (6,5) (7,6) (7,7)], from u to p; also AppendPathTo
+reach.CostTo(p) // 5, true: what it costs to get there
+reach.PathTo(p) // [(5,4) (6,4) (6,5) (7,5) (7,6) (7,7)], from u to p; also AppendPathTo
 reach.Next(p)   // (7,6), true: one step back toward u
 reach.Region()  // the cells to highlight; also All, Len and Contains
 
@@ -444,16 +466,16 @@ set of cells returns one, and what depends on which cells are adjacent is asked 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/regions-dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/regions-light.svg">
-  <img alt="A region of two pieces, one with a hole: its border, around the hole as well; the region grown by one step; the region shrunk by one step; and its two components" src="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/regions-light.svg">
+  <img alt="A region of two pieces, one with a hole: its two components; the region grown by one step; the region shrunk by one step; and its border, around the hole as well" src="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/regions-light.svg">
 </picture>
 </p>
 
 ```go
-g.Border(r)      // the 25 cells of r with a neighbor outside it, around the hole as well
-g.Grow(r, 1)     // the 60 cells of r and within one step of it
-g.Shrink(r, 1)   // the 6 cells of r more than one step from its outside
 g.Components(r)  // its 2 pieces, as regions
 g.IsConnected(r) // false
+g.Grow(r, 1)     // the 60 cells of r and within one step of it
+g.Shrink(r, 1)   // the 6 cells of r more than one step from its outside
+g.Border(r)      // the 25 cells of r with a neighbor outside it, around the hole as well
 ```
 
 A region knows nothing of the grid it came from, so the set operations serve every layout:

@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="467" height="152" viewBox="0 0 467 152" role="img">
-<g transform="translate(20.3 12.0)">
+<svg xmlns="http://www.w3.org/2000/svg" width="548" height="152" viewBox="0 0 548 152" role="img">
+<g transform="translate(37.1 12.0)">
 <polygon points="-0.0,0.0 26.0,-0.0 26.0,26.0 0.0,26.0" fill="#fdfbf9" stroke="#cfc7be" stroke-width="1" stroke-linejoin="round"/>
 <polygon points="26.0,0.0 52.0,-0.0 52.0,26.0 26.0,26.0" fill="#fdfbf9" stroke="#cfc7be" stroke-width="1" stroke-linejoin="round"/>
 <polygon points="52.0,0.0 78.0,-0.0 78.0,26.0 52.0,26.0" fill="#fdfbf9" stroke="#cfc7be" stroke-width="1" stroke-linejoin="round"/>
@@ -22,8 +22,8 @@
 <text x="13.0" y="17.2" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" text-anchor="middle"><tspan fill="#1c1713">a</tspan></text>
 <text x="91.0" y="95.2" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" text-anchor="middle"><tspan fill="#1c1713">b</tspan></text>
 </g>
-<text x="72.3" y="136.0" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" text-anchor="middle" fill="#8a8178">in the way: hidden</text>
-<g transform="translate(164.6 12.0)">
+<text x="89.0" y="136.0" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" text-anchor="middle" fill="#8a8178">in the way: hidden</text>
+<g transform="translate(222.1 12.0)">
 <polygon points="-0.0,0.0 26.0,-0.0 26.0,26.0 0.0,26.0" fill="#fdfbf9" stroke="#cfc7be" stroke-width="1" stroke-linejoin="round"/>
 <polygon points="26.0,0.0 52.0,-0.0 52.0,26.0 26.0,26.0" fill="#4a433d" stroke="#cfc7be" stroke-width="1" stroke-linejoin="round"/>
 <polygon points="52.0,0.0 78.0,-0.0 78.0,26.0 52.0,26.0" fill="#fdfbf9" stroke="#cfc7be" stroke-width="1" stroke-linejoin="round"/>
@@ -46,8 +46,8 @@
 <text x="13.0" y="17.2" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" text-anchor="middle"><tspan fill="#1c1713">a</tspan></text>
 <text x="91.0" y="95.2" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" text-anchor="middle"><tspan fill="#1c1713">b</tspan></text>
 </g>
-<text x="216.6" y="136.0" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" text-anchor="middle" fill="#8a8178">a pillar: seen</text>
-<g transform="translate(325.7 12.0)">
+<text x="274.1" y="136.0" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" text-anchor="middle" fill="#8a8178">a pillar: seen</text>
+<g transform="translate(407.2 12.0)">
 <polygon points="-0.0,0.0 26.0,-0.0 26.0,26.0 0.0,26.0" fill="#fdfbf9" stroke="#cfc7be" stroke-width="1" stroke-linejoin="round"/>
 <polygon points="26.0,0.0 52.0,-0.0 52.0,26.0 26.0,26.0" fill="#4a433d" stroke="#cfc7be" stroke-width="1" stroke-linejoin="round"/>
 <polygon points="52.0,0.0 78.0,-0.0 78.0,26.0 52.0,26.0" fill="#fdfbf9" stroke="#cfc7be" stroke-width="1" stroke-linejoin="round"/>
@@ -70,5 +70,5 @@
 <text x="13.0" y="17.2" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" text-anchor="middle"><tspan fill="#1c1713">a</tspan></text>
 <text x="91.0" y="95.2" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" text-anchor="middle"><tspan fill="#1c1713">b</tspan></text>
 </g>
-<text x="377.7" y="136.0" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" text-anchor="middle" fill="#8a8178">a diagonal wall: hidden</text>
+<text x="459.2" y="136.0" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" text-anchor="middle" fill="#8a8178">a diagonal wall: hidden</text>
 </svg>
