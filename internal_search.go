@@ -69,9 +69,10 @@ func (f *frontier) push(slot int32, priority float64) {
 	}
 }
 
-// pop removes the slot of the least priority and sifts the last item down from the top.
-func (f *frontier) pop() int32 {
-	top := f.items[0].slot
+// pop removes the slot of the least priority, returning it with its priority, and sifts the
+// last item down from the top.
+func (f *frontier) pop() (int32, float64) {
+	top := f.items[0]
 
 	last := len(f.items) - 1
 	f.items[0] = f.items[last]
@@ -92,5 +93,5 @@ func (f *frontier) pop() int32 {
 		i = least
 	}
 
-	return top
+	return top.slot, top.priority
 }

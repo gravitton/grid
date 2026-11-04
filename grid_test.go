@@ -2997,6 +2997,9 @@ func TestGrid_PathGreedyBestFirst(t *testing.T) {
 	testSearch(t, func(g *Grid[int], passable func(Cell[int]) bool) []Index {
 		return g.PathGreedyBestFirst(testStart, testGoal, passable)
 	})
+	t.Run("to the cell itself is that cell alone", func(t *testing.T) {
+		assert.Equal(t, walledGrid().PathGreedyBestFirst(testStart, testStart, nil), []Index{testStart})
+	})
 }
 
 func BenchmarkGrid_PathGreedyBestFirst(b *testing.B) {
@@ -3119,6 +3122,22 @@ func TestGrid_FieldBreadthFirst(t *testing.T) {
 func TestGrid_FieldUniformCost(t *testing.T) {
 	testSearchField(t, func(g *Grid[int], passable func(Cell[int]) bool) Field {
 		return g.FieldUniformCost(testStart, passable, nil)
+	})
+	t.Run("expands a cell once, however often it is reached more cheaply", func(t *testing.T) {
+		for name, g := range ruleGrids(geom.Sz(9, 9)) {
+			scatterHeights(g)
+
+			asked := map[Index]int{}
+			g.FieldUniformCost(testStart, nil, func(current, next Cell[int]) float64 {
+				asked[current.Index()]++
+
+				return climbCost(current, next)
+			})
+
+			for index, times := range asked {
+				assert.LessOrEqual(t, times, len(g.Neighbors(index)), name+" at "+index.String()+": ")
+			}
+		}
 	})
 }
 

@@ -860,6 +860,9 @@ func (g *Grid[T]) breadthFirstSearch(start Index, goal *Index, budget float64, p
 	}
 
 	field := newField(g.Size(), start, false)
+	if goal != nil && start == *goal {
+		return field
+	}
 
 	// Every cell enters the queue once at most, so it never grows past the grid.
 	queue := make([]int32, 1, len(field.from))
@@ -868,9 +871,6 @@ func (g *Grid[T]) breadthFirstSearch(start Index, goal *Index, budget float64, p
 	for head, steps := 0, 1; head < len(queue) && float64(steps) <= budget; steps++ {
 		for ring := len(queue); head < ring; head++ {
 			current := field.index(queue[head])
-			if goal != nil && current == *goal {
-				return field
-			}
 
 			for _, offset := range g.topology.offsets(current) {
 				next := current.Add(offset)
@@ -879,6 +879,10 @@ func (g *Grid[T]) breadthFirstSearch(start Index, goal *Index, budget float64, p
 				}
 
 				field.reach(next, queue[head])
+				if goal != nil && next == *goal {
+					return field
+				}
+
 				queue = append(queue, field.slot(next))
 			}
 		}
@@ -903,7 +907,11 @@ func (g *Grid[T]) uniformCostSearch(start Index, goal *Index, budget float64, pa
 	open.push(field.slot(start), 0)
 
 	for open.len() > 0 {
-		slot := open.pop()
+		slot, priority := open.pop()
+		if priority > field.costs[slot] {
+			continue
+		}
+
 		current := field.index(slot)
 		if goal != nil && current == *goal {
 			break
@@ -934,16 +942,16 @@ func (g *Grid[T]) greedyBestFirstSearch(start, goal Index, passable func(Cell[T]
 	}
 
 	field := newField(g.Size(), start, false)
+	if start == goal {
+		return field
+	}
 
 	var open frontier
 	open.push(field.slot(start), 0)
 
 	for open.len() > 0 {
-		slot := open.pop()
+		slot, _ := open.pop()
 		current := field.index(slot)
-		if current == goal {
-			break
-		}
 
 		for _, offset := range g.topology.offsets(current) {
 			next := current.Add(offset)
@@ -952,6 +960,10 @@ func (g *Grid[T]) greedyBestFirstSearch(start, goal Index, passable func(Cell[T]
 			}
 
 			field.reach(next, slot)
+			if next == goal {
+				return field
+			}
+
 			open.push(field.slot(next), g.heuristic(next, goal))
 		}
 	}
@@ -974,8 +986,11 @@ func (g *Grid[T]) astar(start, goal Index, passable func(Cell[T]) bool, cost fun
 	open.push(field.slot(start), 0)
 
 	for open.len() > 0 {
-		slot := open.pop()
+		slot, priority := open.pop()
 		current := field.index(slot)
+		if priority > field.costs[slot]+g.heuristic(current, goal) {
+			continue
+		}
 		if current == goal {
 			break
 		}
