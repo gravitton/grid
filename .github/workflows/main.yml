@@ -3,51 +3,8 @@ name: Test
 on:
   - push
   - pull_request
+  - workflow_dispatch
 
 jobs:
-  build:
-    runs-on: ${{ matrix.os }}
-    name: Go ${{ matrix.go }} on ${{ matrix.os }}
-    strategy:
-      matrix:
-        go:
-          - '1.27'
-        os:
-          - ubuntu-latest
-          - ubuntu-24.04-arm
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Setup Go ${{ matrix.go }}
-        uses: actions/setup-go@v7
-        with:
-          go-version: ${{ matrix.go }}
-
-      - name: Install tools
-        run: |
-          go install honnef.co/go/tools/cmd/staticcheck@latest
-          go install golang.org/x/vuln/cmd/govulncheck@latest
-
-      - name: Vet
-        run: go vet ./...
-
-      - name: Lint
-        run: staticcheck ./...
-
-      - name: Security
-        run: govulncheck ./...
-
-      - name: Build
-        run: go build -v ./...
-
-      - name: Test
-        run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
-
-      - name: Upload coverage
-        if: matrix.os == 'ubuntu-latest'
-        uses: coverallsapp/github-action@v2
-        with:
-          file: coverage.out
-          format: golang
+  test:
+    uses: gravitton/.github/.github/workflows/go.yml@main

@@ -46,6 +46,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - The cell-size helpers are named for the cell scale they return and for their constructor: `RectCellSize`, `IsometricRectCellSize`, `IsometricPixelPerfectRectCellSize`, `HexFlatTopCellSize`, `HexPointyTopCellSize`, `HexFlatTopIsometricPixelPerfectCellSize` and `HexPointyTopIsometricPixelPerfectCellSize` are `RectCellScale`, `IsometricCellScale`, `IsometricPixelCellScale`, `HexFlatTopCellScale`, `HexPointyTopCellScale`, `HexFlatTopPixelCellScale` and `HexPointyTopPixelCellScale`. A hexagonal one gives a circumradius, which "cell size", the box of a cell as drawn, no longer names (**breaking**)
 - The constructors of a grid and of a `HexLayout` name what they take `cellScale`, where they were `grid` and `size`, `cellSize` or `hexSize`; no caller changes
 - Rewrote the doc comments to one style, with the shared rules, every panic and the order of directions stated once in the package doc
+- CI runs the shared workflow of `gravitton/.github`, adding the fused multiply-add check, and can be started by hand
 
 ### Added
 - `Cell.String` prints a cell as `Cell(x,y)`
