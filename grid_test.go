@@ -804,7 +804,7 @@ func TestGrid_IndexAt(t *testing.T) {
 			for _, g := range grids {
 				assert.PanicsWith(t, func() {
 					g.IndexAt(point)
-				}, "geom: cast of a non-finite value to an integer")
+				}, geom.ErrNonFinite)
 			}
 		})
 	}
