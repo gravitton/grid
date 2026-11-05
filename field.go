@@ -98,9 +98,9 @@ func (f Field) All() iter.Seq[Index] {
 			return
 		}
 
-		rows := len(f.chunks) / f.columns
-		for x := range f.size.Width {
-			for row := range rows {
+		first, last := f.touched()
+		for x := first.X << chunkShift; x < min((last.X+1)<<chunkShift, f.size.Width); x++ {
+			for row := first.Y; row <= last.Y; row++ {
 				place := f.chunks[row*f.columns+x>>chunkShift]
 				if place == 0 {
 					continue
@@ -114,6 +114,18 @@ func (f Field) All() iter.Seq[Index] {
 			}
 		}
 	}
+}
+
+// touched returns the column and row, in chunks, of the first and the last corner of the box
+// around the chunks the search touched, so a walk of the field reads no chunk table beyond it.
+func (f Field) touched() (first, last Index) {
+	first, last = f.corners[0], f.corners[0]
+	for _, corner := range f.corners[1:] {
+		first = geom.Pt(min(first.X, corner.X), min(first.Y, corner.Y))
+		last = geom.Pt(max(last.X, corner.X), max(last.Y, corner.Y))
+	}
+
+	return geom.Pt(first.X>>chunkShift, first.Y>>chunkShift), geom.Pt(last.X>>chunkShift, last.Y>>chunkShift)
 }
 
 // reaches reports whether the search reached the slot.

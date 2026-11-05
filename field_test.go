@@ -51,11 +51,25 @@ func TestField_Region(t *testing.T) {
 	})
 }
 
+func BenchmarkField_Region(b *testing.B) {
+	field := NewRect[int](geom.Sz(1024, 1024), geom.SzU(1.0)).Reachable(geom.Pt(500, 500), 8, nil, nil)
+
+	for b.Loop() {
+		sinkRegion = field.Region()
+	}
+}
+
 func TestField_All(t *testing.T) {
 	field := NewRect[int](geom.Sz(3, 3), geom.SzU(32.0)).FieldBreadthFirst(geom.Pt(1, 1), nil)
 
 	t.Run("yields what Region holds, in its order", func(t *testing.T) {
 		assert.Equal(t, slices.Collect(field.All()), field.Region().Elements())
+	})
+	t.Run("yields the cells reached across chunks away from the corner of the grid", func(t *testing.T) {
+		g := NewRect[int](geom.Sz(100, 100), geom.SzU(1.0))
+		reached := g.Reachable(geom.Pt(50, 40), 20, nil, nil)
+
+		assert.Equal(t, slices.Collect(reached.All()), g.Range(geom.Pt(50, 40), 20).Elements())
 	})
 	t.Run("the empty field yields nothing", func(t *testing.T) {
 		assert.Length(t, slices.Collect(Field{}.All()), 0)
