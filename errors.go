@@ -6,7 +6,8 @@ import (
 
 var (
 	// ErrUnknownMovement is wrapped by the panic value of a movement outside the constants,
-	// MovementNone included, where a method has no answer for it.
+	// MovementNone included, where a method has no answer for it, and by the error of
+	// UnmarshalJSON reading square cells with no movement.
 	ErrUnknownMovement = errors.New("grid: unknown movement")
 	// ErrNonFinite is wrapped by the panic value of an origin or bounds with a NaN or infinite
 	// coordinate.

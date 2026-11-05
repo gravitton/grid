@@ -3438,6 +3438,9 @@ func TestGrid_JSON(t *testing.T) {
 			assert.Equal(t, *kept.Cell(geom.Pt(1, 0)).Value(), 7)
 		})
 	}
+	t.Run("square cells with no movement are ErrUnknownMovement", func(t *testing.T) {
+		assert.ErrorIs(t, json.Unmarshal([]byte(`{"k":"Rect","m":"None","c":{"w":1,"h":1}}`), new(Grid[int])), ErrUnknownMovement)
+	})
 	t.Run("a cell scale no cell can be drawn at is ErrInvalidCellScale", func(t *testing.T) {
 		assert.ErrorIs(t, json.Unmarshal([]byte(`{"k":"HexFlatTop","c":{"w":-1,"h":1}}`), new(Grid[int])), ErrInvalidCellScale)
 	})

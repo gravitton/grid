@@ -1120,7 +1120,7 @@ func (g *Grid[T]) UnmarshalJSON(data []byte) error {
 	}
 
 	if decoded.Kind.sides() == 4 && decoded.Movement.IsNone() {
-		return fmt.Errorf("grid: square cells with no movement")
+		return fmt.Errorf("%w %s for square cells", ErrUnknownMovement, decoded.Movement)
 	}
 
 	if err := checkCellScale(decoded.CellScale); err != nil {
