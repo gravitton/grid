@@ -11,7 +11,7 @@ import (
 type Region = container.Set[Index]
 
 // Reg returns the region of the given indices, in any order and with any repeats. The region
-// does not change with the slice.
-func Reg(indices []Index) Region {
+// does not change with a slice spread into it.
+func Reg(indices ...Index) Region {
 	return container.SetOf(indices...)
 }

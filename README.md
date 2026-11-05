@@ -498,8 +498,9 @@ for index := range r.All() { // by x, then by y
 	highlight(g.Cell(index))
 }
 
-grid.Reg(indices) // a region of any slice, in any order, with repeats
-json.Marshal(r)   // an array of points
+grid.Reg(a, b, c)    // a region of the given indices, in any order, with repeats
+grid.Reg(indices...) // or of a slice
+json.Marshal(r)      // an array of points
 ```
 
 It is `container.Set` over `grid.Index`, from [`gravitton/container`][link-container]. The same

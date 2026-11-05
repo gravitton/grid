@@ -198,7 +198,7 @@ func TestSquare_Range(t *testing.T) {
 					assert.LessOrEqual(t, center.DistanceTo(index, movement), n, movement.String()+" at "+index.String()+": ")
 				}
 				for _, index := range center.Range(n+1, movement) {
-					assert.Equal(t, Reg(indices).Contains(index), center.DistanceTo(index, movement) <= n, movement.String()+" at "+index.String()+": ")
+					assert.Equal(t, Reg(indices...).Contains(index), center.DistanceTo(index, movement) <= n, movement.String()+" at "+index.String()+": ")
 				}
 			}
 		}
@@ -283,7 +283,7 @@ func TestSquare_Ring(t *testing.T) {
 				for n := range 6 {
 					ring := testSquare.Ring(n, movement)
 
-					assert.Equal(t, Reg(ring).Len(), len(ring), strconv.Itoa(n)+": ")
+					assert.Equal(t, Reg(ring...).Len(), len(ring), strconv.Itoa(n)+": ")
 					for _, index := range testSquare.Range(n+1, movement) {
 						assert.Equal(t, slices.Contains(ring, index), testSquare.DistanceTo(index, movement) == n, strconv.Itoa(n)+" at "+index.String()+": ")
 					}
@@ -346,7 +346,7 @@ func TestSquare_Spiral(t *testing.T) {
 				assert.Equal(t, testSquare.Spiral(3, movement)[0], testSquare.Point())
 			})
 			t.Run("holds what Range holds", func(t *testing.T) {
-				assert.True(t, Reg(testSquare.Spiral(4, movement)).Equal(Reg(testSquare.Range(4, movement))))
+				assert.True(t, Reg(testSquare.Spiral(4, movement)...).Equal(Reg(testSquare.Range(4, movement)...)))
 			})
 			t.Run("never steps back toward the point", func(t *testing.T) {
 				previous := 0
@@ -437,13 +437,13 @@ func TestSquare_Sector(t *testing.T) {
 			t.Run("as many turns as directions is the range but s, each ring from the index opposite", func(t *testing.T) {
 				full := testSquare.Sector(4, geom.DirectionRight, movement.neighborsLen(), movement)
 
-				assert.True(t, Reg(full).Equal(Reg(testSquare.Range(4, movement)).Difference(Reg([]Index{testSquare.Point()}))))
+				assert.True(t, Reg(full...).Equal(Reg(testSquare.Range(4, movement)...).Difference(Reg(testSquare.Point()))))
 				assert.Equal(t, full[0], testSquare.Neighbor(geom.DirectionLeft).Point())
 				assert.Equal(t, testSquare.Sector(4, geom.DirectionRight, 99, movement), full)
 			})
 			t.Run("widens with its turns", func(t *testing.T) {
 				for turns := range movement.neighborsLen() {
-					narrow, wide := Reg(testSquare.Sector(5, geom.DirectionDown, turns, movement)), Reg(testSquare.Sector(5, geom.DirectionDown, turns+1, movement))
+					narrow, wide := Reg(testSquare.Sector(5, geom.DirectionDown, turns, movement)...), Reg(testSquare.Sector(5, geom.DirectionDown, turns+1, movement)...)
 
 					assert.True(t, wide.Encloses(narrow), strconv.Itoa(turns)+": ")
 				}
