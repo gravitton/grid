@@ -923,7 +923,7 @@ func (g *Grid[T]) uniformCostSearch(start Index, goal *Index, budget float64, pa
 	defer work.release()
 
 	open := work.frontier()
-	open.push(field.startSlot(), 0)
+	open.push(field.startSlot(), 0, 0)
 
 	for open.len() > 0 {
 		slot, priority := open.pop()
@@ -948,7 +948,7 @@ func (g *Grid[T]) uniformCostSearch(start Index, goal *Index, budget float64, pa
 			}
 
 			if improved, ok := field.improve(next, slot, reached); ok {
-				open.push(improved, reached)
+				open.push(improved, reached, 0)
 			}
 		}
 	}
@@ -973,7 +973,7 @@ func (g *Grid[T]) greedyBestFirstSearch(start, goal Index, passable func(Cell[T]
 	defer work.release()
 
 	open := work.frontier()
-	open.push(field.startSlot(), 0)
+	open.push(field.startSlot(), 0, 0)
 
 	for open.len() > 0 {
 		slot, _ := open.pop()
@@ -998,7 +998,7 @@ func (g *Grid[T]) greedyBestFirstSearch(start, goal Index, passable func(Cell[T]
 				return field
 			}
 
-			open.push(reached, g.heuristic(next, goal))
+			open.push(reached, g.heuristic(next, goal), 0)
 		}
 	}
 
@@ -1020,7 +1020,7 @@ func (g *Grid[T]) astar(start, goal Index, passable func(Cell[T]) bool, cost fun
 	defer work.release()
 
 	open := work.frontier()
-	open.push(field.startSlot(), 0)
+	open.push(field.startSlot(), 0, 0)
 
 	for open.len() > 0 {
 		slot, priority := open.pop()
@@ -1040,7 +1040,8 @@ func (g *Grid[T]) astar(start, goal Index, passable func(Cell[T]) bool, cost fun
 
 			reached := field.costs[slot] + checkedCost(cost, g.Cell(current), g.Cell(next))
 			if improved, ok := field.improve(next, slot, reached); ok {
-				open.push(improved, reached+g.heuristic(next, goal))
+				remaining := g.Distance(next, goal)
+				open.push(improved, reached+float64(remaining), int32(remaining))
 			}
 		}
 	}

@@ -92,14 +92,16 @@ func (s *scratch) release() {
 }
 
 // frontier is the cells a search has reached and not yet expanded, a binary heap that hands
-// out the one of the least priority first. It holds its items by value, and a cell reached
-// again more cheaply is pushed again rather than moved.
+// out the one of the least priority first, and of two equal ones the one of the lesser tie. It
+// holds its items by value, and a cell reached again more cheaply is pushed again rather than
+// moved.
 type frontier struct {
 	items []frontierItem
 }
 
 type frontierItem struct {
 	slot     int32
+	tie      int32
 	priority float64
 }
 
@@ -107,13 +109,13 @@ func (f *frontier) len() int {
 	return len(f.items)
 }
 
-// push adds a slot with its priority and sifts it up to its place.
-func (f *frontier) push(slot int32, priority float64) {
-	f.items = append(f.items, frontierItem{slot, priority})
+// push adds a slot with its priority and tie and sifts it up to its place.
+func (f *frontier) push(slot int32, priority float64, tie int32) {
+	f.items = append(f.items, frontierItem{slot, tie, priority})
 
 	for i := len(f.items) - 1; i > 0; {
 		parent := (i - 1) / 2
-		if f.items[parent].priority <= f.items[i].priority {
+		if !f.before(i, parent) {
 			break
 		}
 
@@ -134,7 +136,7 @@ func (f *frontier) pop() (int32, float64) {
 	for i := 0; ; {
 		least := i
 		for child := 2*i + 1; child <= 2*i+2 && child < last; child++ {
-			if f.items[child].priority < f.items[least].priority {
+			if f.before(child, least) {
 				least = child
 			}
 		}
@@ -147,4 +149,11 @@ func (f *frontier) pop() (int32, float64) {
 	}
 
 	return top.slot, top.priority
+}
+
+// before reports whether the item at i is handed out before the one at j.
+func (f *frontier) before(i, j int) bool {
+	a, b := f.items[i], f.items[j]
+
+	return a.priority < b.priority || (a.priority == b.priority && a.tie < b.tie)
 }
