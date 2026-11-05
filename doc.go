@@ -67,8 +67,9 @@
 //
 // A slice or region result is allocated once, at its final size. A traversal has a Seq form that
 // allocates nothing and walks no further than where it is stopped, and slices.AppendSeq puts one
-// in a buffer. A search allocates its scratch once per call, sized by the grid, and its path has
-// the Append form of [Field.PathTo]. What
+// in a buffer. A search allocates the field it returns, for the part of the grid it reaches, and
+// reuses the rest of what it needs from one search to the next, safe for searches from several
+// goroutines at once; its path has the Append form of [Field.PathTo]. What
 // depends on which cells of a region are adjacent builds its result in steps: [Grid.Grow]
 // marks the cells of the grid and gathers what it adds as it goes, [Grid.Shrink] builds a
 // region at every step, and [Grid.IsConnected] and [Grid.Components] mark the indices of the

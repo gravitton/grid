@@ -3,6 +3,7 @@ package grid
 import (
 	"fmt"
 	"math"
+	"sync"
 )
 
 // passableOrAny returns passable, or a function admitting every cell where it is nil.
@@ -36,6 +37,58 @@ func checkedCost[T any](cost func(current, next Cell[T]) float64, current, next 
 	}
 
 	return step
+}
+
+// A field keeps what a search found in square chunks of the grid, room made for a chunk when
+// the search first reaches a cell in it, so a field holds as much as the search touched.
+const (
+	chunkShift = 4
+	chunkSide  = 1 << chunkShift
+	chunkMask  = chunkSide - 1
+	chunkCells = chunkSide * chunkSide
+)
+
+// link is what a field holds for one slot: one more than the slot stepped from, zero where the
+// search did not reach it and the slot itself at the start, and the steps from the start.
+type link struct {
+	from  int32
+	steps int32
+}
+
+// node is a cell a search reached, its index with its slot in the field.
+type node struct {
+	index Index
+	slot  int32
+}
+
+// scratch is what a search needs only while it runs, borrowed from scratches and handed back
+// when it ends, so searches from several goroutines never share one.
+type scratch struct {
+	queue []node
+	open  frontier
+}
+
+var scratches = sync.Pool{
+	New: func() any {
+		return new(scratch)
+	},
+}
+
+// takeScratch returns a scratch no other search holds, its slices kept from its last search.
+func takeScratch() *scratch {
+	return scratches.Get().(*scratch)
+}
+
+// frontier returns the frontier of the scratch, emptied.
+func (s *scratch) frontier() *frontier {
+	s.open.items = s.open.items[:0]
+
+	return &s.open
+}
+
+// release hands the scratch back for another search.
+func (s *scratch) release() {
+	scratches.Put(s)
 }
 
 // frontier is the cells a search has reached and not yet expanded, a binary heap that hands

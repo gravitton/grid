@@ -8,6 +8,7 @@ import (
 	"math"
 	"slices"
 	"strconv"
+	"sync"
 	"testing"
 
 	"github.com/gravitton/assert"
@@ -2929,6 +2930,24 @@ func TestGrid_Path(t *testing.T) {
 	t.Run("a start outside the grid has no path", func(t *testing.T) {
 		assert.Length(t, walledGrid().Path(geom.Pt(-1, 0), testGoal, nil, nil), 0)
 	})
+	t.Run("searches from several goroutines at once find what one alone finds", func(t *testing.T) {
+		g := NewRect[int](geom.Sz(40, 40), RectCellScale(32))
+		scatterHeights(g)
+		expected := g.Path(testStart, geom.Pt(39, 39), nil, climbCost)
+
+		paths := make([][]Index, 8)
+		var group sync.WaitGroup
+		for i := range paths {
+			group.Go(func() {
+				paths[i] = g.Path(testStart, geom.Pt(39, 39), nil, climbCost)
+			})
+		}
+		group.Wait()
+
+		for _, path := range paths {
+			assert.Equal(t, path, expected)
+		}
+	})
 }
 
 func ExampleGrid_Path() {
@@ -2999,6 +3018,17 @@ func TestGrid_PathGreedyBestFirst(t *testing.T) {
 	})
 	t.Run("to the cell itself is that cell alone", func(t *testing.T) {
 		assert.Equal(t, walledGrid().PathGreedyBestFirst(testStart, testStart, nil), []Index{testStart})
+	})
+	t.Run("crosses a grid of many chunks, on every kind of grid", func(t *testing.T) {
+		for name, g := range ruleGrids(geom.Sz(40, 40)) {
+			path := g.PathGreedyBestFirst(testStart, geom.Pt(39, 39), nil)
+
+			assert.Equal(t, path[0], testStart, name+": ")
+			assert.Equal(t, path[len(path)-1], geom.Pt(39, 39), name+": ")
+			for i := 1; i < len(path); i++ {
+				assert.Equal(t, g.Distance(path[i-1], path[i]), 1, name+": ")
+			}
+		}
 	})
 }
 
@@ -3119,6 +3149,14 @@ func TestGrid_FieldBreadthFirst(t *testing.T) {
 	})
 }
 
+func BenchmarkGrid_FieldBreadthFirst(b *testing.B) {
+	benchmarkGrids(b, func(b *testing.B, g *Grid[int]) {
+		for b.Loop() {
+			sinkField = g.FieldBreadthFirst(geom.Pt(0, 0), nil)
+		}
+	})
+}
+
 func TestGrid_FieldUniformCost(t *testing.T) {
 	testSearchField(t, func(g *Grid[int], passable func(Cell[int]) bool) Field {
 		return g.FieldUniformCost(testStart, passable, nil)
@@ -3179,6 +3217,14 @@ func TestGrid_Reachable(t *testing.T) {
 
 		assert.False(t, g.Reachable(testStart, 20, walkable, nil).Region().Contains(testGoal))
 		assert.Equal(t, g.Reachable(testStart, 20, walkable, nil).Region().Len(), 10)
+	})
+	t.Run("on a grid of many chunks is the range of the steps, on every kind of grid", func(t *testing.T) {
+		for name, g := range ruleGrids(geom.Sz(40, 40)) {
+			field := g.Reachable(geom.Pt(20, 20), 6, nil, nil)
+
+			assert.True(t, field.Region().Equal(g.Range(geom.Pt(20, 20), 6)), name+": ")
+			assert.False(t, field.Contains(geom.Pt(39, 0)), name+": ")
+		}
 	})
 	t.Run("no steps is the start alone", func(t *testing.T) {
 		assert.Equal(t, slices.Collect(walledGrid().Reachable(testStart, 0, nil, nil).Region().All()), []Index{testStart})
@@ -3255,6 +3301,13 @@ func BenchmarkGrid_Reachable(b *testing.B) {
 	benchmarkGrids(b, func(b *testing.B, g *Grid[int]) {
 		for b.Loop() {
 			sinkRegion = g.Reachable(geom.Pt(32, 32), 8, nil, nil).Region()
+		}
+	})
+	b.Run("large", func(b *testing.B) {
+		g := NewRect[int](geom.Sz(512, 512), RectCellScale(32))
+
+		for b.Loop() {
+			sinkRegion = g.Reachable(geom.Pt(256, 256), 8, nil, nil).Region()
 		}
 	})
 }

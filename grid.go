@@ -859,34 +859,47 @@ func (g *Grid[T]) breadthFirstSearch(start Index, goal *Index, budget float64, p
 		return Field{}
 	}
 
-	field := newField(g.Size(), start, false)
+	field := newField(g.Size(), start, false, g.searchRadius(start, goal, budget))
 	if goal != nil && start == *goal {
 		return field
 	}
 
-	// Every cell enters the queue once at most, so it never grows past the grid.
-	queue := make([]int32, 1, len(field.from))
-	queue[0] = field.slot(start)
+	work := takeScratch()
+	defer work.release()
+
+	queue := append(work.queue[:0], node{start, field.startSlot()})
 
 	for head, steps := 0, 1; head < len(queue) && float64(steps) <= budget; steps++ {
 		for ring := len(queue); head < ring; head++ {
-			current := field.index(queue[head])
+			current := queue[head]
 
-			for _, offset := range g.topology.offsets(current) {
-				next := current.Add(offset)
-				if !g.Contains(next) || field.from[field.slot(next)] != 0 || !passable(g.Cell(next)) {
+			for _, offset := range g.topology.offsets(current.index) {
+				next := current.index.Add(offset)
+				if !g.Contains(next) {
 					continue
 				}
 
-				field.reach(next, queue[head])
+				reached, beside := field.slotBeside(next, current)
+				if !beside {
+					reached = field.claim(next)
+				}
+				if field.reaches(reached) || !passable(g.Cell(next)) {
+					continue
+				}
+
+				field.reach(reached, current.slot)
 				if goal != nil && next == *goal {
+					work.queue = queue
+
 					return field
 				}
 
-				queue = append(queue, field.slot(next))
+				queue = append(queue, node{next, reached})
 			}
 		}
 	}
+
+	work.queue = queue
 
 	return field
 }
@@ -901,10 +914,13 @@ func (g *Grid[T]) uniformCostSearch(start Index, goal *Index, budget float64, pa
 		return Field{}
 	}
 
-	field := newField(g.Size(), start, true)
+	field := newField(g.Size(), start, true, g.searchRadius(start, goal, budget))
 
-	var open frontier
-	open.push(field.slot(start), 0)
+	work := takeScratch()
+	defer work.release()
+
+	open := work.frontier()
+	open.push(field.startSlot(), 0)
 
 	for open.len() > 0 {
 		slot, priority := open.pop()
@@ -924,8 +940,12 @@ func (g *Grid[T]) uniformCostSearch(start Index, goal *Index, budget float64, pa
 			}
 
 			reached := field.costs[slot] + checkedCost(cost, g.Cell(current), g.Cell(next))
-			if reached <= budget && field.improve(next, slot, reached) {
-				open.push(field.slot(next), reached)
+			if reached > budget {
+				continue
+			}
+
+			if improved, ok := field.improve(next, slot, reached); ok {
+				open.push(improved, reached)
 			}
 		}
 	}
@@ -941,13 +961,16 @@ func (g *Grid[T]) greedyBestFirstSearch(start, goal Index, passable func(Cell[T]
 		return Field{}
 	}
 
-	field := newField(g.Size(), start, false)
+	field := newField(g.Size(), start, false, g.searchRadius(start, &goal, math.Inf(1)))
 	if start == goal {
 		return field
 	}
 
-	var open frontier
-	open.push(field.slot(start), 0)
+	work := takeScratch()
+	defer work.release()
+
+	open := work.frontier()
+	open.push(field.startSlot(), 0)
 
 	for open.len() > 0 {
 		slot, _ := open.pop()
@@ -955,16 +978,24 @@ func (g *Grid[T]) greedyBestFirstSearch(start, goal Index, passable func(Cell[T]
 
 		for _, offset := range g.topology.offsets(current) {
 			next := current.Add(offset)
-			if !g.Contains(next) || field.from[field.slot(next)] != 0 || !passable(g.Cell(next)) {
+			if !g.Contains(next) {
 				continue
 			}
 
-			field.reach(next, slot)
+			reached, beside := field.slotBeside(next, node{current, slot})
+			if !beside {
+				reached = field.claim(next)
+			}
+			if field.reaches(reached) || !passable(g.Cell(next)) {
+				continue
+			}
+
+			field.reach(reached, slot)
 			if next == goal {
 				return field
 			}
 
-			open.push(field.slot(next), g.heuristic(next, goal))
+			open.push(reached, g.heuristic(next, goal))
 		}
 	}
 
@@ -980,10 +1011,13 @@ func (g *Grid[T]) astar(start, goal Index, passable func(Cell[T]) bool, cost fun
 		return Field{}
 	}
 
-	field := newField(g.Size(), start, true)
+	field := newField(g.Size(), start, true, g.searchRadius(start, &goal, math.Inf(1)))
 
-	var open frontier
-	open.push(field.slot(start), 0)
+	work := takeScratch()
+	defer work.release()
+
+	open := work.frontier()
+	open.push(field.startSlot(), 0)
 
 	for open.len() > 0 {
 		slot, priority := open.pop()
@@ -1002,13 +1036,27 @@ func (g *Grid[T]) astar(start, goal Index, passable func(Cell[T]) bool, cost fun
 			}
 
 			reached := field.costs[slot] + checkedCost(cost, g.Cell(current), g.Cell(next))
-			if field.improve(next, slot, reached) {
-				open.push(field.slot(next), reached+g.heuristic(next, goal))
+			if improved, ok := field.improve(next, slot, reached); ok {
+				open.push(improved, reached+g.heuristic(next, goal))
 			}
 		}
 	}
 
 	return field
+}
+
+// searchRadius returns how far from start a search is expected to reach, for the room its field
+// makes at first: the budget where it is finite, the distance to the goal where one is given,
+// and -1 for the whole grid.
+func (g *Grid[T]) searchRadius(start Index, goal *Index, budget float64) int {
+	if !math.IsInf(budget, 1) {
+		return int(min(budget, float64(g.Width()+g.Height())))
+	}
+	if goal != nil {
+		return g.Distance(start, *goal)
+	}
+
+	return -1
 }
 
 // heuristic returns the least a path from current to goal can cost at one per step.
