@@ -128,6 +128,12 @@ func (m Movement) Distance(from, to Index) int {
 	}
 }
 
+// unknown returns the error a method with no answer for a movement outside the constants panics
+// with.
+func (m Movement) unknown() error {
+	return fmt.Errorf("%w %d", ErrUnknownMovement, m)
+}
+
 // Contains reports whether the direction is one of Directions.
 func (m Movement) Contains(direction geom.Direction) bool {
 	switch m {
@@ -144,12 +150,6 @@ func (m Movement) Contains(direction geom.Direction) bool {
 // value.
 func (m Movement) IsNone() bool {
 	return m != MovementCardinal && m != MovementDiagonal
-}
-
-// unknown returns the error a method with no answer for a movement outside the constants panics
-// with.
-func (m Movement) unknown() error {
-	return fmt.Errorf("%w %d", ErrUnknownMovement, m)
 }
 
 // String returns the name of the movement, "None" for one outside the constants.
