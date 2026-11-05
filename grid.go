@@ -784,7 +784,8 @@ func (g *Grid[T]) blockedIndex(blocked func(Cell[T]) bool) func(Index) bool {
 	}
 }
 
-// Path returns the path of PathAStar from start to goal, both included, or nil where none is found.
+// Path returns the path of PathAStar from start to goal, both included, or nil where none is
+// found. A cost below one per step can make the path dearer than the cheapest.
 func (g *Grid[T]) Path(start, goal Index, passable func(Cell[T]) bool, cost func(current, next Cell[T]) float64) []Index {
 	return g.astar(start, goal, passable, cost).PathTo(goal)
 }
