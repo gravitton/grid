@@ -6,10 +6,10 @@ import (
 	"sync"
 )
 
-// passableOrAny returns passable, or a function admitting every cell where it is nil.
-func passableOrAny[T any](passable func(Cell[T]) bool) func(Cell[T]) bool {
-	if passable != nil {
-		return passable
+// orAny returns the callback, or one admitting every cell where it is nil.
+func orAny[T any](admitted func(Cell[T]) bool) func(Cell[T]) bool {
+	if admitted != nil {
+		return admitted
 	}
 
 	return func(Cell[T]) bool {

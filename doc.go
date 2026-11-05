@@ -42,7 +42,7 @@
 // between any two indices.
 //
 // A nil callback means no constraint: a nil passable admits every cell, a nil cost charges one
-// per step, and a nil blocked blocks nothing.
+// per step, a nil blocked blocks nothing, and a nil selected selects every cell.
 //
 // Range, distance and neighbors agree: [Grid.Range] is exactly the cells within radius by
 // [Grid.Distance], and a neighbor is a cell at distance one.

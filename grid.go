@@ -271,7 +271,7 @@ func (g *Grid[T]) All() iter.Seq[Cell[T]] {
 
 // Select returns the cells of the grid selected reports.
 func (g *Grid[T]) Select(selected func(Cell[T]) bool) Region {
-	selected = passableOrAny(selected)
+	selected = orAny(selected)
 
 	points := make([]Index, 0, g.cells.Len())
 	for x := range g.Width() {
@@ -854,7 +854,7 @@ func (g *Grid[T]) Reachable(start Index, budget float64, passable func(Cell[T]) 
 // breadthFirstSearch walks outward from start a step at a time, to the goal where one is given
 // and no more steps than the budget.
 func (g *Grid[T]) breadthFirstSearch(start Index, goal *Index, budget float64, passable func(Cell[T]) bool) Field {
-	passable = passableOrAny(passable)
+	passable = orAny(passable)
 
 	if !g.checkPath(start, goal, passable) {
 		return Field{}
@@ -908,7 +908,7 @@ func (g *Grid[T]) breadthFirstSearch(start Index, goal *Index, budget float64, p
 // uniformCostSearch expands the cheapest cell reached so far, to the goal where one is given and
 // no further than the budget.
 func (g *Grid[T]) uniformCostSearch(start Index, goal *Index, budget float64, passable func(Cell[T]) bool, cost func(current, next Cell[T]) float64) Field {
-	passable = passableOrAny(passable)
+	passable = orAny(passable)
 	cost = costOrUnit(cost)
 
 	if !g.checkPath(start, goal, passable) {
@@ -956,7 +956,7 @@ func (g *Grid[T]) uniformCostSearch(start Index, goal *Index, budget float64, pa
 
 // greedyBestFirstSearch expands the cell reached so far that is nearest to the goal.
 func (g *Grid[T]) greedyBestFirstSearch(start, goal Index, passable func(Cell[T]) bool) Field {
-	passable = passableOrAny(passable)
+	passable = orAny(passable)
 
 	if !g.checkPath(start, &goal, passable) {
 		return Field{}
@@ -1005,7 +1005,7 @@ func (g *Grid[T]) greedyBestFirstSearch(start, goal Index, passable func(Cell[T]
 
 // astar expands the cell whose cost so far and distance to the goal sum to the least.
 func (g *Grid[T]) astar(start, goal Index, passable func(Cell[T]) bool, cost func(current, next Cell[T]) float64) Field {
-	passable = passableOrAny(passable)
+	passable = orAny(passable)
 	cost = costOrUnit(cost)
 
 	if !g.checkPath(start, &goal, passable) {
