@@ -404,7 +404,8 @@ hides.
 
 ### Pathfinding
 
-`Path` is the cheapest path, both ends included, or nil where there is none.
+`Path` is the cheapest path where no step costs less than one, both ends included, or nil where
+there is none.
 
 <p align="center">
 <picture>
@@ -432,7 +433,7 @@ is a step never taken; a negative cost or a NaN panics.
 | `PathBreadthFirst(start, goal, passable)`      | Breadth-first     | no       | in steps |
 | `PathUniformCost(start, goal, passable, cost)` | Dijkstra          | yes      | yes      |
 | `PathGreedyBestFirst(start, goal, passable)`   | Greedy best-first | no       | no       |
-| `PathAStar(start, goal, passable, cost)`       | A*                | yes      | yes      |
+| `PathAStar(start, goal, passable, cost)`       | A*                | yes      | at ≥ 1   |
 
 ### Fields
 

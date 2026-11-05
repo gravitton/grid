@@ -18,7 +18,7 @@ func Sq(x, y int) Square {
 	return Square{X: x, Y: y}
 }
 
-// RangeLen returns the length of Range and Spiral for the radius under the movement
+// RangeLen returns the length of Square.Range and Square.Spiral for the radius under the movement
 // (1+2r(r+1) cardinal, (2r+1)² diagonal), one for a movement outside the constants and zero
 // for a negative radius.
 func RangeLen(radius int, movement Movement) int {
@@ -30,7 +30,7 @@ func RangeLen(radius int, movement Movement) int {
 	return 1 + count*radius*(radius+1)/2
 }
 
-// RingLen returns the length of Ring for the radius under the movement (4r cardinal, 8r
+// RingLen returns the length of Square.Ring for the radius under the movement (4r cardinal, 8r
 // diagonal), one for a zero radius, and zero for a negative one and for a movement outside the
 // constants past zero.
 func RingLen(radius int, movement Movement) int {

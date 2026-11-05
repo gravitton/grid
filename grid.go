@@ -787,7 +787,8 @@ func (g *Grid[T]) blockedIndex(blocked func(Cell[T]) bool) func(Index) bool {
 }
 
 // Path returns the path of PathAStar from start to goal, both included, or nil where none is
-// found. A cost below one per step can make the path dearer than the cheapest.
+// found. A cost below one per step can make the path dearer than the cheapest. It panics for a
+// cost that is negative or NaN.
 func (g *Grid[T]) Path(start, goal Index, passable func(Cell[T]) bool, cost func(current, next Cell[T]) float64) []Index {
 	return g.astar(start, goal, passable, cost).PathTo(goal)
 }
@@ -799,7 +800,8 @@ func (g *Grid[T]) PathBreadthFirst(start, goal Index, passable func(Cell[T]) boo
 }
 
 // PathUniformCost returns the cheapest path from start to goal, both included, or nil where
-// none is found. Uniform cost search is also known as Dijkstra's algorithm.
+// none is found. Uniform cost search is also known as Dijkstra's algorithm. It panics for a
+// cost that is negative or NaN.
 func (g *Grid[T]) PathUniformCost(start, goal Index, passable func(Cell[T]) bool, cost func(current, next Cell[T]) float64) []Index {
 	return g.uniformCostSearch(start, &goal, math.Inf(1), passable, cost).PathTo(goal)
 }
@@ -812,12 +814,14 @@ func (g *Grid[T]) PathGreedyBestFirst(start, goal Index, passable func(Cell[T]) 
 }
 
 // PathAStar returns the cheapest path from start to goal, both included, or nil where none is
-// found. A cost below one per step can make the path dearer than the cheapest.
+// found. A cost below one per step can make the path dearer than the cheapest. It panics for
+// a cost that is negative or NaN.
 func (g *Grid[T]) PathAStar(start, goal Index, passable func(Cell[T]) bool, cost func(current, next Cell[T]) float64) []Index {
 	return g.astar(start, goal, passable, cost).PathTo(goal)
 }
 
-// Field returns the field of every cell reached from start, with the cheapest way to each.
+// Field returns the field of every cell reached from start, with the cheapest way to each. It
+// panics for a cost that is negative or NaN.
 func (g *Grid[T]) Field(start Index, passable func(Cell[T]) bool, cost func(current, next Cell[T]) float64) Field {
 	if cost == nil {
 		return g.breadthFirstSearch(start, nil, math.Inf(1), passable)
@@ -833,14 +837,16 @@ func (g *Grid[T]) FieldBreadthFirst(start Index, passable func(Cell[T]) bool) Fi
 }
 
 // FieldUniformCost returns the field of every cell reached from start, with the cheapest
-// way to each. Uniform cost search is also known as Dijkstra's algorithm.
+// way to each. Uniform cost search is also known as Dijkstra's algorithm. It panics for a cost
+// that is negative or NaN.
 func (g *Grid[T]) FieldUniformCost(start Index, passable func(Cell[T]) bool, cost func(current, next Cell[T]) float64) Field {
 	return g.uniformCostSearch(start, nil, math.Inf(1), passable, cost)
 }
 
 // Reachable returns the field of the cells reached from start for at most budget, the search
 // walking no further, with the cheapest way to each. A nil cost makes the budget a number of
-// steps. It is empty for a negative budget or a NaN.
+// steps. It is empty for a negative budget or a NaN, and it panics for a cost that is negative
+// or NaN.
 func (g *Grid[T]) Reachable(start Index, budget float64, passable func(Cell[T]) bool, cost func(current, next Cell[T]) float64) Field {
 	if budget < 0 || math.IsNaN(budget) {
 		return Field{}

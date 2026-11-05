@@ -100,17 +100,20 @@ func (c Cell[T]) FieldOfView(radius int, blocked func(Cell[T]) bool) Region {
 	return c.grid.FieldOfView(c.index, radius, blocked)
 }
 
-// PathTo returns the path of Grid.Path from the cell to the index.
+// PathTo returns the path of Grid.Path from the cell to the index. It panics for a cost that is
+// negative or NaN.
 func (c Cell[T]) PathTo(index Index, passable func(Cell[T]) bool, cost func(current, next Cell[T]) float64) []Index {
 	return c.grid.Path(c.index, index, passable, cost)
 }
 
-// Field returns the field of Grid.Field from the cell.
+// Field returns the field of Grid.Field from the cell. It panics for a cost that is negative
+// or NaN.
 func (c Cell[T]) Field(passable func(Cell[T]) bool, cost func(current, next Cell[T]) float64) Field {
 	return c.grid.Field(c.index, passable, cost)
 }
 
-// Reachable returns the field of Grid.Reachable from the cell.
+// Reachable returns the field of Grid.Reachable from the cell. It panics for a cost that is
+// negative or NaN.
 func (c Cell[T]) Reachable(budget float64, passable func(Cell[T]) bool, cost func(current, next Cell[T]) float64) Field {
 	return c.grid.Reachable(c.index, budget, passable, cost)
 }
