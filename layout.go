@@ -10,10 +10,10 @@ import (
 // HexLayout places hexagonal cells on an unbounded plane with no grid around them: the
 // center, the box and the polygon of any index, and the index under any point. An index is in
 // the coordinate system the layout is built with, any of the seven of [hex.CoordinateSystem],
-// so an axial layout takes [hex.Hex.Point] and gives back what [hex.Axial] turns into a hex. A
-// cell is placed exactly where a hexagonal [Grid] of the same cell scale places it. It is built
-// by [NewHexFlatTopLayout] or [NewHexPointyTopLayout]; the zero value is no layout, and its
-// methods are not to be called.
+// so an axial layout takes [hex.Hex.Point] and gives back what [hex.Axial] turns into a hex.
+// Moved to the center of index zero of a hexagonal [Grid] of its cell scale and system, it places
+// every cell where the grid does. It is built by [NewHexFlatTopLayout] or
+// [NewHexPointyTopLayout]; the zero value is no layout, and its methods are not to be called.
 type HexLayout struct {
 	layout layout
 	system hex.CoordinateSystem

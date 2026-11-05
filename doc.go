@@ -99,6 +99,8 @@
 //     positive and finite on both axes: no cell can be drawn at it.
 //   - The constructors of a grid, [Grid.MoveTo] and [HexLayout.MoveTo] for an origin with a NaN
 //     or infinite coordinate: no cell can be drawn from it.
+//   - The constructors of a grid for a negative size, or one of more cells than an int counts: no
+//     storage holds it.
 //   - [Grid.Path], [Grid.Field], [Grid.Reachable], [Grid.PathUniformCost],
 //     [Grid.FieldUniformCost], [Grid.PathAStar], [Cell.PathTo], [Cell.Field] and [Cell.Reachable]
 //     for a cost that is negative or NaN: no search ends on it.

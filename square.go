@@ -31,7 +31,8 @@ func RangeLen(radius int, movement Movement) int {
 }
 
 // RingLen returns the length of Ring for the radius under the movement (4r cardinal, 8r
-// diagonal), one for a zero radius and zero for a negative one.
+// diagonal), one for a zero radius, and zero for a negative one and for a movement outside the
+// constants past zero.
 func RingLen(radius int, movement Movement) int {
 	count := movement.neighborsLen()
 
@@ -164,7 +165,8 @@ func (s Square) within(radius int, movement Movement, yield func(Index) bool) bo
 
 // Ring returns the indices at exactly radius steps from s under the movement, by increasing
 // angle from the one to the right, so the ring of radius one is Neighbors. It returns nil for a
-// negative radius and s alone for a zero one.
+// negative radius, s alone for a zero one, and none past zero for a movement outside the
+// constants.
 func (s Square) Ring(radius int, movement Movement) []Index {
 	size := RingLen(radius, movement)
 	if radius < 0 {

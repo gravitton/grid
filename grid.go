@@ -45,17 +45,19 @@ type Grid[T any] struct {
 
 // NewRect returns a grid of square cells of the given size in cells, each cell of the given
 // cell scale in the world. Each opts function sets the fields of the [SquareOptions] it is given.
-// It panics for a movement outside the constants, for a cell scale that is not positive and
-// finite on both axes, and for an origin with a NaN or infinite coordinate.
+// It panics for a negative size or one of more cells than an int counts, for a movement outside
+// the constants, for a cell scale that is not positive and finite on both axes, and for an
+// origin with a NaN or infinite coordinate.
 func NewRect[T any](size geom.Size[int], cellScale geom.Size[float64], opts ...func(*SquareOptions)) *Grid[T] {
 	return newSquare[T](size, cellScale, kindRect, opts)
 }
 
 // NewIsometric returns a grid of square cells drawn as diamonds, of the given size in cells,
 // each diamond of the given cell scale in the world, the first cell at the top corner. Each
-// opts function sets the fields of the [SquareOptions] it is given. It panics for a movement
-// outside the constants, for a cell scale that is not positive and finite on both axes, and for
-// an origin with a NaN or infinite coordinate.
+// opts function sets the fields of the [SquareOptions] it is given. It panics for a negative size
+// or one of more cells than an int counts, for a movement outside the constants, for a cell scale
+// that is not positive and finite on both axes, and for an origin with a NaN or infinite
+// coordinate.
 func NewIsometric[T any](size geom.Size[int], cellScale geom.Size[float64], opts ...func(*SquareOptions)) *Grid[T] {
 	return newSquare[T](size, cellScale, kindIsometric, opts)
 }
@@ -79,8 +81,8 @@ func newSquare[T any](size geom.Size[int], cellScale geom.Size[float64], kind ki
 // stretched along an axis where they are not. The box around a cell is twice the radius wide
 // and √3 times it tall. The odd columns are shifted half a cell down, or the even ones with
 // EvenOffset. Each opts function sets the fields of the [HexOptions] it is given. It panics for
-// a cell scale that is not positive and finite on both axes, and for an origin with a NaN or
-// infinite coordinate.
+// a negative size or one of more cells than an int counts, for a cell scale that is not positive
+// and finite on both axes, and for an origin with a NaN or infinite coordinate.
 func NewHexFlatTop[T any](size geom.Size[int], cellScale geom.Size[float64], opts ...func(*HexOptions)) *Grid[T] {
 	return newHex[T](size, cellScale, kindHexFlatTop, kindHexFlatTopEven, opts)
 }
@@ -90,8 +92,8 @@ func NewHexFlatTop[T any](size geom.Size[int], cellScale geom.Size[float64], opt
 // stretched along an axis where they are not. The box around a cell is √3 times the radius wide
 // and twice it tall. The odd rows are shifted half a cell right, or the even ones with
 // EvenOffset. Each opts function sets the fields of the [HexOptions] it is given. It panics for
-// a cell scale that is not positive and finite on both axes, and for an origin with a NaN or
-// infinite coordinate.
+// a negative size or one of more cells than an int counts, for a cell scale that is not positive
+// and finite on both axes, and for an origin with a NaN or infinite coordinate.
 func NewHexPointyTop[T any](size geom.Size[int], cellScale geom.Size[float64], opts ...func(*HexOptions)) *Grid[T] {
 	return newHex[T](size, cellScale, kindHexPointyTop, kindHexPointyTopEven, opts)
 }
@@ -720,7 +722,7 @@ func (g *Grid[T]) LineSeq(from, to Index) iter.Seq[Index] {
 }
 
 // HasLineOfSight reports whether from sees to past the cells blocked reports, asking it only
-// about the indices the line passes that lie in the grid.
+// about cells of the grid.
 func (g *Grid[T]) HasLineOfSight(from, to Index, blocked func(Cell[T]) bool) bool {
 	return g.Contains(from) && g.Contains(to) && g.topology.sees(from, to, g.blockedIndex(blocked))
 }

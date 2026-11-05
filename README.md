@@ -601,7 +601,7 @@ layout.Rescale(grid.HexPointyTopCellScale(48)) // the scale of a hex, to zoom it
 
 Built with another system, the same hexes keep their places and take its indices: `hex.OffsetOddR`
 numbers them as a pointy-top grid does. Moved to the center of a grid's index zero, a layout of the
-grid's scale and system places every cell exactly where the grid does, and puts a point on an edge
+grid's scale and system places every cell where the grid does, and puts a point on an edge
 on the same side.
 
 Full reference: [pkg.go.dev][link-go-dev-reference].
