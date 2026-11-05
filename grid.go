@@ -300,7 +300,7 @@ func (g *Grid[T]) DrawOrder(bounds geom.Box[float64]) iter.Seq[Cell[T]] {
 
 	return func(yield func(Cell[T]) bool) {
 		if !bounds.Min.IsFinite() || !bounds.Max.IsFinite() {
-			panic(fmt.Errorf("grid: bounds %s is not finite", bounds))
+			panic(fmt.Errorf("%w in bounds %s", ErrNonFinite, bounds))
 		}
 
 		switch g.layout.kind {

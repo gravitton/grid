@@ -41,16 +41,16 @@ func testNewHexLayout(t *testing.T, construct func(cellScale geom.Size[float64],
 		t.Run("panics for a "+name+" size", func(t *testing.T) {
 			assert.PanicsWith(t, func() {
 				construct(bad, hex.Axial)
-			}, "grid: cell scale "+bad.String()+" is not positive and finite")
+			}, ErrInvalidCellScale)
 		})
 	}
 	t.Run("panics for a system outside the seven", func(t *testing.T) {
 		assert.PanicsWith(t, func() {
 			construct(geom.Sz(32.0, 20.0), hex.CoordinateSystem(9))
-		}, "grid: unknown coordinate system 9")
+		}, hex.ErrUnknownCoordinateSystem)
 		assert.PanicsWith(t, func() {
 			construct(geom.Sz(32.0, 20.0), hex.CoordinateSystemNone)
-		}, "grid: unknown coordinate system -1")
+		}, hex.ErrUnknownCoordinateSystem)
 	})
 	t.Run("allocates once", func(t *testing.T) {
 		assert.Equal(t, testing.AllocsPerRun(100, func() {
@@ -265,7 +265,7 @@ func TestHexLayout_MoveTo(t *testing.T) {
 
 		assert.PanicsWith(t, func() {
 			layout.MoveTo(geom.Pt(math.Inf(1), 50.0))
-		}, "grid: origin "+geom.Pt(math.Inf(1), 50.0).String()+" is not finite")
+		}, ErrNonFinite)
 		assert.Equal(t, layout.Center(geom.Pt(0, 0)), geom.Pt(0.0, 0.0))
 	})
 }
@@ -312,7 +312,7 @@ func TestHexLayout_Rescale(t *testing.T) {
 
 		assert.PanicsWith(t, func() {
 			layout.Rescale(geom.Sz(-1.0, 2.0))
-		}, "grid: cell scale "+geom.Sz(-1.0, 2.0).String()+" is not positive and finite")
+		}, ErrInvalidCellScale)
 		assert.Equal(t, layout.CellSize(), NewHexFlatTopLayout(geom.Sz(32.0, 20.0), hex.Axial).CellSize())
 	})
 }

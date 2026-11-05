@@ -197,10 +197,10 @@ func TestMovement_Distance(t *testing.T) {
 	t.Run("panics outside the constants, where no index is reached from another", func(t *testing.T) {
 		assert.PanicsWith(t, func() {
 			Movement(99).Distance(geom.Pt(0, 0), geom.Pt(1, 1))
-		}, "grid: unknown movement 99")
+		}, ErrUnknownMovement)
 		assert.PanicsWith(t, func() {
 			MovementNone.Distance(geom.Pt(0, 0), geom.Pt(1, 1))
-		}, "grid: unknown movement -1")
+		}, ErrUnknownMovement)
 	})
 }
 

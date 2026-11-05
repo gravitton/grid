@@ -33,7 +33,7 @@ func costOrUnit[T any](cost func(current, next Cell[T]) float64) func(current, n
 func checkedCost[T any](cost func(current, next Cell[T]) float64, current, next Cell[T]) float64 {
 	step := cost(current, next)
 	if step < 0 || math.IsNaN(step) {
-		panic(fmt.Errorf("grid: cost %v from %s to %s is negative or NaN", step, current, next))
+		panic(fmt.Errorf("%w %v from %s to %s", ErrInvalidCost, step, current, next))
 	}
 
 	return step

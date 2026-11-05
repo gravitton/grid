@@ -37,7 +37,7 @@ func NewHexPointyTopLayout(cellScale geom.Size[float64], system hex.CoordinateSy
 // newHexLayout returns a layout of hexagons of the kind, indexed in the system.
 func newHexLayout(kind kind, cellScale geom.Size[float64], system hex.CoordinateSystem) *HexLayout {
 	if system.IsNone() {
-		panic(fmt.Errorf("grid: unknown coordinate system %d", system))
+		panic(fmt.Errorf("grid: %w %d", hex.ErrUnknownCoordinateSystem, system))
 	}
 
 	return &HexLayout{newLayout(kind, geom.Size[int]{}, cellScale, geom.Point[float64]{}), system}

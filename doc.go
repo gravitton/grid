@@ -87,23 +87,24 @@
 //
 // # Panics
 //
-// A degenerate value gets an answer; an argument with no meaning gets a panic, whose value is
-// an error:
+// A degenerate value gets an answer; an argument with no meaning gets a panic, with an error
+// that errors.Is matches to its sentinel:
 //
-//   - [Movement.Distance], [Square.DistanceTo], [Square.LineTo] with its Seq form, and
-//     [NewRect] and [NewIsometric], for a movement outside the constants: no index is reached
-//     from another under it. Every other method answers as for no neighbors.
-//   - [Grid.IndexAt], [Grid.CellAt] and [HexLayout.IndexAt] for a point with a NaN or infinite
-//     coordinate, and the iterator of [Grid.DrawOrder] for such bounds: no cell is at it.
-//   - Every constructor, [Grid.Rescale] and [HexLayout.Rescale] for a cell scale that is not
-//     positive and finite on both axes: no cell can be drawn at it.
-//   - The constructors of a grid, [Grid.MoveTo] and [HexLayout.MoveTo] for an origin with a NaN
-//     or infinite coordinate: no cell can be drawn from it.
-//   - The constructors of a grid for a negative size, or one of more cells than an int counts: no
-//     storage holds it.
-//   - [Grid.Path], [Grid.Field], [Grid.Reachable], [Grid.PathUniformCost],
-//     [Grid.FieldUniformCost], [Grid.PathAStar], [Cell.PathTo], [Cell.Field] and [Cell.Reachable]
-//     for a cost that is negative or NaN: no search ends on it.
-//   - [NewHexFlatTopLayout] and [NewHexPointyTopLayout] for a coordinate system outside the
-//     seven: no index can be read in it.
+//   - [ErrUnknownMovement] for a movement outside the constants to [Movement.Distance],
+//     [Square.DistanceTo], [Square.LineTo] with its Seq form, and [NewRect] and [NewIsometric]: no
+//     index is reached from another under it. Every other method answers as for no neighbors.
+//   - [geom.ErrNonFinite] for a point with a NaN or infinite coordinate to [Grid.IndexAt],
+//     [Grid.CellAt] and [HexLayout.IndexAt]: no cell is at it.
+//   - [ErrNonFinite] for an origin with a NaN or infinite coordinate to the constructors of a
+//     grid, [Grid.MoveTo] and [HexLayout.MoveTo], and for such bounds to the iterator of
+//     [Grid.DrawOrder]: no cell is drawn from it.
+//   - [ErrInvalidCellScale] for a cell scale that is not positive and finite on both axes to every
+//     constructor, [Grid.Rescale] and [HexLayout.Rescale]: no cell can be drawn at it.
+//   - [ErrInvalidCost] for a cost that is negative or NaN to [Grid.Path], [Grid.Field],
+//     [Grid.Reachable], [Grid.PathUniformCost], [Grid.FieldUniformCost], [Grid.PathAStar],
+//     [Cell.PathTo], [Cell.Field] and [Cell.Reachable]: no search ends on it.
+//   - [hex.ErrUnknownCoordinateSystem] for a coordinate system outside the seven to
+//     [NewHexFlatTopLayout] and [NewHexPointyTopLayout]: no index can be read in it.
+//   - The error of container.Arr for a negative size, or one of more cells than an int counts, to
+//     the constructors of a grid: no storage holds it.
 package grid

@@ -605,10 +605,10 @@ func TestSquare_LineTo(t *testing.T) {
 	t.Run("panics for a movement outside the constants, which draws no line", func(t *testing.T) {
 		assert.PanicsWith(t, func() {
 			testSquare.LineTo(geom.Pt(0, 0), MovementNone)
-		}, "grid: unknown movement -1")
+		}, ErrUnknownMovement)
 		assert.PanicsWith(t, func() {
 			sinkPoints = slices.Collect(testSquare.LineToSeq(geom.Pt(0, 0), Movement(99)))
-		}, "grid: unknown movement 99")
+		}, ErrUnknownMovement)
 	})
 }
 

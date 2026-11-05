@@ -149,7 +149,7 @@ func (m Movement) IsNone() bool {
 // unknown returns the error a method with no answer for a movement outside the constants panics
 // with.
 func (m Movement) unknown() error {
-	return fmt.Errorf("grid: unknown movement %d", m)
+	return fmt.Errorf("%w %d", ErrUnknownMovement, m)
 }
 
 // String returns the name of the movement, "None" for one outside the constants.

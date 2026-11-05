@@ -243,7 +243,7 @@ func testNewRect(t *testing.T, construct func(opts ...func(*SquareOptions)) *Gri
 				construct(func(options *SquareOptions) {
 					options.Movement = movement
 				})
-			}, "grid: unknown movement "+number)
+			}, ErrUnknownMovement)
 		})
 	}
 }
@@ -1166,7 +1166,7 @@ func TestGrid_DrawOrder(t *testing.T) {
 				for range order {
 					break
 				}
-			}, fmt.Errorf("grid: bounds %s is not finite", bounds), name+": ")
+			}, ErrNonFinite, name+": ")
 		}
 	})
 }
@@ -1278,7 +1278,7 @@ func TestGrid_MoveTo(t *testing.T) {
 			for _, g := range before {
 				assert.PanicsWith(t, func() {
 					g.MoveTo(corner)
-				}, "grid: origin "+corner.String()+" is not finite")
+				}, ErrNonFinite)
 			}
 		})
 	}
@@ -1396,7 +1396,7 @@ func TestGrid_Rescale(t *testing.T) {
 			for _, g := range grids() {
 				assert.PanicsWith(t, func() {
 					g.Rescale(bad)
-				}, "grid: cell scale "+bad.String()+" is not positive and finite")
+				}, ErrInvalidCellScale)
 			}
 		})
 	}
@@ -2746,14 +2746,14 @@ func testCost(t *testing.T, search func(g *Grid[int], cost func(current, next Ce
 			search(g, func(_, _ Cell[int]) float64 {
 				return -0.5
 			})
-		}, "grid: cost -0.5 from Cell(0,0) to Cell(1,0) is negative or NaN")
+		}, ErrInvalidCost)
 	})
 	t.Run("panics for a NaN cost", func(t *testing.T) {
 		assert.PanicsWith(t, func() {
 			search(g, func(_, _ Cell[int]) float64 {
 				return math.NaN()
 			})
-		}, "grid: cost NaN from Cell(0,0) to Cell(1,0) is negative or NaN")
+		}, ErrInvalidCost)
 	})
 	t.Run("an infinite cost is a step never taken", func(t *testing.T) {
 		path := search(g, func(_, next Cell[int]) float64 {
@@ -3438,6 +3438,9 @@ func TestGrid_JSON(t *testing.T) {
 			assert.Equal(t, *kept.Cell(geom.Pt(1, 0)).Value(), 7)
 		})
 	}
+	t.Run("a cell scale no cell can be drawn at is ErrInvalidCellScale", func(t *testing.T) {
+		assert.ErrorIs(t, json.Unmarshal([]byte(`{"k":"HexFlatTop","c":{"w":-1,"h":1}}`), new(Grid[int])), ErrInvalidCellScale)
+	})
 }
 
 func FuzzGrid_JSON(f *testing.F) {

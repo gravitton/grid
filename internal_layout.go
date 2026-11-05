@@ -44,7 +44,7 @@ func newLayout(kind kind, size geom.Size[int], cellScale geom.Size[float64], ori
 // NaN or infinite coordinate.
 func (l *layout) moveTo(origin geom.Point[float64]) {
 	if !origin.IsFinite() {
-		panic(fmt.Errorf("grid: origin %s is not finite", origin))
+		panic(fmt.Errorf("%w in origin %s", ErrNonFinite, origin))
 	}
 
 	l.origin = origin
@@ -69,7 +69,7 @@ func (l *layout) rescale(cellScale geom.Size[float64]) {
 // checkCellScale returns the error of a scale no cell can be drawn at.
 func checkCellScale(cellScale geom.Size[float64]) error {
 	if !cellScale.IsPositive() || !cellScale.IsFinite() {
-		return fmt.Errorf("grid: cell scale %s is not positive and finite", cellScale)
+		return fmt.Errorf("%w: %s", ErrInvalidCellScale, cellScale)
 	}
 
 	return nil
