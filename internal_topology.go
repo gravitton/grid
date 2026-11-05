@@ -80,6 +80,62 @@ func (t *topology) rangeLen(radius int) int {
 	return RangeLen(radius, t.movement)
 }
 
+// rangeLenIn returns the number of indices within radius of index that lie in a grid of the
+// given size, what walkWithin yields inside it. A range short of every edge is all inside, and
+// any other is counted a line of the lattice at a time.
+func (t *topology) rangeLenIn(index Index, radius int, size geom.Size[int]) int {
+	if radius <= min(index.X, index.Y, size.Width-1-index.X, size.Height-1-index.Y) {
+		return t.rangeLen(radius)
+	}
+	if t.isHex() {
+		return t.hexRangeLenIn(index, radius, size)
+	}
+
+	count := 0
+	for x := max(index.X-radius, 0); x <= min(index.X+radius, size.Width-1); x++ {
+		reach := radius
+		if t.movement == MovementCardinal {
+			reach -= geom.Abs(x - index.X)
+		}
+
+		count += spanLen(index.Y-reach, index.Y+reach, size.Height)
+	}
+
+	return count
+}
+
+// hexRangeLenIn is rangeLenIn for hexagonal cells. The hexes within radius of one axial step
+// along the axis of the parity form a run of one column, or of one row, of the offset system.
+func (t *topology) hexRangeLenIn(index Index, radius int, size geom.Size[int]) int {
+	center := t.system.From(index)
+
+	count := 0
+	for step := -radius; step <= radius; step++ {
+		low, high := max(-radius, -step-radius), min(radius, -step+radius)
+
+		if t.byColumn {
+			first, last := t.system.To(center.Add(hex.Pt(step, low))), t.system.To(center.Add(hex.Pt(step, high)))
+			if first.X >= 0 && first.X < size.Width {
+				count += spanLen(first.Y, last.Y, size.Height)
+			}
+
+			continue
+		}
+
+		first, last := t.system.To(center.Add(hex.Pt(low, step))), t.system.To(center.Add(hex.Pt(high, step)))
+		if first.Y >= 0 && first.Y < size.Height {
+			count += spanLen(first.X, last.X, size.Width)
+		}
+	}
+
+	return count
+}
+
+// spanLen returns the number of whole numbers from low to high that lie in [0, length).
+func spanLen(low, high, length int) int {
+	return max(min(high, length-1)-max(low, 0)+1, 0)
+}
+
 // walkWithin yields every index within radius of index, inside a grid or not, in the order of a
 // region, so a range kept in that order is a region with nothing to sort, and reports whether it
 // yielded them all.
@@ -117,14 +173,10 @@ func (t *topology) walkHexWithin(index Index, radius int, yield func(Index) bool
 	return true
 }
 
-// ringLen returns the number of indices at exactly radius steps from an index, what walkRing
-// yields.
-func (t *topology) ringLen(radius int) int {
-	if t.isHex() {
-		return hex.RingLen(radius)
-	}
-
-	return RingLen(radius, t.movement)
+// ringLenIn returns the number of indices at exactly radius steps from index that lie in a grid
+// of the given size, what walkRing yields inside it.
+func (t *topology) ringLenIn(index Index, radius int, size geom.Size[int]) int {
+	return t.rangeLenIn(index, radius, size) - t.rangeLenIn(index, radius-1, size)
 }
 
 // walkRing yields every index at exactly radius steps from index, inside a grid or not, in the

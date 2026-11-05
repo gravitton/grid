@@ -413,7 +413,7 @@ func (g *Grid[T]) Neighbors(index Index) []Index {
 		return nil
 	}
 
-	return slices.AppendSeq(make([]Index, 0, len(g.topology.offsets(index))), g.NeighborsSeq(index))
+	return slices.AppendSeq(make([]Index, 0, g.topology.ringLenIn(index, 1, g.Size())), g.NeighborsSeq(index))
 }
 
 // NeighborsSeq returns an iterator over the indices of Neighbors, in the same order.
@@ -458,7 +458,7 @@ func (g *Grid[T]) RangeSeq(index Index, radius int) iter.Seq[Index] {
 // gatherRange returns the indices in range of an index the caller knows to be inside the grid,
 // at a radius it knows to be cut to the grid.
 func (g *Grid[T]) gatherRange(index Index, radius int) []Index {
-	return slices.AppendSeq(make([]Index, 0, g.topology.rangeLen(radius)), g.RangeSeq(index, radius))
+	return slices.AppendSeq(make([]Index, 0, g.topology.rangeLenIn(index, radius, g.Size())), g.RangeSeq(index, radius))
 }
 
 // walkRange yields the indices of Range and reports whether it yielded them all.
@@ -498,7 +498,7 @@ func (g *Grid[T]) Ring(index Index, radius int) []Index {
 		return nil
 	}
 
-	return slices.AppendSeq(make([]Index, 0, g.topology.ringLen(radius)), g.RingSeq(index, radius))
+	return slices.AppendSeq(make([]Index, 0, g.topology.ringLenIn(index, radius, g.Size())), g.RingSeq(index, radius))
 }
 
 // RingSeq returns an iterator over the indices of Ring, in the same order.
@@ -532,7 +532,7 @@ func (g *Grid[T]) Spiral(index Index, radius int) []Index {
 		return nil
 	}
 
-	size := g.topology.rangeLen(g.clampRadius(index, radius))
+	size := g.topology.rangeLenIn(index, g.clampRadius(index, radius), g.Size())
 
 	return slices.AppendSeq(make([]Index, 0, size), g.SpiralSeq(index, radius))
 }
