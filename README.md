@@ -52,6 +52,7 @@ ones the code beside them returns.
 - **Pathfinding** – A*, Dijkstra, greedy best-first and breadth-first, with fields for movement ranges and flow.
 - **Regions** – immutable sets of cells with set operations, borders, growth and components.
 - **Draw order** – the cells in view, back to front, whatever the layout.
+- **Hex layout** – the world space of hexes kept outside a grid, over `gravitton/hexagon`.
 - **Extras** – `Square` lattice queries, JSON, and `Seq` forms that allocate nothing.
 
 The rules behind them are in the [package documentation][link-go-dev-reference].
@@ -320,7 +321,7 @@ g.Range(c, 2) // a Region of the 13 cells within two steps; 25 with MovementDiag
 cell.Range(2) // the same, from a cell
 ```
 
-What a hex walks, the grid walks in its own indices, on every layout. On a grid with
+A ring, a spiral and a line walk the grid in its own indices, on every layout. On a grid with
 `MovementDiagonal`:
 
 <p align="center">
@@ -503,13 +504,7 @@ grid.Reg(indices...) // or of a slice
 json.Marshal(r)      // an array of points
 ```
 
-It is `container.Set` over `grid.Index`, from [`gravitton/container`][link-container]. The same
-set over hexes is `container.SetOf`, with no grid and no conversion:
-
-```go
-seen := container.SetOf(hex.Pt(0, 0).Range(3)...) // a set of hex.Hex
-seen.Intersection(container.SetOf(hex.Pt(3, -1).Range(1)...))
-```
+It is `container.Set` over `grid.Index`, from [`gravitton/container`][link-container].
 
 ### Saving
 
@@ -538,18 +533,22 @@ cells are adjacent takes the `Movement`.
 </p>
 
 ```go
-s, a := grid.Sq(3, 3), grid.Sq(5, 2)
+s, a := grid.Sq(3, 3), geom.Pt(5, 2) // a square and the index it is asked about
 
 s.Neighbor(geom.DirectionUp)                            // (3,2)
 s.Neighbors(grid.MovementDiagonal)                      // all 8, by increasing angle from the right
-s.DistanceTo(a.Point(), grid.MovementCardinal)          // 3, Manhattan; 2 with MovementDiagonal, Chebyshev
-s.DirectionTo(a.Point(), grid.MovementCardinal)         // Right, the nearest of the four; UpRight of the eight
+s.DistanceTo(a, grid.MovementCardinal)                  // 3, Manhattan; 2 with MovementDiagonal, Chebyshev
+s.DirectionTo(a, grid.MovementCardinal)                 // Right, the nearest of the four; UpRight of the eight
 s.Range(2, grid.MovementCardinal)                       // the 13 indices within two steps; also Ring, Spiral and LineTo
 s.Sector(3, geom.DirectionUp, 1, grid.MovementCardinal) // the 7 indices of the cone a quarter-turn wide, ring by ring
+```
 
-a.TurnAround(s.Point(), 1) // (4,5), a quarter-turn around s, clockwise on a screen; negative steps go the other way
-a.Turn(1)                  // (-2,5), around the origin
-a.ReflectX()               // (5,-2), across the x-axis; also ReflectY
+A turn or a reflection returns a `Square`, so an index is converted to one first:
+
+```go
+grid.Square(a).TurnAround(s.Point(), 1) // (4,5), a quarter-turn around s, clockwise on a screen; negative steps go the other way
+grid.Square(a).Turn(1)                  // (-2,5), around the origin
+grid.Square(a).ReflectX()               // (5,-2), across the x-axis; also ReflectY
 ```
 
 Each traversal has a `Seq` form, and the length functions size a buffer for it:
@@ -562,17 +561,37 @@ buffer = slices.AppendSeq(buffer[:0], s.RangeSeq(2, grid.MovementDiagonal))
 Sight takes a function saying what blocks, for a map or a grid to answer:
 
 ```go
-s.HasLineOfSight(a.Point(), blocked) // blocked is a func(grid.Index) bool
-s.FieldOfView(8, movement, blocked)  // the indices within 8 steps in sight; also FieldOfViewSeq
+s.HasLineOfSight(a, blocked)                      // blocked is a func(grid.Index) bool
+s.FieldOfView(8, grid.MovementCardinal, blocked) // the indices within 8 steps in sight; also FieldOfViewSeq
 ```
 
-### Hex layout
+### Hexagons
 
-A `HexLayout` places hexagonal cells with no grid around them, on an unbounded plane, for a map
-whose data lives elsewhere: in a `map[hex.Hex]T`, a `container.Set`, a chunked world. It is the
-world space of [`gravitton/hexagon`][link-hexagon], which does the coordinate math and draws
-nothing. Its indices are in the coordinate system it is built with, and the center of index zero
-is its origin.
+The coordinate math of hexagons is [`gravitton/hexagon`][link-hexagon]'s; this package places
+them in the world. An index of a hexagonal grid is the offset coordinate of its system:
+`OffsetOddQ` on a flat-top grid, `OffsetOddR` on a pointy-top one, and the even systems with
+`EvenOffset`. The system converts it to a `hex.Hex` and back:
+
+```go
+import hex "github.com/gravitton/hexagon"
+
+g := grid.NewHexFlatTop[Tile](size, grid.HexFlatTopCellScale(32))
+
+h := hex.OffsetOddQ.From(geom.Pt(3, 2)) // Hex{3, 1}, the hex of a cell
+g.Cell(hex.OffsetOddQ.To(h))            // and its cell back
+```
+
+Hexes with no grid around them need no conversion: a set of them is a `container.Set` like
+`Region`:
+
+```go
+seen := container.SetOf(hex.Pt(0, 0).Range(3)...) // a set of hex.Hex
+seen.Intersection(container.SetOf(hex.Pt(3, -1).Range(1)...))
+```
+
+A `HexLayout` places such hexes on an unbounded plane, for a map whose data lives elsewhere: in a
+`map[hex.Hex]T`, a `container.Set`, a chunked world. Its indices are in the coordinate system it
+is built with, and the center of index zero is its origin.
 
 <p align="center">
 <picture>
@@ -583,8 +602,6 @@ is its origin.
 </p>
 
 ```go
-import hex "github.com/gravitton/hexagon"
-
 layout := grid.NewHexPointyTopLayout(grid.HexPointyTopCellScale(34), hex.Axial)
 
 h := hex.Pt(2, -1)
