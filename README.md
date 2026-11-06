@@ -105,7 +105,7 @@ scout, goal := geom.Pt(14, 24), geom.Pt(27, 12)
 g.FieldOfView(scout, 8, opaque)     // the 116 cells the scout sees, the walls in front included
 g.Path(scout, goal, walkable, cost) // 32 cells around the wall and the rough ground, at a cost of 31
 
-view := geom.BoxFromMin(g.Bounds().Center().Add(geom.Vec(-468.0, -140.0)), geom.Sz(936.0, 280.0))
+view := geom.BoxFromMin(g.Bounds().Center().Add(geom.Vec(-468.0, -110.0)), geom.Sz(936.0, 280.0))
 for cell := range g.DrawOrder(view) { // the cells in the window shown, back to front
 	// draw cell.Polygon()
 }
