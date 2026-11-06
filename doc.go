@@ -65,7 +65,10 @@
 //
 // # Allocations
 //
-// A slice or region result is allocated once, at its final size. A traversal has a Seq form that
+// A slice or region result is allocated once, at its final size, but for those that make room
+// for the most they can hold: [Grid.Neighbors] and [Grid.Ring] for every index the neighbor rule
+// gives, [Grid.Select] for every cell of the grid, and [Grid.FieldOfView] and [Square.FieldOfView]
+// for every cell of the range where something is hidden. A traversal has a Seq form that
 // allocates nothing and walks no further than where it is stopped, and slices.AppendSeq puts one
 // in a buffer. A search allocates the field it returns, for the part of the grid it reaches, and
 // reuses the rest of what it needs from one search to the next, safe for searches from several

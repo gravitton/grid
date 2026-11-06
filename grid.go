@@ -413,7 +413,7 @@ func (g *Grid[T]) Neighbors(index Index) []Index {
 		return nil
 	}
 
-	return slices.AppendSeq(make([]Index, 0, g.topology.ringLenIn(index, 1, g.Size())), g.NeighborsSeq(index))
+	return slices.AppendSeq(make([]Index, 0, len(g.topology.offsets(index))), g.NeighborsSeq(index))
 }
 
 // NeighborsSeq returns an iterator over the indices of Neighbors, in the same order.
@@ -498,7 +498,7 @@ func (g *Grid[T]) Ring(index Index, radius int) []Index {
 		return nil
 	}
 
-	return slices.AppendSeq(make([]Index, 0, g.topology.ringLenIn(index, radius, g.Size())), g.RingSeq(index, radius))
+	return slices.AppendSeq(make([]Index, 0, g.topology.ringLen(radius)), g.RingSeq(index, radius))
 }
 
 // RingSeq returns an iterator over the indices of Ring, in the same order.

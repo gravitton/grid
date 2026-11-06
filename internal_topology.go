@@ -173,10 +173,14 @@ func (t *topology) walkHexWithin(index Index, radius int, yield func(Index) bool
 	return true
 }
 
-// ringLenIn returns the number of indices at exactly radius steps from index that lie in a grid
-// of the given size, what walkRing yields inside it.
-func (t *topology) ringLenIn(index Index, radius int, size geom.Size[int]) int {
-	return t.rangeLenIn(index, radius, size) - t.rangeLenIn(index, radius-1, size)
+// ringLen returns the number of indices at exactly radius steps from an index, what walkRing
+// yields.
+func (t *topology) ringLen(radius int) int {
+	if t.isHex() {
+		return hex.RingLen(radius)
+	}
+
+	return RingLen(radius, t.movement)
 }
 
 // walkRing yields every index at exactly radius steps from index, inside a grid or not, in the

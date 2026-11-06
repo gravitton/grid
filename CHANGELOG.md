@@ -102,7 +102,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - `Grid.Range` no longer returns the cells that fail `passable`, nor indices outside the grid; both still hide what lies behind them (**breaking**)
 - `FieldBreadthFirst` and `FieldUniformCost` no longer hold the cells that fail `passable`, and no search asks `cost` about such a cell (**breaking**)
 - A nil `passable` or `cost` is accepted by every search, both fields and `Grid.Range`, admitting every cell at a cost of one per step, as `Grid.Path` already did; they panicked before
-- `Grid.Neighbors`, `Range`, `Ring` and `Spiral`, and `FieldOfView` where nothing hides a cell, allocate at the size of their result near an edge, where they made room for the indices beyond it too and a region kept it: a range over the whole of a grid from a corner held nearly eight times its cells
+- `Grid.Range` and `Spiral`, and `FieldOfView` where nothing hides a cell, allocate at the size of their result near an edge, where they made room for the indices beyond it too and a region kept it: a range over the whole of a grid from a corner held nearly eight times its cells
 
 
 ## [v1.2.0](https://github.com/gravitton/grid/compare/v1.1.0...v1.2.0) (2026-05-12)

@@ -1485,11 +1485,9 @@ func TestGrid_Neighbors(t *testing.T) {
 			assert.Nil(t, g.Neighbors(geom.Pt(40, 40)), name+": ")
 		}
 	})
-	t.Run("allocates once, at its length", func(t *testing.T) {
+	t.Run("allocates once, at the count of the neighbor rule", func(t *testing.T) {
 		for name, g := range grids {
-			for _, index := range []Index{center, geom.Pt(0, 0), geom.Pt(10, 3)} {
-				assert.Equal(t, cap(g.Neighbors(index)), len(g.Neighbors(index)), name+" at "+index.String()+": ")
-			}
+			assert.Equal(t, cap(g.Neighbors(geom.Pt(0, 0))), len(g.Neighbors(center)), name+": ")
 			assert.Equal(t, testing.AllocsPerRun(10, func() {
 				sinkPoints = g.Neighbors(center)
 			}), 1.0, name+": ")
@@ -1538,7 +1536,6 @@ func FuzzGrid_Neighbors(f *testing.F) {
 
 		assert.Equal(t, len(neighbors), len(expected))
 		assert.True(t, Reg(neighbors...).Equal(Reg(expected...)))
-		assert.Equal(t, cap(neighbors), len(neighbors))
 
 		for _, neighbor := range neighbors {
 			assert.True(t, slices.Contains(g.Neighbors(neighbor), index), neighbor.String()+": ")
@@ -1718,7 +1715,6 @@ func FuzzGrid_Range(f *testing.F) {
 
 		assert.True(t, everything.Equal(Reg(within...)))
 		assert.Equal(t, cap(g.Spiral(index, radius)), everything.Len())
-		assert.Equal(t, cap(g.Ring(index, radius)), len(g.Ring(index, radius)))
 	})
 }
 
@@ -1803,13 +1799,9 @@ func TestGrid_Ring(t *testing.T) {
 			assert.Nil(t, g.Ring(geom.Pt(-1, 5), 2), name+": ")
 		}
 	})
-	t.Run("allocates once, at its length", func(t *testing.T) {
+	t.Run("allocates once, at the count of the ring", func(t *testing.T) {
 		for name, g := range grids {
-			for _, index := range []Index{center, geom.Pt(0, 0), geom.Pt(10, 3)} {
-				for radius := range 8 {
-					assert.Equal(t, cap(g.Ring(index, radius)), len(g.Ring(index, radius)), name+" at "+index.String()+": ")
-				}
-			}
+			assert.Equal(t, cap(g.Ring(geom.Pt(0, 0), 3)), len(g.Ring(center, 3)), name+": ")
 			assert.Equal(t, testing.AllocsPerRun(10, func() {
 				sinkPoints = g.Ring(center, 3)
 			}), 1.0, name+": ")
