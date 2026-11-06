@@ -22,9 +22,9 @@ var heroMap = []string{
 func hero(t theme) []*panel {
 	panels := make([]*panel, 0, 3)
 	for _, l := range []layout{
-		{"NewRect", cardinal, 18},
-		{"NewIsometric", isometric(grid.MovementCardinal), 23},
-		{"NewHexPointyTop", hexPointyTop, 18},
+		{"NewRect", cardinal, 17},
+		{"NewIsometric", isometric(grid.MovementCardinal), 28},
+		{"NewHexPointyTop", hexPointyTop, 17},
 	} {
 		g, m := paint(l.build, l.width, heroMap...)
 		p := newPanel(t, g, "grid."+l.name)
