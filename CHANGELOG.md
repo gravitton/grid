@@ -7,7 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 
 ## [Unreleased](https://github.com/gravitton/grid/compare/v1.3.0...main)
-
+### Changed
+- Require `container` v1.0.1
 
 ## [v1.3.0](https://github.com/gravitton/grid/compare/v1.2.0...v1.3.0) (2026-11-06)
 

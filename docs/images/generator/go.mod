@@ -8,6 +8,6 @@ require (
 	github.com/gravitton/hexagon v1.8.0
 )
 
-require github.com/gravitton/container v1.0.0 // indirect
+require github.com/gravitton/container v1.0.1 // indirect
 
 replace github.com/gravitton/grid => ../../..
