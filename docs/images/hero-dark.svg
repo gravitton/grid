@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="960" height="304" viewBox="0 0 960 304" role="img">
 <g transform="translate(-320.0 -278.0)">
-<clipPath id="view"><rect x="332.0" y="290.0" width="936.0" height="280.0" rx="6"/></clipPath>
-<g clip-path="url(#view)">
+<clipPath id="view-0"><rect x="332.0" y="290.0" width="936.0" height="280.0" rx="6"/></clipPath>
+<g clip-path="url(#view-0)">
 <polygon points="320.0,280.0 340.0,290.0 320.0,300.0 300.0,290.0" fill="#221d19" stroke="#5a524b" stroke-width="1" stroke-linejoin="round"/>
 <polygon points="360.0,280.0 380.0,290.0 360.0,300.0 340.0,290.0" fill="#221d19" stroke="#5a524b" stroke-width="1" stroke-linejoin="round"/>
 <polygon points="400.0,280.0 420.0,290.0 400.0,300.0 380.0,290.0" fill="#221d19" stroke="#5a524b" stroke-width="1" stroke-linejoin="round"/>
@@ -711,7 +711,7 @@
 <polygon points="1160.0,560.0 1180.0,570.0 1160.0,580.0 1140.0,570.0" fill="#221d19" stroke="#5a524b" stroke-width="1" stroke-linejoin="round"/>
 <polygon points="1200.0,560.0 1220.0,570.0 1200.0,580.0 1180.0,570.0" fill="#221d19" stroke="#5a524b" stroke-width="1" stroke-linejoin="round"/>
 <polygon points="1240.0,560.0 1260.0,570.0 1240.0,580.0 1220.0,570.0" fill="#221d19" stroke="#5a524b" stroke-width="1" stroke-linejoin="round"/>
-<polyline points="600.0,390.0 620.0,400.0 640.0,410.0 660.0,420.0 680.0,430.0 700.0,440.0 720.0,450.0 700.0,460.0 680.0,470.0 660.0,480.0 680.0,490.0 700.0,500.0 720.0,510.0 740.0,520.0 760.0,530.0 780.0,540.0 800.0,550.0 820.0,540.0 840.0,530.0 860.0,520.0 880.0,510.0 900.0,500.0 920.0,490.0 940.0,480.0 960.0,470.0 980.0,460.0 1000.0,450.0 1020.0,440.0 1040.0,430.0 1060.0,420.0 1080.0,410.0 1100.0,400.0" fill="none" stroke="#e8883a" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="600.0,390.0 620.0,400.0 640.0,410.0 660.0,420.0 680.0,430.0 700.0,440.0 720.0,450.0 700.0,460.0 680.0,470.0 660.0,480.0 680.0,490.0 700.0,500.0 720.0,510.0 740.0,520.0 760.0,530.0 780.0,540.0 800.0,550.0 820.0,540.0 840.0,530.0 860.0,520.0 880.0,510.0 900.0,500.0 920.0,490.0 940.0,480.0 960.0,470.0 980.0,460.0 1000.0,450.0 1020.0,440.0 1040.0,430.0 1060.0,420.0 1080.0,410.0 1100.0,400.0" fill="none" stroke="#e8883a" stroke-width="2" stroke-linejoin="round"/>
 <polygon points="600.0,380.0 620.0,390.0 600.0,400.0 580.0,390.0" fill="#e8883a" stroke="#5a524b" stroke-width="1" stroke-linejoin="round"/>
 <polygon points="1100.0,390.0 1120.0,400.0 1100.0,410.0 1080.0,400.0" fill="#6bb4e3" stroke="#5a524b" stroke-width="1" stroke-linejoin="round"/>
 </g>
