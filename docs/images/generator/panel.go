@@ -43,13 +43,6 @@ func place(t theme, at placement, caption string) *panel {
 	return &panel{canvas: newCanvas(t, caption), place: at}
 }
 
-func window(t theme, g *grid.Grid[Tile], view geom.Box[float64]) *panel {
-	p := newPanel(t, g, "")
-	p.clip(view)
-
-	return p
-}
-
 func backdrop(t theme, g *grid.Grid[Tile], caption string) *panel {
 	p := newPanel(t, g, caption)
 	for cell := range g.All() {
