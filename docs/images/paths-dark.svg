@@ -279,7 +279,7 @@
 <polygon points="168.0,112.0 182.0,112.0 182.0,126.0 168.0,126.0" fill="#221d19" stroke="#5a524b" stroke-width="1" stroke-linejoin="round"/>
 <polygon points="182.0,112.0 196.0,112.0 196.0,126.0 182.0,126.0" fill="#221d19" stroke="#5a524b" stroke-width="1" stroke-linejoin="round"/>
 <polygon points="196.0,112.0 210.0,112.0 210.0,126.0 196.0,126.0" fill="#221d19" stroke="#5a524b" stroke-width="1" stroke-linejoin="round"/>
-<polyline points="21.0,63.0 35.0,63.0 49.0,63.0 49.0,77.0 49.0,91.0 49.0,105.0 63.0,105.0 77.0,105.0 91.0,105.0 105.0,105.0 105.0,119.0 119.0,119.0 133.0,119.0 147.0,119.0 161.0,119.0 175.0,119.0 175.0,105.0 175.0,91.0 175.0,77.0 175.0,63.0 189.0,63.0" fill="none" stroke="#e8883a" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="21.0,63.0 35.0,63.0 49.0,63.0 49.0,77.0 49.0,91.0 49.0,105.0 63.0,105.0 77.0,105.0 91.0,105.0 105.0,105.0 105.0,119.0 119.0,119.0 133.0,119.0 147.0,119.0 161.0,119.0 175.0,119.0 189.0,119.0 189.0,105.0 189.0,91.0 189.0,77.0 189.0,63.0" fill="none" stroke="#e8883a" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
 <polygon points="14.0,56.0 28.0,56.0 28.0,70.0 14.0,70.0" fill="#e8883a" stroke="#5a524b" stroke-width="1" stroke-linejoin="round"/>
 <polygon points="182.0,56.0 196.0,56.0 196.0,70.0 182.0,70.0" fill="#6bb4e3" stroke="#5a524b" stroke-width="1" stroke-linejoin="round"/>
 <text x="21.0" y="65.1" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="6" text-anchor="middle"><tspan fill="#1c1713">a</tspan></text>
