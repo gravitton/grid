@@ -15,7 +15,7 @@
 [![Go Version][ico-go-version]][link-go]
 [![Software License][ico-license]][link-licence]
 
-Generic 2D grid library for game development
+Generic 2D grids: rectangular, isometric and hexagonal, with sight and pathfinding
 
 <hr>
 
@@ -27,9 +27,9 @@ Generic 2D grid library for game development
   <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/hero-light.svg">
   <img alt="A map of walls, rough ground, a scout and a goal on a rectangular, an isometric and a pointy-top grid: on each the scout's field of view of radius 6 and its cheapest path to the goal around the rough ground" src="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/hero-light.svg">
 </picture>
+<br>
+<sub>Every picture in this README is drawn from what the package returns for the call beside it.</sub>
 </p>
-
-Every picture in this README is drawn from what the package returns for the call beside it.
 
 ## Features
 
@@ -53,10 +53,7 @@ go get github.com/gravitton/grid
 ```
 
 ```go
-import (
-	geom "github.com/gravitton/geometry"
-	"github.com/gravitton/grid"
-)
+import "github.com/gravitton/grid"
 ```
 
 ## Usage
@@ -636,7 +633,7 @@ The MIT License (MIT). Please see [License File][link-licence] for more informat
 [link-licence]:             ./LICENSE.md
 [link-workflow]:            https://github.com/gravitton/grid/actions
 [link-go-dev-reference]:    https://pkg.go.dev/github.com/gravitton/grid
-[link-geometry]:            https://github.com/gravitton/geometry
-[link-container]:           https://github.com/gravitton/container
-[link-hexagon]:             https://github.com/gravitton/hexagon
 [link-coverage]:            https://coveralls.io/github/gravitton/grid
+[link-container]:           https://github.com/gravitton/container
+[link-geometry]:            https://github.com/gravitton/geometry
+[link-hexagon]:             https://github.com/gravitton/hexagon
