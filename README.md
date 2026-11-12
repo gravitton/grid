@@ -610,6 +610,10 @@ on the same side.
 
 Full reference: [pkg.go.dev][link-go-dev-reference].
 
+## Resources
+
+- [Go libraries for 2D games: geometry, hexagon and grid][link-post-libraries]
+
 ## Credits
 
 - [Tomáš Novotný](https://github.com/tomas-novotny)
@@ -634,6 +638,7 @@ The MIT License (MIT). Please see [License File][link-licence] for more informat
 [link-workflow]:            https://github.com/gravitton/grid/actions
 [link-go-dev-reference]:    https://pkg.go.dev/github.com/gravitton/grid
 [link-coverage]:            https://coveralls.io/github/gravitton/grid
+[link-post-libraries]:      https://gravitton.github.io/blog/posts/gravitton-libraries/
 [link-container]:           https://github.com/gravitton/container
 [link-geometry]:            https://github.com/gravitton/geometry
 [link-hexagon]:             https://github.com/gravitton/hexagon
