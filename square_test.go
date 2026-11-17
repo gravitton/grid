@@ -346,7 +346,7 @@ func TestSquare_Spiral(t *testing.T) {
 				assert.Equal(t, testSquare.Spiral(3, movement)[0], testSquare.Point())
 			})
 			t.Run("holds what Range holds", func(t *testing.T) {
-				assert.True(t, Reg(testSquare.Spiral(4, movement)...).Equal(Reg(testSquare.Range(4, movement)...)))
+				assertRegion(t, Reg(testSquare.Spiral(4, movement)...), Reg(testSquare.Range(4, movement)...))
 			})
 			t.Run("never steps back toward the point", func(t *testing.T) {
 				previous := 0
@@ -437,7 +437,7 @@ func TestSquare_Sector(t *testing.T) {
 			t.Run("as many turns as directions is the range but s, each ring from the index opposite", func(t *testing.T) {
 				full := testSquare.Sector(4, geom.DirectionRight, movement.neighborsLen(), movement)
 
-				assert.True(t, Reg(full...).Equal(Reg(testSquare.Range(4, movement)...).Difference(Reg(testSquare.Point()))))
+				assertRegion(t, Reg(full...), Reg(testSquare.Range(4, movement)...).Difference(Reg(testSquare.Point())))
 				assert.Equal(t, full[0], testSquare.Neighbor(geom.DirectionLeft).Point())
 				assert.Equal(t, testSquare.Sector(4, geom.DirectionRight, 99, movement), full)
 			})
@@ -775,8 +775,8 @@ func TestSquare_FieldOfView(t *testing.T) {
 			t.Run("a wall is in sight and hides what is behind it, in the order of Spiral", func(t *testing.T) {
 				seen := center.FieldOfView(3, movement, blocked)
 
-				assert.True(t, slices.Contains(seen, geom.Pt(5, 6)))
-				assert.False(t, slices.Contains(seen, geom.Pt(5, 7)))
+				assert.Contains(t, seen, geom.Pt(5, 6))
+				assert.NotContains(t, seen, geom.Pt(5, 7))
 				assert.Equal(t, seen[0], center.Point())
 			})
 			t.Run("is exactly the indices of Spiral HasLineOfSight sees", func(t *testing.T) {

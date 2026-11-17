@@ -26,8 +26,8 @@ func TestRegion_Constructor(t *testing.T) {
 	t.Run("no indices and a nil slice are the empty region", func(t *testing.T) {
 		var none []Index
 
-		assert.True(t, Reg().Equal(testRegionEmpty))
-		assert.True(t, Reg(none...).Equal(testRegionEmpty))
+		assertRegion(t, Reg(), testRegionEmpty)
+		assertRegion(t, Reg(none...), testRegionEmpty)
 	})
 	t.Run("allocates once, for the copy", func(t *testing.T) {
 		points := []Index{geom.Pt(1, 0), geom.Pt(0, 0), geom.Pt(1, 0)}

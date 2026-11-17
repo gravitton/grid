@@ -41,6 +41,13 @@ var (
 	testWall  = geom.Pt(2, 2)
 )
 
+// assertRegion asserts that the regions hold the same indices, printing both where they differ.
+func assertRegion(t *testing.T, actual, expected Region, messages ...string) {
+	t.Helper()
+
+	assert.Equal(t, actual.Elements(), expected.Elements(), messages...)
+}
+
 // layoutGrids returns one grid of each layout, 6 by 5.
 func layoutGrids() map[string]*Grid[int] {
 	return map[string]*Grid[int]{
@@ -1025,7 +1032,7 @@ func TestGrid_Select(t *testing.T) {
 				return g.Distance(cell.Index(), geom.Pt(0, 0)) <= 2
 			}
 
-			assert.True(t, g.Select(corner).Equal(g.Range(geom.Pt(0, 0), 2)), name+": ")
+			assertRegion(t, g.Select(corner), g.Range(geom.Pt(0, 0), 2), name+": ")
 		}
 	})
 	t.Run("allocates once, sized for the grid", func(t *testing.T) {
@@ -1469,14 +1476,14 @@ func TestGrid_Neighbors(t *testing.T) {
 					}
 				}
 
-				assert.True(t, Reg(g.Neighbors(cell.Index())...).Equal(Reg(expected...)), name+" at "+cell.Index().String()+": ")
+				assertRegion(t, Reg(g.Neighbors(cell.Index())...), Reg(expected...), name+" at "+cell.Index().String()+": ")
 			}
 		}
 	})
 	t.Run("is the range of one step without its center", func(t *testing.T) {
 		for name, g := range grids {
 			for _, index := range []Index{center, geom.Pt(0, 0), geom.Pt(10, 3)} {
-				assert.True(t, Reg(g.Neighbors(index)...).Equal(g.Range(index, 1).Difference(Reg(index))), name+" at "+index.String()+": ")
+				assertRegion(t, Reg(g.Neighbors(index)...), g.Range(index, 1).Difference(Reg(index)), name+" at "+index.String()+": ")
 			}
 		}
 	})
@@ -1536,10 +1543,10 @@ func FuzzGrid_Neighbors(f *testing.F) {
 		}
 
 		assert.Equal(t, len(neighbors), len(expected))
-		assert.True(t, Reg(neighbors...).Equal(Reg(expected...)))
+		assertRegion(t, Reg(neighbors...), Reg(expected...))
 
 		for _, neighbor := range neighbors {
-			assert.True(t, slices.Contains(g.Neighbors(neighbor), index), neighbor.String()+": ")
+			assert.Contains(t, g.Neighbors(neighbor), index, neighbor.String()+": ")
 		}
 	})
 }
@@ -1622,7 +1629,7 @@ func TestGrid_Range(t *testing.T) {
 					}
 				}
 
-				assert.True(t, g.Range(center, n).Equal(Reg(expected...)), name+" at "+strconv.Itoa(n)+": ")
+				assertRegion(t, g.Range(center, n), Reg(expected...), name+" at "+strconv.Itoa(n)+": ")
 			}
 		}
 	})
@@ -1698,7 +1705,7 @@ func FuzzGrid_Range(f *testing.F) {
 		index, radius := fuzzIndex(g, x, y), int(reach%6)
 		everything := g.Range(index, radius)
 
-		assert.True(t, Reg(slices.Collect(g.RangeSeq(index, radius))...).Equal(everything))
+		assertRegion(t, Reg(slices.Collect(g.RangeSeq(index, radius))...), everything)
 		assert.True(t, slices.IsSortedFunc(slices.Collect(g.RangeSeq(index, radius)), Index.Compare))
 
 		if !g.Contains(index) {
@@ -1714,7 +1721,7 @@ func FuzzGrid_Range(f *testing.F) {
 			}
 		}
 
-		assert.True(t, everything.Equal(Reg(within...)))
+		assertRegion(t, everything, Reg(within...))
 		assert.Equal(t, cap(g.Spiral(index, radius)), everything.Len())
 	})
 }
@@ -1779,7 +1786,7 @@ func TestGrid_Ring(t *testing.T) {
 					ring := g.Ring(index, radius)
 
 					assert.Length(t, ring, len(expected), name+" at "+index.String()+": ")
-					assert.True(t, Reg(ring...).Equal(Reg(expected...)), name+" at "+index.String()+": ")
+					assertRegion(t, Reg(ring...), Reg(expected...), name+" at "+index.String()+": ")
 				}
 			}
 		}
@@ -1893,7 +1900,7 @@ func TestGrid_Spiral(t *testing.T) {
 	t.Run("holds the cells of the range", func(t *testing.T) {
 		for name, g := range grids {
 			for _, index := range []Index{center, geom.Pt(0, 0), geom.Pt(10, 3)} {
-				assert.True(t, Reg(g.Spiral(index, 4)...).Equal(g.Range(index, 4)), name+" at "+index.String()+": ")
+				assertRegion(t, Reg(g.Spiral(index, 4)...), g.Range(index, 4), name+" at "+index.String()+": ")
 			}
 		}
 	})
@@ -2008,7 +2015,7 @@ func TestGrid_Border(t *testing.T) {
 
 	t.Run("a single cell is its own border", func(t *testing.T) {
 		for name, g := range ruleGrids(geom.Sz(9, 9)) {
-			assert.True(t, g.Border(Reg(center)).Equal(Reg(center)), name+": ")
+			assertRegion(t, g.Border(Reg(center)), Reg(center), name+": ")
 		}
 	})
 	t.Run("the border of a range is its outermost ring", func(t *testing.T) {
@@ -2020,7 +2027,7 @@ func TestGrid_Border(t *testing.T) {
 				}
 			}
 
-			assert.True(t, g.Border(g.Range(center, 3)).Equal(Reg(ring...)), name+": ")
+			assertRegion(t, g.Border(g.Range(center, 3)), Reg(ring...), name+": ")
 		}
 	})
 	t.Run("a hole has a border of its own", func(t *testing.T) {
@@ -2040,7 +2047,7 @@ func TestGrid_Border(t *testing.T) {
 				}
 			}
 
-			assert.True(t, g.Border(Reg(whole...)).Equal(Reg(edge...)), name+": ")
+			assertRegion(t, g.Border(Reg(whole...)), Reg(edge...), name+": ")
 		}
 	})
 	t.Run("the empty region has none", func(t *testing.T) {
@@ -2092,15 +2099,15 @@ func TestGrid_Grow(t *testing.T) {
 	t.Run("a cell grown is the range around it", func(t *testing.T) {
 		for name, g := range ruleGrids(geom.Sz(9, 9)) {
 			for n := range 4 {
-				assert.True(t, g.Grow(single, n).Equal(g.Range(center, n)), name+": ")
+				assertRegion(t, g.Grow(single, n), g.Range(center, n), name+": ")
 			}
 		}
 	})
 	t.Run("zero or fewer steps is the region", func(t *testing.T) {
 		g := ruleGrids(geom.Sz(9, 9))["cardinal"]
 
-		assert.True(t, g.Grow(single, 0).Equal(single))
-		assert.True(t, g.Grow(single, -2).Equal(single))
+		assertRegion(t, g.Grow(single, 0), single)
+		assertRegion(t, g.Grow(single, -2), single)
 	})
 	t.Run("stops at the edge of the grid", func(t *testing.T) {
 		for name, g := range ruleGrids(geom.Sz(9, 9)) {
@@ -2148,20 +2155,20 @@ func TestGrid_Shrink(t *testing.T) {
 		for name, g := range ruleGrids(geom.Sz(9, 9)) {
 			region := g.Range(center, 1)
 
-			assert.True(t, g.Shrink(g.Grow(region, 2), 2).Equal(region), name+": ")
+			assertRegion(t, g.Shrink(g.Grow(region, 2), 2), region, name+": ")
 		}
 	})
 	t.Run("a range shrunk is the smaller range", func(t *testing.T) {
 		for name, g := range ruleGrids(geom.Sz(9, 9)) {
-			assert.True(t, g.Shrink(g.Range(center, 3), 2).Equal(g.Range(center, 1)), name+": ")
+			assertRegion(t, g.Shrink(g.Range(center, 3), 2), g.Range(center, 1), name+": ")
 		}
 	})
 	t.Run("zero or fewer steps is the region", func(t *testing.T) {
 		g := ruleGrids(geom.Sz(9, 9))["cardinal"]
 		region := g.Range(center, 2)
 
-		assert.True(t, g.Shrink(region, 0).Equal(region))
-		assert.True(t, g.Shrink(region, -1).Equal(region))
+		assertRegion(t, g.Shrink(region, 0), region)
+		assertRegion(t, g.Shrink(region, -1), region)
 	})
 	t.Run("more steps than the region is deep leaves nothing", func(t *testing.T) {
 		g := ruleGrids(geom.Sz(9, 9))["cardinal"]
@@ -2243,7 +2250,7 @@ func TestGrid_Components(t *testing.T) {
 			components := g.Components(region)
 
 			assert.Length(t, components, 1, name+": ")
-			assert.True(t, components[0].Equal(region), name+": ")
+			assertRegion(t, components[0], region, name+": ")
 		}
 	})
 	t.Run("parts apart come back in the order of their first index", func(t *testing.T) {
@@ -2252,8 +2259,8 @@ func TestGrid_Components(t *testing.T) {
 			components := g.Components(left.Union(right))
 
 			assert.Length(t, components, 2, name+": ")
-			assert.True(t, components[0].Equal(left), name+": ")
-			assert.True(t, components[1].Equal(right), name+": ")
+			assertRegion(t, components[0], left, name+": ")
+			assertRegion(t, components[1], right, name+": ")
 		}
 	})
 	t.Run("every component is connected and together they are the region", func(t *testing.T) {
@@ -2273,7 +2280,7 @@ func TestGrid_Components(t *testing.T) {
 				union = union.Union(component)
 			}
 
-			assert.True(t, union.Equal(region), name+": ")
+			assertRegion(t, union, region, name+": ")
 		}
 	})
 	t.Run("allocates twice, then once a component and once for the list of one", func(t *testing.T) {
@@ -2328,7 +2335,8 @@ func TestGrid_Distance(t *testing.T) {
 				for _, neighbor := range g.Neighbors(cell.Index()) {
 					change := g.Distance(center, neighbor) - g.Distance(center, cell.Index())
 
-					assert.True(t, change >= -1 && change <= 1, name+" at "+cell.Index().String()+": ")
+					assert.GreaterOrEqual(t, change, -1, name+" at "+cell.Index().String()+": ")
+					assert.LessOrEqual(t, change, 1, name+" at "+cell.Index().String()+": ")
 				}
 			}
 		}
@@ -2499,12 +2507,12 @@ func TestGrid_FieldOfView(t *testing.T) {
 	})
 	t.Run("a nil blocked is Range", func(t *testing.T) {
 		for name, g := range grids {
-			assert.True(t, g.FieldOfView(center, 4, nil).Equal(g.Range(center, 4)), name+": ")
+			assertRegion(t, g.FieldOfView(center, 4, nil), g.Range(center, 4), name+": ")
 		}
 	})
 	t.Run("a radius beyond the grid still hides what is behind a wall", func(t *testing.T) {
 		for name, g := range grids {
-			assert.True(t, g.FieldOfView(center, math.MaxInt, wall).Equal(g.FieldOfView(center, g.Width()+g.Height(), wall)), name+": ")
+			assertRegion(t, g.FieldOfView(center, math.MaxInt, wall), g.FieldOfView(center, g.Width()+g.Height(), wall), name+": ")
 		}
 	})
 	t.Run("a wall is in sight and hides what is behind it", func(t *testing.T) {
@@ -2532,7 +2540,7 @@ func TestGrid_FieldOfView(t *testing.T) {
 				return false
 			})
 
-			assert.True(t, seen.Equal(g.Range(center, 3)), name+": ")
+			assertRegion(t, seen, g.Range(center, 3), name+": ")
 		}
 	})
 	t.Run("sight is reciprocal", func(t *testing.T) {
@@ -2549,7 +2557,7 @@ func TestGrid_FieldOfView(t *testing.T) {
 
 		for name, g := range grids {
 			for _, index := range []Index{center, geom.Pt(0, 0), geom.Pt(10, 3)} {
-				assert.True(t, g.FieldOfView(index, 4, nil).Equal(g.FieldOfView(index, 4, never)), name+" at "+index.String()+": ")
+				assertRegion(t, g.FieldOfView(index, 4, nil), g.FieldOfView(index, 4, never), name+" at "+index.String()+": ")
 			}
 		}
 	})
@@ -2657,7 +2665,7 @@ func FuzzGrid_FieldOfView(f *testing.F) {
 		blocked := scatteredWalls(int(seed))
 		seen := g.FieldOfView(index, radius, blocked)
 
-		assert.True(t, Reg(slices.Collect(g.FieldOfViewSeq(index, radius, blocked))...).Equal(seen))
+		assertRegion(t, Reg(slices.Collect(g.FieldOfViewSeq(index, radius, blocked))...), seen)
 
 		if !g.Contains(index) {
 			assert.True(t, seen.IsEmpty())
@@ -2682,10 +2690,10 @@ func TestGrid_FieldOfViewSeq(t *testing.T) {
 	for name, g := range grids {
 		t.Run(name, func(t *testing.T) {
 			t.Run("yields what FieldOfView holds", func(t *testing.T) {
-				assert.True(t, Reg(slices.Collect(g.FieldOfViewSeq(center, 4, scatteredWalls(0)))...).Equal(g.FieldOfView(center, 4, scatteredWalls(0))))
+				assertRegion(t, Reg(slices.Collect(g.FieldOfViewSeq(center, 4, scatteredWalls(0)))...), g.FieldOfView(center, 4, scatteredWalls(0)))
 			})
 			t.Run("a nil blocked yields the range", func(t *testing.T) {
-				assert.True(t, Reg(slices.Collect(g.FieldOfViewSeq(center, 3, nil))...).Equal(g.Range(center, 3)))
+				assertRegion(t, Reg(slices.Collect(g.FieldOfViewSeq(center, 3, nil))...), g.Range(center, 3))
 			})
 			t.Run("yields no index outside the grid", func(t *testing.T) {
 				for index := range g.FieldOfViewSeq(geom.Pt(0, 0), 3, nil) {
@@ -2693,7 +2701,7 @@ func TestGrid_FieldOfViewSeq(t *testing.T) {
 				}
 			})
 			t.Run("a radius beyond the grid yields what one across it does", func(t *testing.T) {
-				assert.True(t, Reg(slices.Collect(g.FieldOfViewSeq(center, math.MaxInt, wallAt(geom.Pt(5, 6))))...).Equal(g.FieldOfView(center, g.Width()+g.Height(), wallAt(geom.Pt(5, 6)))))
+				assertRegion(t, Reg(slices.Collect(g.FieldOfViewSeq(center, math.MaxInt, wallAt(geom.Pt(5, 6))))...), g.FieldOfView(center, g.Width()+g.Height(), wallAt(geom.Pt(5, 6))))
 			})
 			t.Run("yields nothing for a negative radius or from outside the grid", func(t *testing.T) {
 				assert.Length(t, slices.Collect(g.FieldOfViewSeq(center, -1, nil)), 0)
@@ -2770,8 +2778,8 @@ func testCost(t *testing.T, search func(g *Grid[int], cost func(current, next Ce
 			return 1
 		})
 
-		assert.True(t, slices.Contains(path, geom.Pt(1, 3)))
-		assert.False(t, slices.Contains(path, geom.Pt(1, 0)))
+		assert.Contains(t, path, geom.Pt(1, 3))
+		assert.NotContains(t, path, geom.Pt(1, 0))
 	})
 	t.Run("a wall of infinite cost is no path", func(t *testing.T) {
 		assert.Nil(t, search(g, func(_, next Cell[int]) float64 {
@@ -3136,7 +3144,7 @@ func TestGrid_Field(t *testing.T) {
 		for name, g := range layoutGrids() {
 			field, expected := g.Field(geom.Pt(1, 1), nil, nil), g.FieldBreadthFirst(geom.Pt(1, 1), nil)
 
-			assert.True(t, field.Region().Equal(expected.Region()), name+": ")
+			assertRegion(t, field.Region(), expected.Region(), name+": ")
 			assert.Equal(t, field.PathTo(geom.Pt(2, 2)), expected.PathTo(geom.Pt(2, 2)), name+": ")
 		}
 	})
@@ -3214,7 +3222,7 @@ func TestGrid_Reachable(t *testing.T) {
 					}
 				}
 
-				assert.True(t, g.Reachable(start, float64(steps), walkable, nil).Region().Equal(Reg(expected...)), name+" at "+strconv.Itoa(steps)+": ")
+				assertRegion(t, g.Reachable(start, float64(steps), walkable, nil).Region(), Reg(expected...), name+" at "+strconv.Itoa(steps)+": ")
 			}
 		}
 	})
@@ -3228,7 +3236,7 @@ func TestGrid_Reachable(t *testing.T) {
 		for name, g := range ruleGrids(geom.Sz(40, 40)) {
 			field := g.Reachable(geom.Pt(20, 20), 6, nil, nil)
 
-			assert.True(t, field.Region().Equal(g.Range(geom.Pt(20, 20), 6)), name+": ")
+			assertRegion(t, field.Region(), g.Range(geom.Pt(20, 20), 6), name+": ")
 			assert.False(t, field.Contains(geom.Pt(39, 0)), name+": ")
 		}
 	})
@@ -3250,7 +3258,7 @@ func TestGrid_Reachable(t *testing.T) {
 					}
 				}
 
-				assert.True(t, g.Reachable(geom.Pt(1, 1), budget, nil, stepCost).Region().Equal(Reg(expected...)), name+": ")
+				assertRegion(t, g.Reachable(geom.Pt(1, 1), budget, nil, stepCost).Region(), Reg(expected...), name+": ")
 			}
 		}
 	})
@@ -3261,7 +3269,7 @@ func TestGrid_Reachable(t *testing.T) {
 
 		for name, g := range layoutGrids() {
 			for _, budget := range []float64{0, 0.5, 1, 2.5, 3, math.Inf(1)} {
-				assert.True(t, g.Reachable(geom.Pt(1, 1), budget, nil, nil).Region().Equal(g.Reachable(geom.Pt(1, 1), budget, nil, one).Region()), name+": ")
+				assertRegion(t, g.Reachable(geom.Pt(1, 1), budget, nil, nil).Region(), g.Reachable(geom.Pt(1, 1), budget, nil, one).Region(), name+": ")
 			}
 		}
 	})

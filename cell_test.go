@@ -316,7 +316,7 @@ func TestCell_Range(t *testing.T) {
 	grids, center := ruleGrids(geom.Sz(11, 11)), geom.Pt(5, 5)
 
 	for name, g := range grids {
-		assert.True(t, g.Cell(center).Range(3).Equal(g.Range(center, 3)), name+": ")
+		assertRegion(t, g.Cell(center).Range(3), g.Range(center, 3), name+": ")
 	}
 }
 
@@ -365,7 +365,7 @@ func TestCell_FieldOfView(t *testing.T) {
 	wall := wallAt(geom.Pt(5, 6))
 
 	for name, g := range grids {
-		assert.True(t, g.Cell(center).FieldOfView(3, wall).Equal(g.FieldOfView(center, 3, wall)), name+": ")
+		assertRegion(t, g.Cell(center).FieldOfView(3, wall), g.FieldOfView(center, 3, wall), name+": ")
 	}
 }
 
@@ -384,7 +384,7 @@ func TestCell_Field(t *testing.T) {
 	grids, center := ruleGrids(geom.Sz(11, 11)), geom.Pt(5, 5)
 
 	for name, g := range grids {
-		assert.True(t, g.Cell(center).Field(nil, stepCost).Region().Equal(g.Field(center, nil, stepCost).Region()), name+": ")
+		assertRegion(t, g.Cell(center).Field(nil, stepCost).Region(), g.Field(center, nil, stepCost).Region(), name+": ")
 	}
 }
 
@@ -392,7 +392,7 @@ func TestCell_Reachable(t *testing.T) {
 	grids, center := ruleGrids(geom.Sz(11, 11)), geom.Pt(5, 5)
 
 	for name, g := range grids {
-		assert.True(t, g.Cell(center).Reachable(3, nil, nil).Region().Equal(g.Reachable(center, 3, nil, nil).Region()), name+": ")
+		assertRegion(t, g.Cell(center).Reachable(3, nil, nil).Region(), g.Reachable(center, 3, nil, nil).Region(), name+": ")
 	}
 }
 
