@@ -16,7 +16,6 @@ import (
 type SquareOptions struct {
 	// Movement chooses the neighbors of a cell.
 	Movement Movement
-
 	// Origin is where the top-left corner of the bounds of the grid is in the world.
 	Origin geom.Point[float64]
 }
@@ -27,7 +26,6 @@ type HexOptions struct {
 	// EvenOffset shifts the even columns of a flat-top grid, or the even rows of a pointy-top
 	// one, in place of the odd ones.
 	EvenOffset bool
-
 	// Origin is where the top-left corner of the bounds of the grid is in the world.
 	Origin geom.Point[float64]
 }

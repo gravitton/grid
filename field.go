@@ -15,27 +15,26 @@ import (
 // step costs the same both ways. It does not change with the grid. The zero value is the empty
 // field.
 type Field struct {
-	size  geom.Size[int]
+	// size is the size of the grid searched.
+	size geom.Size[int]
+	// start is the index the search started from.
 	start Index
 
 	// columns is the number of chunks across the grid.
 	columns int
-
 	// chunks holds, for every chunk of the grid, one more than its place among the chunks the
 	// search touched, so zero marks a chunk it never touched.
 	chunks []int32
-
 	// corners holds, for every chunk the search touched, the index at its top-left corner.
 	corners []Index
-
 	// links holds the step back and the steps of every slot of the chunks touched, a chunk
 	// after another in the order they were touched.
 	links []link
-
 	// costs holds the cost of reaching every slot of links, and is nil for a search that counts
 	// steps.
 	costs []float64
 
+	// reached is the number of indices the search reached.
 	reached int
 }
 

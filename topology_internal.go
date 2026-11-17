@@ -12,15 +12,12 @@ import (
 type topology struct {
 	// movement chooses the neighbors of square cells, and is MovementNone for hexagonal ones.
 	movement Movement
-
 	// system is the coordinate system of hexagonal cells, and is none for square ones.
 	system hex.CoordinateSystem
-
 	// steps holds the neighbor offsets of an index of even and of odd parity, since the shifted
 	// rows or columns of an offset system step differently from the others. Square cells hold
 	// the same offsets twice.
 	steps [2][]geom.Vector[int]
-
 	// byColumn is true where the parity is that of the column, as in a flat-top grid.
 	byColumn bool
 }
