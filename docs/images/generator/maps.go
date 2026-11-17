@@ -15,6 +15,7 @@ type Tile struct {
 var (
 	ground = Tile{Cost: 1}
 	rough  = Tile{Cost: 5}
+	cheap  = Tile{Cost: 0.1}
 	wall   = Tile{Wall: true}
 )
 
@@ -73,6 +74,8 @@ func paint(build builder, width float64, rows ...string) (*grid.Grid[Tile], mark
 				g.Cell(index).Set(wall)
 			case '~':
 				g.Cell(index).Set(rough)
+			case ',':
+				g.Cell(index).Set(cheap)
 			case '.':
 			default:
 				found[r] = append(found[r], index)

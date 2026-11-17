@@ -20,8 +20,10 @@ var figures = []figure{
 	{"corners", corners},
 	{"sight", sight},
 	{"paths", paths},
+	{"cheap-steps", cheapSteps},
 	{"fields", fields},
 	{"regions", regions},
+	{"region-order", regionOrder},
 	{"squares", squares},
 	{"hex-layout", hexLayout},
 }
@@ -325,6 +327,39 @@ func paths(t theme) []*panel {
 	return panels
 }
 
+func cheapSteps(t theme) []*panel {
+	g, m := paint(cardinal, 29,
+		"...............",
+		".,,,,,,,,,,,,,.",
+		".,...........,.",
+		".,...........,.",
+		".a...........b.",
+		"...............",
+	)
+	start, goal := m.at('a'), m.at('b')
+	searches := []struct {
+		name string
+		path []grid.Index
+	}{
+		{"g.Path(a, b, walkable, cost)", g.Path(start, goal, walkable, cost)},
+		{"g.PathUniformCost(a, b, walkable, cost)", g.PathUniformCost(start, goal, walkable, cost)},
+	}
+
+	panels := make([]*panel, 0, len(searches))
+	for _, s := range searches {
+		p := backdrop(t, g, s.name)
+		p.note = fmt.Sprintf("%d steps, cost %.1f", len(s.path)-1, total(g, s.path))
+		p.path(s.path, t.accent)
+		p.cell(start, t.accent)
+		p.cell(goal, t.cool)
+		p.label(start, "a", t.onAccent)
+		p.label(goal, "b", t.onAccent)
+		panels = append(panels, p)
+	}
+
+	return panels
+}
+
 func fields(t theme) []*panel {
 	g, m := paint(cardinal, 22,
 		"...........",
@@ -415,6 +450,28 @@ func regions(t theme) []*panel {
 	border.region(g.Border(region), t.accent)
 
 	return []*panel{components, grow, shrink, border}
+}
+
+func regionOrder(t theme) []*panel {
+	g, m := paint(cardinal, 38,
+		".......",
+		".o..o..",
+		".o..oo.",
+		"..o....",
+		".oo.o..",
+	)
+	region := m.region('o')
+
+	p := backdrop(t, g, "r.All()")
+	p.note = "by column, then by row"
+	i := 0
+	for index := range region.All() {
+		p.cell(index, t.accentSoft)
+		p.label(index, strconv.Itoa(i), t.ink)
+		i++
+	}
+
+	return []*panel{p}
 }
 
 func drawOrder(t theme) []*panel {

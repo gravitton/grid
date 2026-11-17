@@ -421,6 +421,24 @@ is a step never taken; a negative cost or a NaN panics.
 | `PathGreedyBestFirst(start, goal, passable)`   | Greedy best-first | no       | no       |
 | `PathAStar(start, goal, passable, cost)`       | A*                | yes      | at ≥ 1   |
 
+A step cheaper than one makes the guess `Path` adds overestimate the rest of the way, so it can
+return a path costlier than the cheapest, where `PathUniformCost` needs no guess:
+
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/cheap-steps-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/cheap-steps-light.svg">
+  <img alt="Two paths between a and b past a road of cells costing 0.1 a step: Path goes straight along the ground in 12 steps at a cost of 12; PathUniformCost takes the road in 18 steps at a cost of 2.7" src="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/cheap-steps-light.svg">
+</picture>
+</p>
+
+```go
+a, b := geom.Pt(1, 4), geom.Pt(13, 4)
+
+g.Path(a, b, walkable, cost)            // 13 cells straight along the ground: a cost of 12
+g.PathUniformCost(a, b, walkable, cost) // 19 cells along the road of 0.1 a step: a cost of 2.7
+```
+
 ### Fields
 
 A `Field` is what a search reached: every cell, the step back toward its start and the cost of
@@ -470,6 +488,23 @@ g.IsConnected(r) // false
 g.Grow(r, 1)     // the 60 cells of r and within one step of it
 g.Shrink(r, 1)   // the 6 cells of r more than one step from its outside
 g.Border(r)      // the 25 cells of r with a neighbor outside it, around the hole as well
+```
+
+A region is walked in the same order whatever order it was built in, by column and then by row:
+
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/region-order-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/region-order-light.svg">
+  <img alt="Nine cells of a region, numbered 0 to 8 in the order its iterator yields them: down each column in turn, from the leftmost column to the rightmost" src="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/region-order-light.svg">
+</picture>
+</p>
+
+```go
+r := grid.Reg(geom.Pt(4, 4), geom.Pt(1, 1), geom.Pt(5, 2), geom.Pt(2, 3), geom.Pt(1, 4),
+	geom.Pt(4, 1), geom.Pt(2, 4), geom.Pt(1, 2), geom.Pt(4, 2))
+
+r.Elements() // (1,1) (1,2) (1,4) (2,3) (2,4) (4,1) (4,2) (4,4) (5,2), however r was built
 ```
 
 A region knows nothing of the grid it came from, so the set operations serve every layout:

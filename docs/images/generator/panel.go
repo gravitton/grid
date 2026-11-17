@@ -68,6 +68,8 @@ func (p *panel) terrain(index grid.Index) string {
 		return p.theme.wall
 	case rough:
 		return p.theme.leafSoft
+	case cheap:
+		return p.theme.edge
 	default:
 		return p.theme.cell
 	}

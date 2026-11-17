@@ -787,7 +787,7 @@ func (g *Grid[T]) blockedIndex(blocked func(Cell[T]) bool) func(Index) bool {
 }
 
 // Path returns the path of PathAStar from start to goal, both included, or nil where none is
-// found. A cost below one per step can make the path dearer than the cheapest. It panics for a
+// found. A cost below one per step can make the path costlier than the cheapest. It panics for a
 // cost that is negative or NaN.
 func (g *Grid[T]) Path(start, goal Index, passable func(Cell[T]) bool, cost func(current, next Cell[T]) float64) []Index {
 	return g.astar(start, goal, passable, cost).PathTo(goal)
@@ -813,9 +813,9 @@ func (g *Grid[T]) PathGreedyBestFirst(start, goal Index, passable func(Cell[T]) 
 	return g.greedyBestFirstSearch(start, goal, passable).PathTo(goal)
 }
 
-// PathAStar returns the cheapest path from start to goal, both included, or nil where none is
-// found. A cost below one per step can make the path dearer than the cheapest. It panics for
-// a cost that is negative or NaN.
+// PathAStar returns a path from start to goal, both included, or nil where none is found. The
+// path is the cheapest where every step costs at least one; a cheaper step can make it costlier.
+// It panics for a cost that is negative or NaN.
 func (g *Grid[T]) PathAStar(start, goal Index, passable func(Cell[T]) bool, cost func(current, next Cell[T]) float64) []Index {
 	return g.astar(start, goal, passable, cost).PathTo(goal)
 }
