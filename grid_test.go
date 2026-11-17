@@ -1670,10 +1670,18 @@ func BenchmarkGrid_Range(b *testing.B) {
 		{"rectangular", NewRect[int](geom.Sz(101, 101), geom.Sz(32.0, 32.0))},
 		{"hexagonal", NewHexFlatTop[int](geom.Sz(101, 101), geom.Sz(32.0, 32.0))},
 	} {
-		for _, radius := range []int{8, 40} {
-			b.Run(kind.name+" at "+strconv.Itoa(radius), func(b *testing.B) {
+		for _, test := range []struct {
+			name   string
+			index  Index
+			radius int
+		}{
+			{"at 8", geom.Pt(50, 50), 8},
+			{"at 40", geom.Pt(50, 50), 40},
+			{"whole from a corner", geom.Pt(0, 0), 200},
+		} {
+			b.Run(kind.name+" "+test.name, func(b *testing.B) {
 				for b.Loop() {
-					sinkRegion = kind.grid.Range(geom.Pt(50, 50), radius)
+					sinkRegion = kind.grid.Range(test.index, test.radius)
 				}
 			})
 		}

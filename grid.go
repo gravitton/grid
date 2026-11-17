@@ -465,14 +465,12 @@ func (g *Grid[T]) walkRange(index Index, radius int, yield func(Index) bool) boo
 		return true
 	}
 
-	return g.topology.walkWithin(index, g.clampRadius(index, radius), func(found Index) bool {
-		return !g.Contains(found) || yield(found)
-	})
+	return g.topology.walkWithin(index, g.clampRadius(index, radius), g.Size(), yield)
 }
 
 // clampRadius returns the radius cut to the distance from the index to the farthest cell of
-// the grid, one of its corners, since a range gathers every index within its radius before it
-// asks which lie in the grid. A radius short of the nearest edge needs no cut.
+// the grid, one of its corners, since a range and its count step through every line of the
+// lattice within the radius. A radius short of the nearest edge needs no cut.
 func (g *Grid[T]) clampRadius(index Index, radius int) int {
 	x, y := index.XY()
 	right, bottom := g.Width()-1, g.Height()-1

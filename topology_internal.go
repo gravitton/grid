@@ -68,7 +68,7 @@ func (t *topology) distance(from, to Index) int {
 	return Square(from).DistanceTo(to, t.movement)
 }
 
-// rangeLen returns the number of indices within radius of an index, what walkWithin yields.
+// rangeLen returns the number of indices within radius of an index.
 func (t *topology) rangeLen(radius int) int {
 	if t.isHex() {
 		return hex.RangeLen(radius)
@@ -78,7 +78,7 @@ func (t *topology) rangeLen(radius int) int {
 }
 
 // rangeLenIn returns the number of indices within radius of index that lie in a grid of the
-// given size, what walkWithin yields inside it. A range short of every edge is all inside, and
+// given size, what walkWithin yields. A range short of every edge is all inside, and
 // any other is counted a line of the lattice at a time.
 func (t *topology) rangeLenIn(index Index, radius int, size geom.Size[int]) int {
 	if radius <= min(index.X, index.Y, size.Width-1-index.X, size.Height-1-index.Y) {
@@ -133,34 +133,43 @@ func spanLen(low, high, length int) int {
 	return max(min(high, length-1)-max(low, 0)+1, 0)
 }
 
-// walkWithin yields every index within radius of index, inside a grid or not, in the order of a
-// region, so a range kept in that order is a region with nothing to sort, and reports whether it
-// yielded them all.
-func (t *topology) walkWithin(index Index, radius int, yield func(Index) bool) bool {
+// walkWithin yields every index within radius of index that lies in a grid of the given size,
+// in the order of a region, so a range kept in that order is a region with nothing to sort, and
+// reports whether it yielded them all.
+func (t *topology) walkWithin(index Index, radius int, size geom.Size[int], yield func(Index) bool) bool {
 	if t.isHex() {
-		return t.walkHexWithin(index, radius, yield)
+		return t.walkHexWithin(index, radius, size, yield)
 	}
 
-	return Square(index).within(radius, t.movement, yield)
+	return Square(index).within(radius, t.movement, geom.Pt(0, 0), geom.Pt(size.Width-1, size.Height-1), yield)
 }
 
-// walkHexWithin is walkWithin for hexagonal cells. The range of a hex comes in the order of a
-// region only where the parity is that of the column, so otherwise it walks the box around it.
-func (t *topology) walkHexWithin(index Index, radius int, yield func(Index) bool) bool {
+// walkHexWithin is walkWithin for hexagonal cells. Where the parity is that of the column, the
+// hexes of one axial step along it are a run of one column, as in hexRangeLenIn, and the columns
+// come in the order of a region; otherwise it walks the box around the range.
+func (t *topology) walkHexWithin(index Index, radius int, size geom.Size[int], yield func(Index) bool) bool {
 	center := t.system.From(index)
 
 	if t.byColumn {
-		for candidate := range center.RangeSeq(radius) {
-			if !yield(t.system.To(candidate)) {
-				return false
+		for step := -radius; step <= radius; step++ {
+			low, high := max(-radius, -step-radius), min(radius, -step+radius)
+			first, last := t.system.To(center.Add(hex.Pt(step, low))), t.system.To(center.Add(hex.Pt(step, high)))
+			if first.X < 0 || first.X >= size.Width {
+				continue
+			}
+
+			for y := max(first.Y, 0); y <= min(last.Y, size.Height-1); y++ {
+				if !yield(geom.Pt(first.X, y)) {
+					return false
+				}
 			}
 		}
 
 		return true
 	}
 
-	for x := index.X - radius; x <= index.X+radius; x++ {
-		for y := index.Y - radius; y <= index.Y+radius; y++ {
+	for x := max(index.X-radius, 0); x <= min(index.X+radius, size.Width-1); x++ {
+		for y := max(index.Y-radius, 0); y <= min(index.Y+radius, size.Height-1); y++ {
 			if candidate := geom.Pt(x, y); center.DistanceTo(t.system.From(candidate)) <= radius && !yield(candidate) {
 				return false
 			}

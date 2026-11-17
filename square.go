@@ -136,25 +136,26 @@ func (s Square) Range(radius int, movement Movement) []Index {
 // RangeSeq returns an iterator over the indices of Range, in the same order.
 func (s Square) RangeSeq(radius int, movement Movement) iter.Seq[Index] {
 	return func(yield func(Index) bool) {
-		s.within(radius, movement, yield)
+		s.within(radius, movement, geom.Pt(math.MinInt, math.MinInt), geom.Pt(math.MaxInt, math.MaxInt), yield)
 	}
 }
 
-// within yields the indices within radius of s column by column, each as far up and down as
-// the movement reaches, and reports whether it yielded them all.
-func (s Square) within(radius int, movement Movement, yield func(Index) bool) bool {
+// within yields the indices within radius of s that lie from low to high on both axes, column
+// by column, each as far up and down as the movement reaches, and reports whether it yielded
+// them all. Without a movement it reaches s alone.
+func (s Square) within(radius int, movement Movement, low, high Index, yield func(Index) bool) bool {
 	if movement.IsNone() {
-		return radius < 0 || yield(s.Point())
+		radius = min(radius, 0)
 	}
 
-	for dx := -radius; dx <= radius; dx++ {
+	for x := max(s.X-radius, low.X); x <= min(s.X+radius, high.X); x++ {
 		reach := radius
 		if movement == MovementCardinal {
-			reach -= geom.Abs(dx)
+			reach -= geom.Abs(x - s.X)
 		}
 
-		for dy := -reach; dy <= reach; dy++ {
-			if !yield(geom.Pt(s.X+dx, s.Y+dy)) {
+		for y := max(s.Y-reach, low.Y); y <= min(s.Y+reach, high.Y); y++ {
+			if !yield(geom.Pt(x, y)) {
 				return false
 			}
 		}
