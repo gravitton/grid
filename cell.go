@@ -44,6 +44,16 @@ func (c Cell[T]) Polygon() geom.RegularPolygon[float64] {
 	return polygon
 }
 
+// Matrix returns the matrix that maps the square of side one centered on the origin onto the box
+// around the cell as drawn, its axes kept. Its corners can part from Bounds by rounding, so the
+// boxes of neighbors it maps need not meet in the same numbers.
+func (c Cell[T]) Matrix() geom.Matrix[float64] {
+	size := c.Size()
+	center := c.Center()
+
+	return geom.Mat(size.Width, 0, center.X, 0, size.Height, center.Y)
+}
+
 // Value returns a pointer into the grid to the value of the cell.
 func (c Cell[T]) Value() *T {
 	if !c.grid.Contains(c.index) {

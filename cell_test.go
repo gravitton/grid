@@ -211,6 +211,49 @@ func BenchmarkCell_Polygon(b *testing.B) {
 	})
 }
 
+func TestCell_Matrix(t *testing.T) {
+	grids := kindGrids(geom.Sz(6, 5), geom.Sz(30.7, 17.3), geom.Pt(13.3, -77.9))
+
+	t.Run("maps the origin onto the center of the cell", func(t *testing.T) {
+		for name, g := range grids {
+			for index := range container.Arr[int](g.Size()).Keys() {
+				cell := g.Cell(index)
+
+				geomtest.AssertPoint(t, geom.Point[float64]{}.Transform(cell.Matrix()), cell.Center(), name+" "+index.String()+": ")
+			}
+		}
+	})
+	t.Run("maps the corners of the unit square onto the corners of the bounds", func(t *testing.T) {
+		for name, g := range grids {
+			for index := range container.Arr[int](g.Size()).Keys() {
+				cell := g.Cell(index)
+				bounds := cell.Bounds()
+
+				geomtest.AssertPoint(t, geom.Pt(-0.5, -0.5).Transform(cell.Matrix()), bounds.Min, name+" "+index.String()+": ")
+				geomtest.AssertPoint(t, geom.Pt(0.5, 0.5).Transform(cell.Matrix()), bounds.Max, name+" "+index.String()+": ")
+			}
+		}
+	})
+	t.Run("allocates nothing", func(t *testing.T) {
+		for name, g := range grids {
+			cell := g.Cell(geom.Pt(4, 3))
+			allocs := testing.AllocsPerRun(100, func() {
+				sinkMatrix = cell.Matrix()
+			})
+
+			assert.Equal(t, allocs, 0.0, name+": ")
+		}
+	})
+}
+
+func BenchmarkCell_Matrix(b *testing.B) {
+	benchmarkGrids(b, func(b *testing.B, g *Grid[int]) {
+		for i := range b.N {
+			sinkMatrix = g.Cell(geom.Pt(i&63, 7)).Matrix()
+		}
+	})
+}
+
 func TestCell_Value(t *testing.T) {
 	g := NewRect[int](geom.Sz(5, 5), geom.Sz(32.0, 32.0))
 

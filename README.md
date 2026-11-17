@@ -211,6 +211,7 @@ cell := g.Cell(geom.Pt(1, 1))
 cell.Center()  // (48,48)
 cell.Bounds()  // (32,32)-(64,64), the geom.Box around the tile
 cell.Polygon() // the square, diamond or hexagon to draw or hit-test
+cell.Matrix()  // the geom.Matrix that lays a sprite of the unit square onto the tile's box
 
 g.Bounds()      // (0,0)-(128,96)
 g.CellSize()    // 32x32, one tile as drawn

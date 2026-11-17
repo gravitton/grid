@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 
 ## [Unreleased](https://github.com/gravitton/grid/compare/v1.3.0...main)
+### Added
+- `Cell.Matrix` returns the matrix that maps the unit square onto the box of the cell
+
 ### Changed
 - Require `container` v1.0.1
 

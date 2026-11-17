@@ -30,6 +30,7 @@ var (
 	sinkString    string
 	sinkHexLayout *HexLayout
 	sinkPolygon   geom.RegularPolygon[float64]
+	sinkMatrix    geom.Matrix[float64]
 	sinkFloat     float64
 	sinkField     Field
 )
