@@ -3333,6 +3333,10 @@ func TestGrid_FieldFrom(t *testing.T) {
 		assert.True(t, walledGrid().FieldFrom(Region{}, nil, stepCost).IsEmpty())
 	})
 	t.Run("allocates once more than the field from one start, for a copy of the starts", func(t *testing.T) {
+		if race {
+			t.Skip("the race detector drops what a sync.Pool is given back")
+		}
+
 		g := NewRect[int](geom.Sz(9, 9), geom.SzU(32.0))
 
 		for _, cost := range []func(current, next Cell[int]) float64{nil, stepCost} {
