@@ -4,7 +4,7 @@ go 1.27
 
 require (
 	github.com/gravitton/geometry v1.20.0
-	github.com/gravitton/grid v1.4.0
+	github.com/gravitton/grid v1.5.0
 	github.com/gravitton/hexagon v1.9.0
 )
 
