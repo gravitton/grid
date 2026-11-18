@@ -578,15 +578,19 @@ func (g *Grid[T]) Grow(region Region, n int) Region {
 		return region
 	}
 
+	size := g.Size()
+	n = min(n, size.Width+size.Height)
+
 	// held marks the cells of the grid already in the result, so each is added once.
 	held := make([]bool, g.cells.Len())
+	points := make([]Index, 0, g.growLen(region, n))
 	for index := range region.All() {
 		if g.Contains(index) {
 			held[g.slot(index)] = true
 		}
-	}
 
-	points := region.Elements()
+		points = append(points, index)
+	}
 
 	// Each step grows from the indices the step before it added, the region itself at first.
 	for ring, step := points, 0; step < n && len(ring) > 0; step++ {
@@ -608,6 +612,26 @@ func (g *Grid[T]) Grow(region Region, n int) Region {
 	}
 
 	return container.SetFrom(points)
+}
+
+// growLen returns how many indices Grow can gather at most, so it allocates once: the region and
+// the cells of the grid in its bounds widened by n, a step moving an index by at most one in each
+// coordinate, or the range of n around each index where that is fewer.
+func (g *Grid[T]) growLen(region Region, n int) int {
+	low, high := region.At(0), region.At(region.Len()-1)
+	outside := 0
+	for index := range region.All() {
+		low.Y, high.Y = min(low.Y, index.Y), max(high.Y, index.Y)
+		if !g.Contains(index) {
+			outside++
+		}
+	}
+
+	size := g.Size()
+	width := min(min(high.X, size.Width-1)+n, size.Width-1) - max(max(low.X, 0)-n, 0) + 1
+	height := min(min(high.Y, size.Height-1)+n, size.Height-1) - max(max(low.Y, 0)-n, 0) + 1
+
+	return min(outside+max(width, 0)*max(height, 0), region.Len()*g.topology.rangeLen(n))
 }
 
 // Shrink returns the region worn away by n steps, its border removed n times over. It returns

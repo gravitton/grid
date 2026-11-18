@@ -2137,11 +2137,26 @@ func TestGrid_Grow(t *testing.T) {
 	t.Run("the empty region stays empty", func(t *testing.T) {
 		assert.True(t, ruleGrids(geom.Sz(9, 9))["cardinal"].Grow(Region{}, 3).IsEmpty())
 	})
-	t.Run("allocates its marks once and its indices as they double", func(t *testing.T) {
+	t.Run("allocates its marks and its indices once each", func(t *testing.T) {
 		for name, g := range ruleGrids(geom.Sz(9, 9)) {
-			assert.LessOrEqual(t, testing.AllocsPerRun(10, func() {
+			assert.Equal(t, testing.AllocsPerRun(10, func() {
 				sinkRegion = g.Grow(single, 3)
-			}), 10.0, name+": ")
+			}), 2.0, name+": ")
+		}
+	})
+	t.Run("gathers no more than it sized for", func(t *testing.T) {
+		grids := kindGrids(geom.Sz(12, 10), geom.Sz(32.0, 20.0), geom.Pt(0.0, 0.0))
+		maps.Copy(grids, ruleGrids(geom.Sz(12, 10)))
+
+		for name, g := range grids {
+			regions := []Region{Reg(geom.Pt(0, 0)), g.Range(geom.Pt(5, 5), 3), Reg(geom.Pt(-5, -5), geom.Pt(2, 9), geom.Pt(40, 1))}
+			for _, region := range regions {
+				for n := 1; n <= 12; n++ {
+					assert.Equal(t, testing.AllocsPerRun(5, func() {
+						sinkRegion = g.Grow(region, n)
+					}), 2.0, fmt.Sprintf("%s, %s grown by %d: ", name, region.Elements(), n))
+				}
+			}
 		}
 	})
 }

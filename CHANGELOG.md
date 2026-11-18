@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased](https://github.com/gravitton/grid/compare/v1.4.0...main)
 
+### Changed
+- `Grow` allocates its result once, at most the bounds of the region widened by the steps, where it doubled as it gathered
+
 ## [v1.4.0](https://github.com/gravitton/grid/compare/v1.3.0...v1.4.0) (2026-11-18)
 
 ### Added
