@@ -556,21 +556,17 @@ func (g *Grid[T]) walkSpiral(index Index, radius int, yield func(Index) bool) bo
 // edge has its border there.
 func (g *Grid[T]) Border(region Region) Region {
 	size := 0
-	for index := range region.All() {
-		if g.onBorder(region, index) {
-			size++
-		}
-	}
+	g.walkBorder(region, func(Index) {
+		size++
+	})
 	if size == 0 {
 		return Region{}
 	}
 
 	points := make([]Index, 0, size)
-	for index := range region.All() {
-		if g.onBorder(region, index) {
-			points = append(points, index)
-		}
-	}
+	g.walkBorder(region, func(index Index) {
+		points = append(points, index)
+	})
 
 	return container.SetFrom(points)
 }
@@ -660,15 +656,42 @@ func (g *Grid[T]) Components(region Region) []Region {
 	return components
 }
 
-// onBorder reports whether an index of the region has a neighbor outside it.
-func (g *Grid[T]) onBorder(region Region, index Index) bool {
-	for _, offset := range g.topology.offsets(index) {
-		if next := index.Add(offset); !g.Contains(next) || !region.Contains(next) {
-			return true
+// walkBorder visits the indices of the region with a neighbor outside it, in order. The
+// neighbors at one step of indices of one parity come in order as the indices do, so a cursor for
+// each step and parity only moves forward and no neighbor is searched for.
+func (g *Grid[T]) walkBorder(region Region, visit func(Index)) {
+	var cursors [2][8]int
+
+	for i := range region.Len() {
+		index := region.At(i)
+		parity := &cursors[g.topology.parity(index)]
+
+		for step, offset := range g.topology.offsets(index) {
+			next := index.Add(offset)
+			if !g.Contains(next) {
+				visit(index)
+
+				break
+			}
+
+			parity[step] = seek(region, parity[step], next)
+			if parity[step] == region.Len() || region.At(parity[step]) != next {
+				visit(index)
+
+				break
+			}
 		}
 	}
+}
 
-	return false
+// seek returns the first place from the given one whose index of the region does not come
+// before the index, or the length of the region where every one does.
+func seek(region Region, from int, index Index) int {
+	for from < region.Len() && region.At(from).Compare(index) < 0 {
+		from++
+	}
+
+	return from
 }
 
 // component appends to members the places, among the sorted indices of the region, of the

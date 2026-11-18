@@ -51,11 +51,17 @@ func (t *topology) isHex() bool {
 // offsets returns the steps from the index to its neighbors, in the order of the directions of
 // the kind. The slice is the topology's own and is never written to.
 func (t *topology) offsets(index Index) []geom.Vector[int] {
+	return t.steps[t.parity(index)]
+}
+
+// parity returns which of the two sets of steps the index takes: that of its column where the
+// parity is that of the column, and of its row otherwise.
+func (t *topology) parity(index Index) int {
 	if t.byColumn {
-		return t.steps[index.X&1]
+		return index.X & 1
 	}
 
-	return t.steps[index.Y&1]
+	return index.Y & 1
 }
 
 // distance returns the number of steps between two indices, whether or not they lie inside a
