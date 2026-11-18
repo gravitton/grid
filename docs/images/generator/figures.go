@@ -78,7 +78,7 @@ func world(t theme) []*panel {
 				at := geom.Pt(x, y)
 				index := g.IndexAt(at)
 				if g.Contains(index) {
-					p.circle(at, 1.3, style{fill: colors[geom.Mod(index.X, 2)+2*geom.Mod(index.Y, 2)]})
+					p.circle(at, 1.3, style{fill: colors[geom.FloorMod(index.X, 2)+2*geom.FloorMod(index.Y, 2)]})
 				}
 			}
 		}
