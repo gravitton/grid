@@ -70,6 +70,7 @@ Every entry, with breaking changes marked, is in [docs/releases/v1.3.0.md](docs/
 
 
 ## [v1.2.0](https://github.com/gravitton/grid/compare/v1.1.0...v1.2.0) (2026-05-12)
+
 ### Added
 - `Array.Values` — iterator over all values (`iter.Seq[*T]`), completing the `Keys` / `Values` / `All` trio
 
@@ -80,6 +81,7 @@ Every entry, with breaking changes marked, is in [docs/releases/v1.3.0.md](docs/
 
 
 ## [v1.1.0](https://github.com/gravitton/grid/compare/v1.0.0...v1.1.0) (2026-05-09)
+
 ### Added
 - `IsometricRectCellSize(width)` — computes the cell size for `NewIsometricRectGrid` at a true 30° isometric angle
 - `IsometricPixelPerfectRectCellSize(width)` — computes the cell size for `NewIsometricRectGrid` at a pixel-art-friendly 2:1 (width × width/2) ratio
@@ -95,7 +97,8 @@ Every entry, with breaking changes marked, is in [docs/releases/v1.3.0.md](docs/
 - `Iter` includes one extra row and column at every edge of the bounds so partially visible tiles are not culled; border cells may be out-of-bounds (`cell.Valid() == false`)
 
 
-## v1.0.0 (2026-05-06)
+## [v1.0.0](https://github.com/gravitton/grid/commits/v1.0.0) (2026-05-06)
+
 ### Added
 - `Grid[T]` — generic 2D grid with configurable layout, spatial mapping, and graph operations
 - `Cell[T]` — single grid cell with value access, spatial info (`Center`, `Bounds`, `Polygon`), and graph methods (`Neighbors`, `DistanceTo`, `Range`, `PathTo`)
