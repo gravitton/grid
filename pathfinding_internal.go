@@ -49,7 +49,7 @@ const (
 )
 
 // link is what a field holds for one slot: one more than the slot stepped from, zero where the
-// search did not reach it and the slot itself at the start, and the steps from the start.
+// search did not reach it and the slot itself at a start, and the steps from that start.
 type link struct {
 	from  int32
 	steps int32

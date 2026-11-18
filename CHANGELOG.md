@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased](https://github.com/gravitton/grid/compare/v1.4.0...main)
 
+### Added
+- `Grid.FieldFrom` searches from several starts at once, every cell holding its way to the nearest of them, and `Field.Next` stops at any start
+
 ### Changed
 - `Grow` allocates its result once, at most the bounds of the region widened by the steps, where it doubled as it gathered
 

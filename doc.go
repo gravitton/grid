@@ -72,7 +72,8 @@
 // allocates nothing and walks no further than where it is stopped, and slices.AppendSeq puts one
 // in a buffer. A search allocates the field it returns, for the part of the grid it reaches, and
 // reuses the rest of what it needs from one search to the next, safe for searches from several
-// goroutines at once; its path has the Append form of [Field.PathTo]. What
+// goroutines at once; [Grid.FieldFrom] also copies its starts, and a path has the Append form of
+// [Field.PathTo]. What
 // depends on which cells of a region are adjacent builds its result in steps: [Grid.Grow]
 // marks the cells of the grid and gathers what it adds as it goes, [Grid.Shrink] builds a
 // region at every step, and [Grid.IsConnected] and [Grid.Components] mark the indices of the
@@ -104,8 +105,8 @@
 //   - [ErrInvalidCellScale] for a cell scale that is not positive and finite on both axes to every
 //     constructor, [Grid.Rescale] and [HexLayout.Rescale]: no cell can be drawn at it.
 //   - [ErrInvalidCost] for a cost that is negative or NaN to [Grid.Path], [Grid.Field],
-//     [Grid.Reachable], [Grid.PathUniformCost], [Grid.FieldUniformCost], [Grid.PathAStar],
-//     [Cell.PathTo], [Cell.Field] and [Cell.Reachable]: no search ends on it.
+//     [Grid.FieldFrom], [Grid.Reachable], [Grid.PathUniformCost], [Grid.FieldUniformCost],
+//     [Grid.PathAStar], [Cell.PathTo], [Cell.Field] and [Cell.Reachable]: no search ends on it.
 //   - [hex.ErrUnknownCoordinateSystem] for a coordinate system outside the seven to
 //     [NewHexFlatTopLayout] and [NewHexPointyTopLayout]: no index can be read in it.
 //   - The error of container.Arr for a negative size, or one of more cells than an int counts, to

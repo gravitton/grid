@@ -465,10 +465,13 @@ reach.Region()  // the cells to highlight; also All, Len and Contains
 
 flow := g.Field(goal, walkable, nil) // every cell with a way to the goal
 flow.Next(geom.Pt(3, 3))             // (3,4), true: the step to take toward the goal
+
+exits := g.FieldFrom(grid.Reg(west, east), walkable, nil) // every cell led to the nearer exit
 ```
 
 `Field` is breadth-first with a nil cost and Dijkstra with one; `FieldBreadthFirst` and
-`FieldUniformCost` ask for them by name.
+`FieldUniformCost` ask for them by name. `FieldFrom` spreads from several starts at once, each
+cell holding its way to the nearest: a Dijkstra map.
 
 ### Regions
 

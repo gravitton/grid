@@ -3226,6 +3226,168 @@ func BenchmarkGrid_FieldUniformCost(b *testing.B) {
 	})
 }
 
+// assertNearestStart asserts that the field from the starts holds every cell some start reaches,
+// at the least any of them pays, along a path from a start that pays it.
+func assertNearestStart(t *testing.T, g *Grid[int], starts Region, passable func(Cell[int]) bool, cost func(current, next Cell[int]) float64, messages ...string) {
+	t.Helper()
+
+	field, nearest := g.FieldFrom(starts, passable, cost), map[Index]float64{}
+	for start := range starts.All() {
+		single := g.Field(start, passable, cost)
+		for index := range single.All() {
+			paid, _ := single.CostTo(index)
+			if least, found := nearest[index]; !found || paid < least {
+				nearest[index] = paid
+			}
+		}
+	}
+
+	assert.Equal(t, field.Len(), len(nearest), messages...)
+	for index, least := range nearest {
+		paid, _ := field.CostTo(index)
+		path := field.PathTo(index)
+
+		assert.Equal(t, paid, least, append(messages, index.String()+": ")...)
+		assert.True(t, starts.Contains(path[0]), append(messages, index.String()+": ")...)
+		assert.Equal(t, path[len(path)-1], index, append(messages, index.String()+": ")...)
+		if cost != nil {
+			walked := 0.0
+			for i := 1; i < len(path); i++ {
+				walked += cost(g.Cell(path[i-1]), g.Cell(path[i]))
+			}
+
+			assert.Equal(t, walked, least, append(messages, index.String()+": ")...)
+		}
+	}
+}
+
+func TestGrid_FieldFrom(t *testing.T) {
+	corners := Reg(geom.Pt(0, 0), geom.Pt(8, 0), geom.Pt(0, 8), geom.Pt(8, 8))
+
+	testSearchField(t, func(g *Grid[int], passable func(Cell[int]) bool) Field {
+		return g.FieldFrom(Reg(testStart), passable, nil)
+	})
+	t.Run("a single start is the field of Field, both with a cost and without", func(t *testing.T) {
+		for name, g := range layoutGrids() {
+			for _, cost := range []func(current, next Cell[int]) float64{nil, stepCost} {
+				field, expected := g.FieldFrom(Reg(geom.Pt(1, 1)), nil, cost), g.Field(geom.Pt(1, 1), nil, cost)
+
+				assertRegion(t, field.Region(), expected.Region(), name+": ")
+				assert.Equal(t, field.PathTo(geom.Pt(4, 3)), expected.PathTo(geom.Pt(4, 3)), name+": ")
+			}
+		}
+	})
+	t.Run("pays to every cell the least of the fields from each start, on every kind of grid", func(t *testing.T) {
+		for name, g := range ruleGrids(geom.Sz(9, 9)) {
+			scatterHeights(g)
+
+			assertNearestStart(t, g, corners, nil, nil, name+" counting steps: ")
+			assertNearestStart(t, g, corners, nil, climbCost, name+" weighing steps: ")
+		}
+	})
+	t.Run("every start costs nothing and has no step back", func(t *testing.T) {
+		for _, cost := range []func(current, next Cell[int]) float64{nil, stepCost} {
+			field := NewRect[int](geom.Sz(9, 9), geom.SzU(32.0)).FieldFrom(corners, nil, cost)
+
+			for start := range corners.All() {
+				paid, _ := field.CostTo(start)
+				_, found := field.Next(start)
+
+				assert.Equal(t, paid, 0.0, start.String()+": ")
+				assert.False(t, found, start.String()+": ")
+				assert.Equal(t, field.PathTo(start), []Index{start}, start.String()+": ")
+			}
+		}
+	})
+	t.Run("following Next leads every cell to a start", func(t *testing.T) {
+		field := NewRect[int](geom.Sz(9, 9), geom.SzU(32.0)).FieldFrom(corners, nil, nil)
+
+		for index := range field.All() {
+			current := index
+			for next, found := field.Next(current); found; next, found = field.Next(current) {
+				current = next
+			}
+
+			assert.True(t, corners.Contains(current), index.String()+": ")
+		}
+	})
+	t.Run("starts parted by a wall each reach their own side", func(t *testing.T) {
+		g := sealedGrid()
+		field := g.FieldFrom(Reg(testStart, testGoal), walkable, nil)
+
+		assert.Equal(t, field.Len(), 20)
+		assert.Equal(t, field.PathTo(geom.Pt(1, 4))[0], testStart)
+		assert.Equal(t, field.PathTo(geom.Pt(3, 0))[0], testGoal)
+	})
+	t.Run("a start outside the grid or not passable is left out", func(t *testing.T) {
+		field := walledGrid().FieldFrom(Reg(geom.Pt(-1, 0), testWall, testGoal), walkable, nil)
+
+		assert.Equal(t, field.Start(), testGoal)
+		assert.False(t, field.Contains(testWall))
+		assert.Equal(t, field.Len(), 24)
+	})
+	t.Run("starts at the first start in the order of a region", func(t *testing.T) {
+		assert.Equal(t, walledGrid().FieldFrom(Reg(testGoal, geom.Pt(3, 1), geom.Pt(1, 3)), nil, nil).Start(), geom.Pt(1, 3))
+	})
+	t.Run("no starts is the empty field", func(t *testing.T) {
+		assert.True(t, walledGrid().FieldFrom(Region{}, nil, stepCost).IsEmpty())
+	})
+	t.Run("allocates once more than the field from one start, for a copy of the starts", func(t *testing.T) {
+		g := NewRect[int](geom.Sz(9, 9), geom.SzU(32.0))
+
+		for _, cost := range []func(current, next Cell[int]) float64{nil, stepCost} {
+			single := testing.AllocsPerRun(10, func() {
+				sinkField = g.Field(testStart, nil, cost)
+			})
+
+			assert.Equal(t, testing.AllocsPerRun(10, func() {
+				sinkField = g.FieldFrom(corners, nil, cost)
+			}), single+1)
+		}
+	})
+}
+
+func BenchmarkGrid_FieldFrom(b *testing.B) {
+	corners := Reg(geom.Pt(0, 0), geom.Pt(63, 0), geom.Pt(0, 63), geom.Pt(63, 63))
+
+	benchmarkGrids(b, func(b *testing.B, g *Grid[int]) {
+		b.Run("unit", func(b *testing.B) {
+			for b.Loop() {
+				sinkField = g.FieldFrom(corners, nil, nil)
+			}
+		})
+		b.Run("weighted", func(b *testing.B) {
+			scatterHeights(g)
+
+			for b.Loop() {
+				sinkField = g.FieldFrom(corners, nil, climbCost)
+			}
+		})
+	})
+}
+
+func FuzzGrid_FieldFrom(f *testing.F) {
+	for kind := range uint8(7) {
+		f.Add(kind, uint8(8), uint8(8), uint8(2), uint8(2), uint8(9), uint8(9), uint8(3))
+		f.Add(kind, uint8(4), uint8(9), uint8(0), uint8(0), uint8(4), uint8(9), uint8(11))
+		f.Add(kind, uint8(0), uint8(0), uint8(2), uint8(2), uint8(2), uint8(2), uint8(0))
+	}
+
+	f.Fuzz(func(t *testing.T, kind, width, height, x0, y0, x1, y1, seed uint8) {
+		g := fuzzGrid(kind, width, height)
+		for cell := range g.All() {
+			cell.Set((cell.Index().X*7 + cell.Index().Y*13 + int(seed)) % 5)
+		}
+		passable := func(cell Cell[int]) bool {
+			return *cell.Value() != 4
+		}
+		starts := Reg(fuzzIndex(g, x0, y0), fuzzIndex(g, x1, y1), fuzzIndex(g, x0^y1, y0^x1))
+
+		assertNearestStart(t, g, starts, passable, nil, "counting steps: ")
+		assertNearestStart(t, g, starts, passable, stepCost, "weighing steps: ")
+	})
+}
+
 func TestGrid_Reachable(t *testing.T) {
 	t.Run("is the cells within the steps along passable cells", func(t *testing.T) {
 		for name, g := range ruleGrids(geom.Sz(9, 9)) {

@@ -9,15 +9,16 @@ import (
 	geom "github.com/gravitton/geometry"
 )
 
-// Field is what a search from one index found: every index it reached, with the step back
-// toward the start and the cost of getting there. A field searched from a destination
+// Field is what a search from one index or several found: every index it reached, with the
+// step back toward the nearest start and the cost of getting there. A field searched from a
+// destination
 // serves every unit heading there, its path running from the destination to the unit, where a
 // step costs the same both ways. It does not change with the grid. The zero value is the empty
 // field.
 type Field struct {
 	// size is the size of the grid searched.
 	size geom.Size[int]
-	// start is the index the search started from.
+	// start is the first index the search started from.
 	start Index
 
 	// columns is the number of chunks across the grid.
@@ -38,9 +39,9 @@ type Field struct {
 	reached int
 }
 
-// newField returns a field over a grid of the given size, holding the start alone, with room
-// for costs where the search weighs its steps, and at first for the chunks within the radius
-// of the start, every chunk for a negative one.
+// newField returns a field over a grid of the given size holding nothing yet, with room for
+// costs where the search weighs its steps, and at first for the chunks within the radius of
+// the start, every chunk for a negative one.
 func newField(size geom.Size[int], start Index, weighted bool, radius int) Field {
 	columns := (size.Width + chunkMask) >> chunkShift
 	rows := (size.Height + chunkMask) >> chunkShift
@@ -59,24 +60,34 @@ func newField(size geom.Size[int], start Index, weighted bool, radius int) Field
 		chunks:  make([]int32, columns*rows),
 		corners: make([]Index, 0, room),
 		links:   make([]link, 0, room*chunkCells),
-		reached: 1,
 	}
 	if weighted {
 		f.costs = make([]float64, 0, room*chunkCells)
 	}
 
-	slot := f.claim(start)
-	f.links[slot].from = slot + 1
-
 	return f
 }
 
-// Start returns the index the search started from, and the zero index for the empty field.
+// seed records a start of the search, marked by a link to its own slot, and returns its slot.
+func (f *Field) seed(start Index) int32 {
+	if f.reached == 0 {
+		f.start = start
+	}
+
+	slot := f.claim(start)
+	f.links[slot].from = slot + 1
+	f.reached++
+
+	return slot
+}
+
+// Start returns the index the search started from, the first in the order of a region where it
+// started from several, and the zero index for the empty field.
 func (f Field) Start() Index {
 	return f.start
 }
 
-// Len returns the number of indices the search reached, the start included.
+// Len returns the number of indices the search reached, the starts included.
 func (f Field) Len() int {
 	return f.reached
 }
@@ -187,11 +198,11 @@ func (f Field) slotBeside(index Index, beside node) (int32, bool) {
 	return beside.slot&^(chunkCells-1) | f.cellIn(index), true
 }
 
-// Next returns the index one step closer to the start, and false for the start itself and for
-// an index the search did not reach.
+// Next returns the index one step closer to the nearest start, and false for a start itself and
+// for an index the search did not reach.
 func (f Field) Next(index Index) (Index, bool) {
 	slot, found := f.lookup(index)
-	if !found || index == f.start {
+	if !found || f.links[slot].from-1 == slot {
 		return Index{}, false
 	}
 
@@ -212,8 +223,8 @@ func (f Field) CostTo(index Index) (float64, bool) {
 	return float64(f.links[slot].steps), true
 }
 
-// PathTo returns the path the search found from the start to the index, both included, and nil
-// for an index it did not reach.
+// PathTo returns the path the search found from the nearest start to the index, both included,
+// and nil for an index it did not reach.
 func (f Field) PathTo(index Index) []Index {
 	slot, found := f.lookup(index)
 	if !found {
@@ -233,7 +244,7 @@ func (f Field) AppendPathTo(dst []Index, index Index) []Index {
 	return f.appendPath(dst, slot)
 }
 
-// appendPath appends the path from the start to the slot of an index the search reached.
+// appendPath appends the path from the nearest start to the slot of an index the search reached.
 func (f Field) appendPath(dst []Index, slot int32) []Index {
 	start, length := len(dst), int(f.links[slot].steps)+1
 	dst = slices.Grow(dst, length)[:start+length]
@@ -252,7 +263,7 @@ func (f Field) Contains(index Index) bool {
 	return found
 }
 
-// IsEmpty reports whether the search reached nothing, not even its start.
+// IsEmpty reports whether the search reached nothing, not even a start.
 func (f Field) IsEmpty() bool {
 	return f.reached == 0
 }
@@ -271,11 +282,6 @@ func (f Field) lookup(index Index) (int32, bool) {
 	slot := f.slotIn(place, index)
 
 	return slot, f.links[slot].from != 0
-}
-
-// startSlot returns the slot of the start, in the chunk the search touched first.
-func (f Field) startSlot() int32 {
-	return f.slotIn(1, f.start)
 }
 
 // slotIn returns the slot of an index in the chunk at the given place, one more than its place

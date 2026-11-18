@@ -839,14 +839,14 @@ func (g *Grid[T]) Path(start, goal Index, passable func(Cell[T]) bool, cost func
 // PathBreadthFirst returns the path of the fewest steps from start to goal, both included,
 // or nil where none is found.
 func (g *Grid[T]) PathBreadthFirst(start, goal Index, passable func(Cell[T]) bool) []Index {
-	return g.breadthFirstSearch(start, &goal, math.Inf(1), passable).PathTo(goal)
+	return g.breadthFirstSearch([]Index{start}, &goal, math.Inf(1), passable).PathTo(goal)
 }
 
 // PathUniformCost returns the cheapest path from start to goal, both included, or nil where
 // none is found. Uniform cost search is also known as Dijkstra's algorithm. It panics for a
 // cost that is negative or NaN.
 func (g *Grid[T]) PathUniformCost(start, goal Index, passable func(Cell[T]) bool, cost func(current, next Cell[T]) float64) []Index {
-	return g.uniformCostSearch(start, &goal, math.Inf(1), passable, cost).PathTo(goal)
+	return g.uniformCostSearch([]Index{start}, &goal, math.Inf(1), passable, cost).PathTo(goal)
 }
 
 // PathGreedyBestFirst returns a path from start to goal, both included, or nil where none is
@@ -867,23 +867,34 @@ func (g *Grid[T]) PathAStar(start, goal Index, passable func(Cell[T]) bool, cost
 // panics for a cost that is negative or NaN.
 func (g *Grid[T]) Field(start Index, passable func(Cell[T]) bool, cost func(current, next Cell[T]) float64) Field {
 	if cost == nil {
-		return g.breadthFirstSearch(start, nil, math.Inf(1), passable)
+		return g.breadthFirstSearch([]Index{start}, nil, math.Inf(1), passable)
 	}
 
-	return g.uniformCostSearch(start, nil, math.Inf(1), passable, cost)
+	return g.uniformCostSearch([]Index{start}, nil, math.Inf(1), passable, cost)
 }
 
 // FieldBreadthFirst returns the field of every cell reached from start, with the fewest
 // steps to each, whatever a step costs.
 func (g *Grid[T]) FieldBreadthFirst(start Index, passable func(Cell[T]) bool) Field {
-	return g.breadthFirstSearch(start, nil, math.Inf(1), passable)
+	return g.breadthFirstSearch([]Index{start}, nil, math.Inf(1), passable)
 }
 
 // FieldUniformCost returns the field of every cell reached from start, with the cheapest
 // way to each. Uniform cost search is also known as Dijkstra's algorithm. It panics for a cost
 // that is negative or NaN.
 func (g *Grid[T]) FieldUniformCost(start Index, passable func(Cell[T]) bool, cost func(current, next Cell[T]) float64) Field {
-	return g.uniformCostSearch(start, nil, math.Inf(1), passable, cost)
+	return g.uniformCostSearch([]Index{start}, nil, math.Inf(1), passable, cost)
+}
+
+// FieldFrom returns the field of every cell reached from the starts, with the cheapest way to
+// each from the nearest of them; of several as near, any one. A start outside the grid or not
+// passable is left out. It panics for a cost that is negative or NaN.
+func (g *Grid[T]) FieldFrom(starts Region, passable func(Cell[T]) bool, cost func(current, next Cell[T]) float64) Field {
+	if cost == nil {
+		return g.breadthFirstSearch(starts.Elements(), nil, math.Inf(1), passable)
+	}
+
+	return g.uniformCostSearch(starts.Elements(), nil, math.Inf(1), passable, cost)
 }
 
 // Reachable returns the field of the cells reached from start for at most budget, the search
@@ -896,30 +907,30 @@ func (g *Grid[T]) Reachable(start Index, budget float64, passable func(Cell[T]) 
 	}
 
 	if cost == nil {
-		return g.breadthFirstSearch(start, nil, budget, passable)
+		return g.breadthFirstSearch([]Index{start}, nil, budget, passable)
 	}
 
-	return g.uniformCostSearch(start, nil, budget, passable, cost)
+	return g.uniformCostSearch([]Index{start}, nil, budget, passable, cost)
 }
 
-// breadthFirstSearch walks outward from start a step at a time, to the goal where one is given
-// and no more steps than the budget.
-func (g *Grid[T]) breadthFirstSearch(start Index, goal *Index, budget float64, passable func(Cell[T]) bool) Field {
+// breadthFirstSearch walks outward from the starts a step at a time, to the goal where one is
+// given and no more steps than the budget.
+func (g *Grid[T]) breadthFirstSearch(starts []Index, goal *Index, budget float64, passable func(Cell[T]) bool) Field {
 	passable = orAny(passable)
 
-	if !g.checkPath(start, goal, passable) {
+	if goal != nil && !g.admits(*goal, passable) {
 		return Field{}
-	}
-
-	field := newField(g.Size(), start, false, g.searchRadius(start, goal, budget))
-	if goal != nil && start == *goal {
-		return field
 	}
 
 	work := takeScratch()
 	defer work.release()
 
-	queue := append(work.queue[:0], node{start, field.startSlot()})
+	field, queue := g.seedField(starts, goal, budget, false, passable, work.queue[:0])
+	if len(queue) == 0 || (goal != nil && field.Contains(*goal)) {
+		work.queue = queue
+
+		return field
+	}
 
 	for head, steps := 0, 1; head < len(queue) && float64(steps) <= budget; steps++ {
 		for ring := len(queue); head < ring; head++ {
@@ -956,23 +967,26 @@ func (g *Grid[T]) breadthFirstSearch(start Index, goal *Index, budget float64, p
 	return field
 }
 
-// uniformCostSearch expands the cheapest cell reached so far, to the goal where one is given and
-// no further than the budget.
-func (g *Grid[T]) uniformCostSearch(start Index, goal *Index, budget float64, passable func(Cell[T]) bool, cost func(current, next Cell[T]) float64) Field {
+// uniformCostSearch expands the cheapest cell reached so far from the starts, to the goal where
+// one is given and no further than the budget.
+func (g *Grid[T]) uniformCostSearch(starts []Index, goal *Index, budget float64, passable func(Cell[T]) bool, cost func(current, next Cell[T]) float64) Field {
 	passable = orAny(passable)
 	cost = costOrUnit(cost)
 
-	if !g.checkPath(start, goal, passable) {
+	if goal != nil && !g.admits(*goal, passable) {
 		return Field{}
 	}
-
-	field := newField(g.Size(), start, true, g.searchRadius(start, goal, budget))
 
 	work := takeScratch()
 	defer work.release()
 
+	field, seeded := g.seedField(starts, goal, budget, true, passable, work.queue[:0])
+	work.queue = seeded
+
 	open := work.frontier()
-	open.push(field.startSlot(), 0, 0)
+	for _, start := range seeded {
+		open.push(start.slot, 0, 0)
+	}
 
 	for open.len() > 0 {
 		slot, priority := open.pop()
@@ -1009,11 +1023,12 @@ func (g *Grid[T]) uniformCostSearch(start Index, goal *Index, budget float64, pa
 func (g *Grid[T]) greedyBestFirstSearch(start, goal Index, passable func(Cell[T]) bool) Field {
 	passable = orAny(passable)
 
-	if !g.checkPath(start, &goal, passable) {
+	if !g.checkPath(start, goal, passable) {
 		return Field{}
 	}
 
 	field := newField(g.Size(), start, false, g.searchRadius(start, &goal, math.Inf(1)))
+	slot := field.seed(start)
 	if start == goal {
 		return field
 	}
@@ -1022,7 +1037,7 @@ func (g *Grid[T]) greedyBestFirstSearch(start, goal Index, passable func(Cell[T]
 	defer work.release()
 
 	open := work.frontier()
-	open.push(field.startSlot(), 0, 0)
+	open.push(slot, 0, 0)
 
 	for open.len() > 0 {
 		slot, _ := open.pop()
@@ -1059,7 +1074,7 @@ func (g *Grid[T]) astar(start, goal Index, passable func(Cell[T]) bool, cost fun
 	passable = orAny(passable)
 	cost = costOrUnit(cost)
 
-	if !g.checkPath(start, &goal, passable) {
+	if !g.checkPath(start, goal, passable) {
 		return Field{}
 	}
 
@@ -1069,7 +1084,7 @@ func (g *Grid[T]) astar(start, goal Index, passable func(Cell[T]) bool, cost fun
 	defer work.release()
 
 	open := work.frontier()
-	open.push(field.startSlot(), 0, 0)
+	open.push(field.seed(start), 0, 0)
 
 	for open.len() > 0 {
 		slot, priority := open.pop()
@@ -1098,6 +1113,25 @@ func (g *Grid[T]) astar(start, goal Index, passable func(Cell[T]) bool, cost fun
 	return field
 }
 
+// seedField returns a field holding the starts inside the grid that passable admits, with their
+// nodes appended to queue, and the empty field where it admits none. The field makes room at
+// first around the first of them.
+func (g *Grid[T]) seedField(starts []Index, goal *Index, budget float64, weighted bool, passable func(Cell[T]) bool, queue []node) (Field, []node) {
+	var field Field
+	for _, start := range starts {
+		if !g.admits(start, passable) {
+			continue
+		}
+		if field.IsEmpty() {
+			field = newField(g.Size(), start, weighted, g.searchRadius(start, goal, budget))
+		}
+
+		queue = append(queue, node{start, field.seed(start)})
+	}
+
+	return field, queue
+}
+
 // searchRadius returns how far from start a search is expected to reach, for the room its field
 // makes at first: the budget where it is finite, the distance to the goal where one is given,
 // and -1 for the whole grid.
@@ -1117,14 +1151,15 @@ func (g *Grid[T]) heuristic(current, goal Index) float64 {
 	return float64(g.Distance(current, goal))
 }
 
-// checkPath reports whether a search can start: the start, and the goal where one is given,
-// are inside the grid and passable.
-func (g *Grid[T]) checkPath(start Index, goal *Index, passable func(Cell[T]) bool) bool {
-	if !g.Contains(start) || (goal != nil && !g.Contains(*goal)) {
-		return false
-	}
+// checkPath reports whether a search can start: the start and the goal are inside the grid and
+// passable.
+func (g *Grid[T]) checkPath(start, goal Index, passable func(Cell[T]) bool) bool {
+	return g.admits(start, passable) && g.admits(goal, passable)
+}
 
-	return passable(g.Cell(start)) && (goal == nil || passable(g.Cell(*goal)))
+// admits reports whether the index is that of a cell of the grid that passable admits.
+func (g *Grid[T]) admits(index Index, passable func(Cell[T]) bool) bool {
+	return g.Contains(index) && passable(g.Cell(index))
 }
 
 // Contains reports whether the index is that of a cell of the grid.
