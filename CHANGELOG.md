@@ -6,12 +6,15 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 
-## [Unreleased](https://github.com/gravitton/grid/compare/v1.3.0...main)
+## [Unreleased](https://github.com/gravitton/grid/compare/v1.4.0...main)
+
+## [v1.4.0](https://github.com/gravitton/grid/compare/v1.3.0...v1.4.0) (2026-11-18)
+
 ### Added
 - `Cell.Matrix` returns the matrix that maps the unit square onto the box of the cell
 
 ### Changed
-- Require `container` v1.0.1
+- Require `geometry` v1.19.0, `hexagon` v1.8.1 and `container` v1.0.1
 - `Range`, and the queries built on it, walk only the cells of the grid, so a whole grid from a corner takes about 40% of the time
 - `Border` finds the neighbors of each index with cursors that only move forward, about four times faster
 
