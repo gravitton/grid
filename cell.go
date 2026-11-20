@@ -54,6 +54,21 @@ func (c Cell[T]) Matrix() geom.Matrix[float64] {
 	return geom.Mat(size.Width, 0, center.X, 0, size.Height, center.Y)
 }
 
+// touches reports whether the cell shares a point with the box: its box on a rectangular grid, its
+// polygon on any other. The polygon is tested only where the box neither holds the cell's box nor
+// lies apart from it grown by twice geom's Delta, which a rounded vertex within the tolerance
+// never crosses.
+func (c Cell[T]) touches(box geom.Box[float64]) bool {
+	switch c.grid.layout.kind {
+	case kindIsometric, kindHexFlatTop, kindHexFlatTopEven, kindHexPointyTop, kindHexPointyTopEven:
+		bounds := c.Bounds()
+
+		return box.ContainsBox(bounds) || bounds.Grow(2*geom.Delta).IntersectsBox(box) && box.IntersectsRegularPolygon(c.Polygon())
+	default:
+		return c.Bounds().IntersectsBox(box)
+	}
+}
+
 // Value returns a pointer into the grid to the value of the cell.
 func (c Cell[T]) Value() *T {
 	if !c.grid.Contains(c.index) {

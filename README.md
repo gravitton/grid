@@ -35,7 +35,7 @@ Generic 2D grids: rectangular, isometric and hexagonal, with sight and pathfindi
 
 - **Generic** – `Grid[T]` holds a value of any type per cell, in one flat array.
 - **Four layouts** – rectangular, isometric, hexagonal flat-top and pointy-top, behind one API.
-- **World space** – the cell under a point, and the center, bounds and polygon of every cell.
+- **World space** – the cell under a point, the cells under a box, and the center, bounds and polygon of every cell.
 - **Neighbors** – four or eight on a square grid, six on a hexagonal one, with range, ring, spiral and line.
 - **Visibility** – line of sight and field of view on every layout, the same from either end.
 - **Pathfinding** – A*, Dijkstra, greedy best-first and breadth-first, with fields for movement ranges and flow.
@@ -220,6 +220,21 @@ g.CellScale()   // what the constructor took; also Origin
 
 g.MoveTo(geom.Pt(100.0, 50.0))    // the top-left corner of the bounds, to scroll the grid
 g.Rescale(grid.RectCellScale(48)) // the scale of a tile, to zoom it
+```
+
+`CoverBox` gives the cells under a box, for a sprite or a collider: those whose square, diamond or
+hexagon shares a point with it, a cell it only touches included.
+
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/cover-box-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/cover-box-light.svg">
+  <img alt="One box over a grid in each of the four layouts, rectangular, isometric, flat-top and pointy-top, with the cells CoverBox gives for it filled: four squares, and the diamonds and hexagons its outline reaches" src="https://raw.githubusercontent.com/gravitton/grid/refs/heads/main/docs/images/cover-box-light.svg">
+</picture>
+</p>
+
+```go
+g.CoverBox(geom.BoxFromMin(geom.Pt(40.0, 20.0), geom.Sz(36.0, 28.0))) // (1,0) (1,1) (2,0) (2,1)
 ```
 
 ### Drawing

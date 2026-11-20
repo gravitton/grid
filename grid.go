@@ -315,7 +315,7 @@ func (g *Grid[T]) DrawOrder(bounds geom.Box[float64]) iter.Seq[Cell[T]] {
 // drawRect yields the cells of a rectangular grid row by row, from the cell at one corner of
 // bounds to the cell at the other.
 func (g *Grid[T]) drawRect(bounds geom.Box[float64], yield func(Cell[T]) bool) {
-	first, last := g.drawSpan(bounds, 0)
+	first, last := g.cornerSpan(bounds, 0)
 
 	for row := first.Y; row <= last.Y; row++ {
 		for column := first.X; column <= last.X; column++ {
@@ -364,7 +364,7 @@ func (g *Grid[T]) drawIsometric(bounds geom.Box[float64], yield func(Cell[T]) bo
 // corner is in. Where the columns are staggered, two cells of one screen row differ in parity,
 // so a row is walked in a pass per parity, the one its kind draws higher first.
 func (g *Grid[T]) drawHex(bounds geom.Box[float64], yield func(Cell[T]) bool) {
-	first, last := g.drawSpan(bounds, 1)
+	first, last := g.cornerSpan(bounds, 1)
 	step, parity := g.layout.kind.drawColumns()
 
 	for row := first.Y; row <= last.Y; row++ {
@@ -382,13 +382,80 @@ func (g *Grid[T]) drawHex(bounds geom.Box[float64], yield func(Cell[T]) bool) {
 	}
 }
 
-// drawSpan returns the indices of the cells at the corners of bounds, widened by margin and cut
+// cornerSpan returns the indices of the cells at the corners of bounds, widened by margin and cut
 // to the grid.
-func (g *Grid[T]) drawSpan(bounds geom.Box[float64], margin int) (first, last Index) {
+func (g *Grid[T]) cornerSpan(bounds geom.Box[float64], margin int) (first, last Index) {
 	first, last = g.IndexAt(bounds.Min), g.IndexAt(bounds.Max)
 
 	return geom.Pt(max(first.X-margin, 0), max(first.Y-margin, 0)),
 		geom.Pt(min(last.X+margin, g.Width()-1), min(last.Y+margin, g.Height()-1))
+}
+
+// CoverBox returns the cells that share a point with the box, a cell it only touches included: the
+// box of a square cell, the polygon of a diamond or a hexagon. It panics for a box with a NaN or
+// infinite coordinate.
+func (g *Grid[T]) CoverBox(box geom.Box[float64]) Region {
+	size := 0
+	g.walkCoverBox(box, func(Index) bool {
+		size++
+
+		return true
+	})
+
+	return container.SetFrom(slices.AppendSeq(make([]Index, 0, size), g.CoverBoxSeq(box)))
+}
+
+// CoverBoxSeq returns an iterator over the indices of CoverBox, in the order of a region. It
+// panics, once ranged, for a box with a NaN or infinite coordinate.
+func (g *Grid[T]) CoverBoxSeq(box geom.Box[float64]) iter.Seq[Index] {
+	return func(yield func(Index) bool) {
+		g.walkCoverBox(box, yield)
+	}
+}
+
+// walkCoverBox yields the indices of CoverBox column by column, one cell beyond the corners of the
+// box, since a cell it only touches can lie in the row or column beside the one a corner is in.
+func (g *Grid[T]) walkCoverBox(box geom.Box[float64], yield func(Index) bool) {
+	if !box.Min.IsFinite() || !box.Max.IsFinite() {
+		panic(fmt.Errorf("%w in box %s", ErrNonFinite, box))
+	}
+
+	if g.layout.kind == kindIsometric {
+		g.coverBoxIsometric(box, yield)
+
+		return
+	}
+
+	first, last := g.cornerSpan(box, 1)
+	for column := first.X; column <= last.X; column++ {
+		for row := first.Y; row <= last.Y; row++ {
+			if cell := g.Cell(geom.Pt(column, row)); cell.touches(box) && !yield(cell.index) {
+				return
+			}
+		}
+	}
+}
+
+// coverBoxIsometric yields the indices of CoverBox on an isometric grid column by column, where the
+// corners of the box do not bound the rows. A cell of column c and row r is centered at c-r
+// spacings across and c+r spacings down from the center of the first cell, and one touching the
+// box lies within a spacing of it on both axes.
+func (g *Grid[T]) coverBoxIsometric(box geom.Box[float64], yield func(Index) bool) {
+	origin := g.Cell(geom.Pt(0, 0)).Center()
+	spacing := g.CellSpacing()
+
+	left := int(math.Floor((box.Min.X-origin.X)/spacing.Width)) - 1
+	right := int(math.Ceil((box.Max.X-origin.X)/spacing.Width)) + 1
+	top := int(math.Floor((box.Min.Y-origin.Y)/spacing.Height)) - 1
+	bottom := int(math.Ceil((box.Max.Y-origin.Y)/spacing.Height)) + 1
+
+	for column := max((left+top)/2, 0); column <= min((right+bottom)/2, g.Width()-1); column++ {
+		for row := max(top-column, column-right, 0); row <= min(bottom-column, column-left, g.Height()-1); row++ {
+			if cell := g.Cell(geom.Pt(column, row)); cell.touches(box) && !yield(cell.index) {
+				return
+			}
+		}
+	}
 }
 
 // MoveTo places the top-left corner of the bounds of the grid at origin, every cell keeping its

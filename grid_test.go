@@ -1201,6 +1201,193 @@ func ExampleGrid_DrawOrder() {
 	// (0,0) (0,1) (1,0) (1,1)
 }
 
+// coveredBy returns the cells of the grid that share a point with the box, read off each cell: its
+// box where the cells do not interlock, a spacing apart as wide as a cell, its polygon where they
+// do.
+func coveredBy(g *Grid[int], box geom.Box[float64]) Region {
+	interlocked := g.CellSpacing() != g.CellSize()
+
+	return g.Select(func(cell Cell[int]) bool {
+		if interlocked {
+			return box.IntersectsRegularPolygon(cell.Polygon())
+		}
+
+		return cell.Bounds().IntersectsBox(box)
+	})
+}
+
+func TestGrid_CoverBox(t *testing.T) {
+	g := NewRect[int](geom.Sz(10, 10), RectCellScale(32))
+
+	t.Run("is exactly the cells that share a point with the box, on every layout", func(t *testing.T) {
+		for name, g := range kindGrids(geom.Sz(9, 7), geom.Sz(32.0, 20.0), geom.Pt(7.0, -3.0)) {
+			corner := g.Bounds().Min
+
+			for _, offset := range []geom.Vector[float64]{geom.Vec(1.0, 1.0), geom.Vec(30.0, 19.0), geom.Vec(61.5, 37.5), geom.Vec(-50.0, -50.0), geom.Vec(200.0, 90.0)} {
+				for _, size := range []geom.Size[float64]{geom.Sz(0.0, 0.0), geom.Sz(6.0, 6.0), geom.Sz(75.0, 45.0), geom.Sz(400.0, 10.0)} {
+					box := geom.BoxFromMin(corner.Add(offset), size)
+
+					assertRegion(t, g.CoverBox(box), coveredBy(g, box), name+" "+box.String()+": ")
+				}
+			}
+		}
+	})
+	t.Run("a point holds the cell IndexAt gives it, on every layout", func(t *testing.T) {
+		for name, g := range kindGrids(geom.Sz(9, 7), geom.Sz(32.0, 20.0), geom.Pt(7.0, -3.0)) {
+			bounds := g.Bounds()
+
+			for x := bounds.Min.X; x <= bounds.Max.X; x += 4 {
+				for y := bounds.Min.Y; y <= bounds.Max.Y; y += 2.5 {
+					point := geom.Pt(x, y)
+					if at := g.IndexAt(point); g.Contains(at) {
+						assert.True(t, g.CoverBox(geom.Bx(point, point)).Contains(at), name+" "+point.String()+": ")
+					}
+				}
+			}
+		}
+	})
+	t.Run("a box inside one cell is that cell", func(t *testing.T) {
+		assert.Equal(t, g.CoverBox(geom.Bx(geom.Pt(40.0, 70.0), geom.Pt(50.0, 90.0))).Elements(), []Index{geom.Pt(1, 2)})
+	})
+	t.Run("a box on the edges between cells holds the cells it touches", func(t *testing.T) {
+		assert.Equal(t, g.CoverBox(geom.Bx(geom.Pt(32.0, 32.0), geom.Pt(64.0, 32.0))).Elements(), []Index{
+			geom.Pt(0, 0), geom.Pt(0, 1), geom.Pt(1, 0), geom.Pt(1, 1), geom.Pt(2, 0), geom.Pt(2, 1),
+		})
+	})
+	t.Run("a box over the grid is every cell", func(t *testing.T) {
+		for name, g := range kindGrids(geom.Sz(4, 3), geom.Sz(32.0, 20.0), geom.Pt(0.0, 0.0)) {
+			assert.Equal(t, g.CoverBox(g.Bounds().Grow(100)).Len(), 12, name+": ")
+		}
+	})
+	t.Run("a box beside the grid is empty and allocates nothing", func(t *testing.T) {
+		for name, g := range kindGrids(geom.Sz(4, 3), geom.Sz(32.0, 20.0), geom.Pt(0.0, 0.0)) {
+			beside := g.Bounds().Translate(geom.Vec(0.0, g.Bounds().Height()+1))
+
+			assert.True(t, g.CoverBox(beside).IsEmpty(), name+": ")
+			assert.Equal(t, testing.AllocsPerRun(10, func() {
+				sinkRegion = g.CoverBox(beside)
+			}), 0.0, name+": ")
+		}
+	})
+	t.Run("a grid of no cells covers nothing", func(t *testing.T) {
+		for name, g := range kindGrids(geom.Sz(0, 0), geom.Sz(32.0, 20.0), geom.Pt(10.0, 10.0)) {
+			assert.True(t, g.CoverBox(geom.Bx(geom.Pt(0.0, 0.0), geom.Pt(100.0, 100.0))).IsEmpty(), name+": ")
+		}
+	})
+	t.Run("allocates once, its indices", func(t *testing.T) {
+		for name, g := range kindGrids(geom.Sz(9, 7), geom.Sz(32.0, 20.0), geom.Pt(0.0, 0.0)) {
+			box := geom.BoxFromMin(geom.Pt(30.0, 20.0), geom.Sz(75.0, 45.0))
+
+			assert.Equal(t, testing.AllocsPerRun(10, func() {
+				sinkRegion = g.CoverBox(box)
+			}), 1.0, name+": ")
+			assert.Equal(t, cap(g.CoverBox(box).Elements()), g.CoverBox(box).Len(), name+": ")
+		}
+	})
+	t.Run("panics for a box that is not finite, on every layout", func(t *testing.T) {
+		for name, g := range kindGrids(geom.Sz(3, 3), geom.Sz(32.0, 20.0), geom.Pt(0.0, 0.0)) {
+			assert.PanicsWith(t, func() {
+				g.CoverBox(geom.Bx(geom.Pt(0.0, math.NaN()), geom.Pt(10.0, 10.0)))
+			}, ErrNonFinite, name+": ")
+		}
+	})
+}
+
+func BenchmarkGrid_CoverBox(b *testing.B) {
+	benchmarkGrids(b, func(b *testing.B, g *Grid[int]) {
+		center := g.Bounds().Center()
+
+		for _, test := range []struct {
+			name string
+			box  geom.Box[float64]
+		}{
+			{"a ball", geom.BoxFromMin(center, geom.Sz(6.0, 6.0))},
+			{"a view", geom.BoxFromMin(center, geom.Sz(640.0, 480.0))},
+		} {
+			b.Run(test.name, func(b *testing.B) {
+				for b.Loop() {
+					sinkRegion = g.CoverBox(test.box)
+				}
+			})
+		}
+	})
+}
+
+func ExampleGrid_CoverBox() {
+	g := NewRect[bool](geom.Sz(4, 3), RectCellScale(32))
+
+	fmt.Println(g.CoverBox(geom.BoxFromMin(geom.Pt(40.0, 20.0), geom.Sz(36.0, 28.0))).Elements())
+	fmt.Println(g.CoverBox(geom.Bx(geom.Pt(30.0, 10.0), geom.Pt(64.0, 20.0))).Elements())
+	// Output:
+	// [(1,0) (1,1) (2,0) (2,1)]
+	// [(0,0) (1,0) (2,0)]
+}
+
+func FuzzGrid_CoverBox(f *testing.F) {
+	for kind := range uint8(7) {
+		f.Add(kind, uint8(8), uint8(8), uint8(36), uint8(36), uint8(6), uint8(6), uint8(128))
+		f.Add(kind, uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(128))
+		f.Add(kind, uint8(9), uint8(3), uint8(52), uint8(20), uint8(200), uint8(16), uint8(128))
+		f.Add(kind, uint8(4), uint8(4), uint8(36), uint8(22), uint8(3), uint8(3), uint8(129))
+		f.Add(kind, uint8(4), uint8(4), uint8(36), uint8(22), uint8(3), uint8(3), uint8(255))
+		f.Add(kind, uint8(6), uint8(0), uint8(45), uint8(5), uint8(136), uint8(30), uint8(78))
+	}
+
+	f.Fuzz(func(t *testing.T, kind, width, height, x, y, across, down, nudge uint8) {
+		g := fuzzGrid(kind, width, height)
+		shift := float64(int(nudge)-128) * 2e-8
+		box := geom.BoxFromMin(geom.Pt(float64(2*int(x)-40)+shift, float64(2*int(y)-40)+shift), geom.Sz(float64(across), float64(down)))
+		covered := g.CoverBox(box)
+
+		assertRegion(t, covered, coveredBy(g, box))
+		if at := g.IndexAt(box.Min); g.Contains(at) {
+			assert.True(t, covered.Contains(at))
+		}
+		assert.Equal(t, slices.Collect(g.CoverBoxSeq(box)), covered.Elements())
+	})
+}
+
+func TestGrid_CoverBoxSeq(t *testing.T) {
+	box := geom.Bx(geom.Pt(40.0, 40.0), geom.Pt(150.0, 120.0))
+
+	testSeq(t, func(g *Grid[int]) iter.Seq[Index] {
+		return g.CoverBoxSeq(box)
+	}, func(g *Grid[int]) []Index {
+		return g.CoverBox(box).Elements()
+	})
+	t.Run("yields what CoverBox holds and stops at the break, on every layout", func(t *testing.T) {
+		for name, g := range kindGrids(geom.Sz(9, 7), geom.Sz(32.0, 20.0), geom.Pt(0.0, 0.0)) {
+			count := 0
+			for range g.CoverBoxSeq(box) {
+				count++
+
+				break
+			}
+
+			assert.Equal(t, slices.Collect(g.CoverBoxSeq(box)), g.CoverBox(box).Elements(), name+": ")
+			assert.Equal(t, count, 1, name+": ")
+		}
+	})
+	t.Run("allocates nothing", func(t *testing.T) {
+		for name, g := range kindGrids(geom.Sz(9, 7), geom.Sz(32.0, 20.0), geom.Pt(0.0, 0.0)) {
+			assert.Equal(t, testing.AllocsPerRun(10, func() {
+				for index := range g.CoverBoxSeq(box) {
+					sinkPoint = index
+				}
+			}), 0.0, name+": ")
+		}
+	})
+	t.Run("panics once ranged for a box that is not finite", func(t *testing.T) {
+		cover := NewRect[int](geom.Sz(3, 3), RectCellScale(32)).CoverBoxSeq(geom.Bx(geom.Pt(0.0, 0.0), geom.Pt(math.Inf(1), 10.0)))
+
+		assert.PanicsWith(t, func() {
+			for range cover {
+				break
+			}
+		}, ErrNonFinite)
+	})
+}
+
 func TestGrid_MoveTo(t *testing.T) {
 	origin := geom.Pt(100.0, 50.0)
 	start := geom.Pt(7.0, 9.0)

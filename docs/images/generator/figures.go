@@ -13,6 +13,7 @@ var figures = []figure{
 	{"hero", hero},
 	{"grids", grids},
 	{"world", world},
+	{"cover-box", coverBox},
 	{"draw-order", drawOrder},
 	{"movement", movement},
 	{"range", ranges},
@@ -85,6 +86,22 @@ func world(t theme) []*panel {
 		for cell := range g.All() {
 			p.outline(cell.Index(), t.edge, 1)
 		}
+		panels = append(panels, p)
+	}
+
+	return panels
+}
+
+func coverBox(t theme) []*panel {
+	box := geom.BoxFromMin(geom.Pt(40.0, 20.0), geom.Sz(36.0, 28.0))
+
+	panels := make([]*panel, 0, 4)
+	for _, l := range layouts(32, 52, 36, 34) {
+		g := l.build(geom.Sz(4, 3), l.width)
+		p := backdrop(t, g, "g.CoverBox(box)")
+		p.note = l.name
+		p.region(g.CoverBox(box), t.accentSoft)
+		p.polygon(box.Polygon().Points, style{stroke: t.cool, width: 2})
 		panels = append(panels, p)
 	}
 

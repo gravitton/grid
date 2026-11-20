@@ -100,8 +100,9 @@
 //   - [geom.ErrNonFinite] for a point with a NaN or infinite coordinate to [Grid.IndexAt],
 //     [Grid.CellAt] and [HexLayout.IndexAt]: no cell is at it.
 //   - [ErrNonFinite] for an origin with a NaN or infinite coordinate to the constructors of a
-//     grid, [Grid.MoveTo] and [HexLayout.MoveTo], and for such bounds to the iterator of
-//     [Grid.DrawOrder]: no cell is drawn from it.
+//     grid, [Grid.MoveTo] and [HexLayout.MoveTo]: no cell is drawn from it; for such bounds to the
+//     iterator of [Grid.DrawOrder]: no cell is in view of them; and for such a box to
+//     [Grid.CoverBox] and the iterator of [Grid.CoverBoxSeq]: no cell is under it.
 //   - [ErrInvalidCellScale] for a cell scale that is not positive and finite on both axes to every
 //     constructor, [Grid.Rescale] and [HexLayout.Rescale]: no cell can be drawn at it.
 //   - [ErrInvalidCost] for a cost that is negative or NaN to [Grid.Path], [Grid.Field],
