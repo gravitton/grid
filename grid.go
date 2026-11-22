@@ -980,8 +980,9 @@ func (g *Grid[T]) Reachable(start Index, budget float64, passable func(Cell[T]) 
 	return g.uniformCostSearch([]Index{start}, nil, budget, passable, cost)
 }
 
-// breadthFirstSearch walks outward from the starts a step at a time, to the goal where one is
-// given and no more steps than the budget.
+// breadthFirstSearch walks outward from the starts a ring at a time, to the goal where one is
+// given and no more steps than the budget. Its queue holds the nodes of the ring it walks and of
+// the next, never every node reached.
 func (g *Grid[T]) breadthFirstSearch(starts []Index, goal *Index, budget float64, passable func(Cell[T]) bool) Field {
 	passable = orAny(passable)
 
@@ -992,16 +993,15 @@ func (g *Grid[T]) breadthFirstSearch(starts []Index, goal *Index, budget float64
 	work := takeScratch()
 	defer work.release()
 
-	field, queue := g.seedField(starts, goal, budget, false, passable, work.queue[:0])
-	if len(queue) == 0 || (goal != nil && field.Contains(*goal)) {
-		work.queue = queue
-
+	queue := work.queue()
+	field := g.seedField(starts, goal, budget, false, passable, queue)
+	if queue.IsEmpty() || (goal != nil && field.Contains(*goal)) {
 		return field
 	}
 
-	for head, steps := 0, 1; head < len(queue) && float64(steps) <= budget; steps++ {
-		for ring := len(queue); head < ring; head++ {
-			current := queue[head]
+	for steps := 1; !queue.IsEmpty() && float64(steps) <= budget; steps++ {
+		for range queue.Len() {
+			current, _ := queue.PopFront()
 
 			for _, offset := range g.topology.offsets(current.index) {
 				next := current.index.Add(offset)
@@ -1019,17 +1019,13 @@ func (g *Grid[T]) breadthFirstSearch(starts []Index, goal *Index, budget float64
 
 				field.reach(reached, current.slot)
 				if goal != nil && next == *goal {
-					work.queue = queue
-
 					return field
 				}
 
-				queue = append(queue, node{next, reached})
+				queue.PushBack(node{next, reached})
 			}
 		}
 	}
-
-	work.queue = queue
 
 	return field
 }
@@ -1047,11 +1043,11 @@ func (g *Grid[T]) uniformCostSearch(starts []Index, goal *Index, budget float64,
 	work := takeScratch()
 	defer work.release()
 
-	field, seeded := g.seedField(starts, goal, budget, true, passable, work.queue[:0])
-	work.queue = seeded
+	seeded := work.queue()
+	field := g.seedField(starts, goal, budget, true, passable, seeded)
 
 	open := work.frontier()
-	for _, start := range seeded {
+	for _, start := range seeded.All() {
 		open.push(start.slot, 0, 0)
 	}
 
@@ -1181,9 +1177,9 @@ func (g *Grid[T]) astar(start, goal Index, passable func(Cell[T]) bool, cost fun
 }
 
 // seedField returns a field holding the starts inside the grid that passable admits, with their
-// nodes appended to queue, and the empty field where it admits none. The field makes room at
+// nodes pushed to the back of queue, and the empty field where it admits none. The field makes room at
 // first around the first of them.
-func (g *Grid[T]) seedField(starts []Index, goal *Index, budget float64, weighted bool, passable func(Cell[T]) bool, queue []node) (Field, []node) {
+func (g *Grid[T]) seedField(starts []Index, goal *Index, budget float64, weighted bool, passable func(Cell[T]) bool, queue *container.Deque[node]) Field {
 	var field Field
 	for _, start := range starts {
 		if !g.admits(start, passable) {
@@ -1193,10 +1189,10 @@ func (g *Grid[T]) seedField(starts []Index, goal *Index, budget float64, weighte
 			field = newField(g.Size(), start, weighted, g.searchRadius(start, goal, budget))
 		}
 
-		queue = append(queue, node{start, field.seed(start)})
+		queue.PushBack(node{start, field.seed(start)})
 	}
 
-	return field, queue
+	return field
 }
 
 // searchRadius returns how far from start a search is expected to reach, for the room its field

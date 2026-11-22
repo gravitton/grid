@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math"
 	"sync"
+
+	"github.com/gravitton/container"
 )
 
 // orAny returns the callback, or one admitting every cell where it is nil.
@@ -64,7 +66,7 @@ type node struct {
 // scratch is what a search needs only while it runs, borrowed from scratches and handed back
 // when it ends, so searches from several goroutines never share one.
 type scratch struct {
-	queue []node
+	nodes container.Deque[node]
 	open  frontier
 }
 
@@ -77,6 +79,13 @@ var scratches = sync.Pool{
 // takeScratch returns a scratch no other search holds, its slices kept from its last search.
 func takeScratch() *scratch {
 	return scratches.Get().(*scratch)
+}
+
+// queue returns the queue of the scratch, emptied.
+func (s *scratch) queue() *container.Deque[node] {
+	s.nodes.Clear()
+
+	return &s.nodes
 }
 
 // frontier returns the frontier of the scratch, emptied.

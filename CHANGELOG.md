@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased](https://github.com/gravitton/grid/compare/v1.6.0...main)
 
+### Changed
+- Require `geometry` v1.20.1, `hexagon` v1.9.1 and `container` v1.1.0
+- Require `assert` v1.9.0 for the tests
+- A breadth-first search holds the cells of two rings rather than every cell it reached, a third of the memory on a large grid
+
 ## [v1.6.0](https://github.com/gravitton/grid/compare/v1.5.0...v1.6.0) (2026-11-21)
 
 ### Added
