@@ -10,8 +10,6 @@ import (
 	geom "github.com/gravitton/geometry"
 )
 
-var testSquare = Sq(3, -2)
-
 func TestSquare_Constructor(t *testing.T) {
 	assert.Equal(t, Sq(3, -2).Point(), geom.Pt(3, -2))
 }
@@ -164,9 +162,9 @@ func TestSquare_NeighborsSeq(t *testing.T) {
 			t.Run("allocates nothing into a buffer with room", func(t *testing.T) {
 				buffer := make([]Index, 0, 8)
 
-				assert.Equal(t, testing.AllocsPerRun(10, func() {
+				assert.Allocates(t, func() {
 					sinkPoints = slices.AppendSeq(buffer[:0], testSquare.NeighborsSeq(movement))
-				}), 0.0)
+				}, 0)
 			})
 		})
 	}
@@ -209,9 +207,9 @@ func TestSquare_Range(t *testing.T) {
 
 			assert.True(t, slices.IsSortedFunc(indices, Index.Compare), movement.String()+": ")
 			assert.Equal(t, cap(indices), len(indices), movement.String()+": ")
-			assert.Equal(t, testing.AllocsPerRun(10, func() {
+			assert.Allocates(t, func() {
 				sinkPoints = center.Range(4, movement)
-			}), 1.0, movement.String()+": ")
+			}, 1, movement.String()+": ")
 		}
 	})
 	t.Run("is the index alone outside the constants", func(t *testing.T) {
@@ -247,11 +245,11 @@ func TestSquare_RangeSeq(t *testing.T) {
 				assert.Equal(t, count, 1)
 			})
 			t.Run("allocates nothing", func(t *testing.T) {
-				assert.Equal(t, testing.AllocsPerRun(10, func() {
+				assert.Allocates(t, func() {
 					for index := range testSquare.RangeSeq(3, movement) {
 						sinkPoint = index
 					}
-				}), 0.0)
+				}, 0)
 			})
 		})
 	}
@@ -293,9 +291,9 @@ func TestSquare_Ring(t *testing.T) {
 				ring := testSquare.Ring(4, movement)
 
 				assert.Equal(t, cap(ring), len(ring))
-				assert.Equal(t, testing.AllocsPerRun(10, func() {
+				assert.Allocates(t, func() {
 					sinkPoints = testSquare.Ring(4, movement)
-				}), 1.0)
+				}, 1)
 			})
 		})
 	}
@@ -326,11 +324,11 @@ func TestSquare_RingSeq(t *testing.T) {
 				}
 			})
 			t.Run("allocates nothing", func(t *testing.T) {
-				assert.Equal(t, testing.AllocsPerRun(10, func() {
+				assert.Allocates(t, func() {
 					for index := range testSquare.RingSeq(3, movement) {
 						sinkPoint = index
 					}
-				}), 0.0)
+				}, 0)
 			})
 		})
 	}
@@ -360,9 +358,9 @@ func TestSquare_Spiral(t *testing.T) {
 				spiral := testSquare.Spiral(4, movement)
 
 				assert.Equal(t, cap(spiral), len(spiral))
-				assert.Equal(t, testing.AllocsPerRun(10, func() {
+				assert.Allocates(t, func() {
 					sinkPoints = testSquare.Spiral(4, movement)
-				}), 1.0)
+				}, 1)
 			})
 		})
 	}
@@ -473,9 +471,9 @@ func TestSquare_Sector(t *testing.T) {
 			})
 			t.Run("allocates once, at its length", func(t *testing.T) {
 				assert.Equal(t, cap(testSquare.Sector(7, geom.DirectionUp, 2, movement)), SectorLen(7, 2, movement))
-				assert.Equal(t, testing.AllocsPerRun(10, func() {
+				assert.Allocates(t, func() {
 					sinkPoints = testSquare.Sector(7, geom.DirectionUp, 2, movement)
-				}), 1.0)
+				}, 1)
 			})
 		})
 	}
@@ -516,9 +514,9 @@ func TestSquare_SectorSeq(t *testing.T) {
 			t.Run("allocates nothing into a buffer with room", func(t *testing.T) {
 				buffer := make([]Index, 0, 128)
 
-				assert.Equal(t, testing.AllocsPerRun(10, func() {
+				assert.Allocates(t, func() {
 					sinkPoints = slices.AppendSeq(buffer[:0], testSquare.SectorSeq(7, geom.DirectionUp, 2, movement))
-				}), 0.0)
+				}, 0)
 			})
 		})
 	}
@@ -596,9 +594,9 @@ func TestSquare_LineTo(t *testing.T) {
 				line := testSquare.LineTo(geom.Pt(-4, 7), movement)
 
 				assert.Equal(t, cap(line), len(line))
-				assert.Equal(t, testing.AllocsPerRun(10, func() {
+				assert.Allocates(t, func() {
 					sinkPoints = testSquare.LineTo(geom.Pt(-4, 7), movement)
-				}), 1.0)
+				}, 1)
 			})
 		})
 	}
@@ -642,19 +640,13 @@ func TestSquare_LineToSeq(t *testing.T) {
 				}
 			})
 			t.Run("allocates nothing", func(t *testing.T) {
-				assert.Equal(t, testing.AllocsPerRun(10, func() {
+				assert.Allocates(t, func() {
 					for index := range testSquare.LineToSeq(geom.Pt(-4, 7), movement) {
 						sinkPoint = index
 					}
-				}), 0.0)
+				}, 0)
 			})
 		})
-	}
-}
-
-func blockedBy(indices []Index) func(Index) bool {
-	return func(index Index) bool {
-		return slices.Contains(indices, index)
 	}
 }
 
@@ -669,9 +661,9 @@ func TestSquare_HasLineOfSight(t *testing.T) {
 	t.Run("allocates nothing", func(t *testing.T) {
 		blocked := blockedBy([]Index{geom.Pt(1, 1)})
 
-		assert.Equal(t, testing.AllocsPerRun(10, func() {
+		assert.Allocates(t, func() {
 			sinkBool = origin.HasLineOfSight(geom.Pt(6, 4), blocked)
-		}), 0.0)
+		}, 0)
 	})
 	t.Run("blocked mid", func(t *testing.T) {
 		assert.False(t, origin.HasLineOfSight(geom.Pt(3, 0), blockedBy([]Index{geom.Pt(1, 0)})))
@@ -811,15 +803,15 @@ func TestSquare_FieldOfView(t *testing.T) {
 				assert.Nil(t, center.FieldOfView(-1, movement, blocked))
 			})
 			t.Run("allocates once more for what it asked where something can block", func(t *testing.T) {
-				assert.Equal(t, testing.AllocsPerRun(10, func() {
+				assert.Allocates(t, func() {
 					sinkPoints = center.FieldOfView(3, movement, blocked)
-				}), 2.0)
+				}, 2)
 			})
 			t.Run("allocates once, at its length, where nothing blocks", func(t *testing.T) {
 				assert.Equal(t, cap(center.FieldOfView(3, movement, nil)), RangeLen(3, movement))
-				assert.Equal(t, testing.AllocsPerRun(10, func() {
+				assert.Allocates(t, func() {
 					sinkPoints = center.FieldOfView(3, movement, nil)
-				}), 1.0)
+				}, 1)
 			})
 		})
 	}
@@ -875,3 +867,11 @@ func ExampleSquare() {
 	// false
 	// (-5,5) (5,-5)
 }
+
+func blockedBy(indices []Index) func(Index) bool {
+	return func(index Index) bool {
+		return slices.Contains(indices, index)
+	}
+}
+
+var testSquare = Sq(3, -2)

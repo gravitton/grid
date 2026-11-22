@@ -10,11 +10,6 @@ import (
 	geom "github.com/gravitton/geometry"
 )
 
-var (
-	sinkDirections []geom.Direction
-	sinkVectors    []geom.Vector[int]
-)
-
 func TestMovements(t *testing.T) {
 	t.Run("lists both in order", func(t *testing.T) {
 		assert.Equal(t, Movements(), [2]Movement{MovementCardinal, MovementDiagonal})
@@ -73,9 +68,9 @@ func TestMovement_Directions(t *testing.T) {
 			directions := movement.Directions()
 
 			assert.Equal(t, cap(directions), len(directions), movement.String()+": ")
-			assert.Equal(t, testing.AllocsPerRun(10, func() {
+			assert.Allocates(t, func() {
 				sinkDirections = movement.Directions()
-			}), 1.0, movement.String()+": ")
+			}, 1, movement.String()+": ")
 		}
 	})
 	t.Run("is nil outside the constants", func(t *testing.T) {
@@ -117,9 +112,9 @@ func TestMovement_Offsets(t *testing.T) {
 			offsets := movement.Offsets()
 
 			assert.Equal(t, cap(offsets), len(offsets), movement.String()+": ")
-			assert.Equal(t, testing.AllocsPerRun(10, func() {
+			assert.Allocates(t, func() {
 				sinkVectors = movement.Offsets()
-			}), 1.0, movement.String()+": ")
+			}, 1, movement.String()+": ")
 		}
 	})
 	t.Run("is nil outside the constants", func(t *testing.T) {
@@ -316,3 +311,8 @@ func ExampleMovement() {
 	// Diagonal <nil>
 	// "Cardinal"
 }
+
+var (
+	sinkDirections []geom.Direction
+	sinkVectors    []geom.Vector[int]
+)

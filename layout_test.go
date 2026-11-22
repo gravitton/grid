@@ -11,93 +11,12 @@ import (
 	hex "github.com/gravitton/hexagon"
 )
 
-func testNewHexLayout(t *testing.T, construct func(cellScale geom.Size[float64], system hex.CoordinateSystem) *HexLayout, orientation geom.Orientation) {
-	t.Run("places the center of index zero at the world origin", func(t *testing.T) {
-		for _, system := range hex.CoordinateSystems() {
-			assert.Equal(t, construct(geom.Sz(32.0, 20.0), system).Center(geom.Pt(0, 0)), geom.Pt(0.0, 0.0), system.String()+": ")
-		}
-	})
-	t.Run("draws a hexagon of the given radius and orientation", func(t *testing.T) {
-		polygon := construct(geom.Sz(32.0, 20.0), hex.Axial).Polygon(geom.Pt(0, 0))
-
-		geomtest.AssertRegularPolygon(t, polygon, geom.RegularPolygonWithOrientation(geom.Pt(0.0, 0.0), geom.Sz(32.0, 20.0), 6, orientation))
-	})
-	t.Run("indexes in the given coordinate system", func(t *testing.T) {
-		axial := construct(geom.Sz(32.0, 20.0), hex.Axial)
-
-		for _, system := range hex.CoordinateSystems() {
-			layout := construct(geom.Sz(32.0, 20.0), system)
-			for _, h := range hex.Pt(2, -1).Spiral(2) {
-				assert.Equal(t, layout.Center(system.To(h)), axial.Center(h.Point()), system.String()+" "+h.String()+": ")
-			}
-		}
-	})
-	for name, bad := range map[string]geom.Size[float64]{
-		"zero":     geom.Sz(0.0, 32.0),
-		"negative": geom.Sz(32.0, -32.0),
-		"NaN":      geom.Sz(math.NaN(), 32.0),
-		"infinite": geom.Sz(32.0, math.Inf(1)),
-	} {
-		t.Run("panics for a "+name+" size", func(t *testing.T) {
-			assert.PanicsWith(t, func() {
-				construct(bad, hex.Axial)
-			}, ErrInvalidCellScale)
-		})
-	}
-	t.Run("panics for a system outside the seven", func(t *testing.T) {
-		assert.PanicsWith(t, func() {
-			construct(geom.Sz(32.0, 20.0), hex.CoordinateSystem(9))
-		}, hex.ErrUnknownCoordinateSystem)
-		assert.PanicsWith(t, func() {
-			construct(geom.Sz(32.0, 20.0), hex.CoordinateSystemNone)
-		}, hex.ErrUnknownCoordinateSystem)
-	})
-	t.Run("allocates once", func(t *testing.T) {
-		assert.Equal(t, testing.AllocsPerRun(100, func() {
-			sinkHexLayout = construct(geom.Sz(32.0, 20.0), hex.OffsetOddR)
-		}), 1.0)
-	})
-}
-
 func TestNewHexFlatTopLayout(t *testing.T) {
 	testNewHexLayout(t, NewHexFlatTopLayout, geom.OrientationFlatTop)
 }
 
 func TestNewHexPointyTopLayout(t *testing.T) {
 	testNewHexLayout(t, NewHexPointyTopLayout, geom.OrientationPointyTop)
-}
-
-// hexLayoutGrid is a hexagonal grid with the layout that places its cells and the coordinate
-// system both index them in.
-type hexLayoutGrid struct {
-	layout *HexLayout
-	grid   *Grid[int]
-	system hex.CoordinateSystem
-}
-
-// hexLayoutGrids returns, for each hexagonal grid of kindGrids, the layout of the same scale and
-// coordinate system with the center of index zero where the grid places it.
-func hexLayoutGrids() map[string]hexLayoutGrid {
-	scale := geom.Sz(32.0, 20.0)
-	grids := kindGrids(geom.Sz(6, 5), scale, geom.Pt(100.0, 50.0))
-	tests := map[string]hexLayoutGrid{}
-
-	for name, system := range map[string]hex.CoordinateSystem{
-		"flat-top":        hex.OffsetOddQ,
-		"flat-top even":   hex.OffsetEvenQ,
-		"pointy-top":      hex.OffsetOddR,
-		"pointy-top even": hex.OffsetEvenR,
-	} {
-		layout := NewHexPointyTopLayout(scale, system)
-		if system == hex.OffsetOddQ || system == hex.OffsetEvenQ {
-			layout = NewHexFlatTopLayout(scale, system)
-		}
-		layout.MoveTo(grids[name].Cell(geom.Pt(0, 0)).Center())
-
-		tests[name] = hexLayoutGrid{layout, grids[name], system}
-	}
-
-	return tests
 }
 
 func TestHexLayout_CellSize(t *testing.T) {
@@ -128,9 +47,9 @@ func TestHexLayout_Center(t *testing.T) {
 	t.Run("allocates nothing", func(t *testing.T) {
 		layout := NewHexFlatTopLayout(geom.Sz(32.0, 20.0), hex.OffsetOddQ)
 
-		assert.Equal(t, testing.AllocsPerRun(100, func() {
+		assert.Allocates(t, func() {
 			sinkCenter = layout.Center(geom.Pt(3, -2))
-		}), 0.0)
+		}, 0)
 	})
 }
 
@@ -228,9 +147,9 @@ func TestHexLayout_IndexAt(t *testing.T) {
 	t.Run("allocates nothing", func(t *testing.T) {
 		layout := NewHexPointyTopLayout(geom.Sz(32.0, 20.0), hex.OffsetOddR)
 
-		assert.Equal(t, testing.AllocsPerRun(100, func() {
+		assert.Allocates(t, func() {
 			sinkPoint = layout.IndexAt(geom.Pt(123.4, -56.7))
-		}), 0.0)
+		}, 0)
 	})
 }
 
@@ -335,4 +254,85 @@ func ExampleHexLayout() {
 	// (432.00,286.14)-(464.00,313.86)
 	// (3,-1)
 	// (3,0)
+}
+
+func testNewHexLayout(t *testing.T, construct func(cellScale geom.Size[float64], system hex.CoordinateSystem) *HexLayout, orientation geom.Orientation) {
+	t.Run("places the center of index zero at the world origin", func(t *testing.T) {
+		for _, system := range hex.CoordinateSystems() {
+			assert.Equal(t, construct(geom.Sz(32.0, 20.0), system).Center(geom.Pt(0, 0)), geom.Pt(0.0, 0.0), system.String()+": ")
+		}
+	})
+	t.Run("draws a hexagon of the given radius and orientation", func(t *testing.T) {
+		polygon := construct(geom.Sz(32.0, 20.0), hex.Axial).Polygon(geom.Pt(0, 0))
+
+		geomtest.AssertRegularPolygon(t, polygon, geom.RegularPolygonWithOrientation(geom.Pt(0.0, 0.0), geom.Sz(32.0, 20.0), 6, orientation))
+	})
+	t.Run("indexes in the given coordinate system", func(t *testing.T) {
+		axial := construct(geom.Sz(32.0, 20.0), hex.Axial)
+
+		for _, system := range hex.CoordinateSystems() {
+			layout := construct(geom.Sz(32.0, 20.0), system)
+			for _, h := range hex.Pt(2, -1).Spiral(2) {
+				assert.Equal(t, layout.Center(system.To(h)), axial.Center(h.Point()), system.String()+" "+h.String()+": ")
+			}
+		}
+	})
+	for name, bad := range map[string]geom.Size[float64]{
+		"zero":     geom.Sz(0.0, 32.0),
+		"negative": geom.Sz(32.0, -32.0),
+		"NaN":      geom.Sz(math.NaN(), 32.0),
+		"infinite": geom.Sz(32.0, math.Inf(1)),
+	} {
+		t.Run("panics for a "+name+" size", func(t *testing.T) {
+			assert.PanicsWith(t, func() {
+				construct(bad, hex.Axial)
+			}, ErrInvalidCellScale)
+		})
+	}
+	t.Run("panics for a system outside the seven", func(t *testing.T) {
+		assert.PanicsWith(t, func() {
+			construct(geom.Sz(32.0, 20.0), hex.CoordinateSystem(9))
+		}, hex.ErrUnknownCoordinateSystem)
+		assert.PanicsWith(t, func() {
+			construct(geom.Sz(32.0, 20.0), hex.CoordinateSystemNone)
+		}, hex.ErrUnknownCoordinateSystem)
+	})
+	t.Run("allocates once", func(t *testing.T) {
+		assert.Allocates(t, func() {
+			sinkHexLayout = construct(geom.Sz(32.0, 20.0), hex.OffsetOddR)
+		}, 1)
+	})
+}
+
+// hexLayoutGrid is a hexagonal grid with the layout that places its cells and the coordinate
+// system both index them in.
+type hexLayoutGrid struct {
+	layout *HexLayout
+	grid   *Grid[int]
+	system hex.CoordinateSystem
+}
+
+// hexLayoutGrids returns, for each hexagonal grid of kindGrids, the layout of the same scale and
+// coordinate system with the center of index zero where the grid places it.
+func hexLayoutGrids() map[string]hexLayoutGrid {
+	scale := geom.Sz(32.0, 20.0)
+	grids := kindGrids(geom.Sz(6, 5), scale, geom.Pt(100.0, 50.0))
+	tests := map[string]hexLayoutGrid{}
+
+	for name, system := range map[string]hex.CoordinateSystem{
+		"flat-top":        hex.OffsetOddQ,
+		"flat-top even":   hex.OffsetEvenQ,
+		"pointy-top":      hex.OffsetOddR,
+		"pointy-top even": hex.OffsetEvenR,
+	} {
+		layout := NewHexPointyTopLayout(scale, system)
+		if system == hex.OffsetOddQ || system == hex.OffsetEvenQ {
+			layout = NewHexFlatTopLayout(scale, system)
+		}
+		layout.MoveTo(grids[name].Cell(geom.Pt(0, 0)).Center())
+
+		tests[name] = hexLayoutGrid{layout, grids[name], system}
+	}
+
+	return tests
 }

@@ -8,8 +8,6 @@ import (
 	geom "github.com/gravitton/geometry"
 )
 
-var testRegionEmpty = Region{}
-
 func TestRegion_Constructor(t *testing.T) {
 	t.Run("indices give a region, sorted and without repeats", func(t *testing.T) {
 		var region Region = Reg(geom.Pt(1, 2), geom.Pt(-1, 0), geom.Pt(1, 2), geom.Pt(1, -3))
@@ -32,9 +30,9 @@ func TestRegion_Constructor(t *testing.T) {
 	t.Run("allocates once, for the copy", func(t *testing.T) {
 		points := []Index{geom.Pt(1, 0), geom.Pt(0, 0), geom.Pt(1, 0)}
 
-		assert.Equal(t, testing.AllocsPerRun(10, func() {
+		assert.Allocates(t, func() {
 			sinkRegion = Reg(points...)
-		}), 1.0)
+		}, 1)
 	})
 }
 
@@ -48,3 +46,5 @@ func ExampleReg() {
 	// [(0,-1) (0,0) (0,1) (1,-1) (1,0) (1,1)]
 	// 3 12 true
 }
+
+var testRegionEmpty = Region{}

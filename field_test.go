@@ -45,9 +45,9 @@ func TestField_Region(t *testing.T) {
 		assert.True(t, Field{}.Region().IsEmpty())
 	})
 	t.Run("allocates once", func(t *testing.T) {
-		assert.Equal(t, testing.AllocsPerRun(10, func() {
+		assert.Allocates(t, func() {
 			sinkRegion = field.Region()
-		}), 1.0)
+		}, 1)
 	})
 }
 
@@ -205,9 +205,9 @@ func TestField_PathTo(t *testing.T) {
 		path := field.PathTo(testGoal)
 
 		assert.Equal(t, cap(path), len(path))
-		assert.Equal(t, testing.AllocsPerRun(10, func() {
+		assert.Allocates(t, func() {
 			sinkPoints = field.PathTo(testGoal)
-		}), 1.0)
+		}, 1)
 	})
 }
 
@@ -235,9 +235,9 @@ func TestField_AppendPathTo(t *testing.T) {
 	t.Run("allocates nothing with room", func(t *testing.T) {
 		buffer := make([]Index, 0, 16)
 
-		assert.Equal(t, testing.AllocsPerRun(10, func() {
+		assert.Allocates(t, func() {
 			sinkPoints = field.AppendPathTo(buffer[:0], testGoal)
-		}), 0.0)
+		}, 0)
 	})
 }
 

@@ -87,11 +87,10 @@ func TestCell_Center(t *testing.T) {
 	t.Run("allocates nothing", func(t *testing.T) {
 		for name, g := range grids {
 			cell := g.Cell(geom.Pt(2, 3))
-			allocs := testing.AllocsPerRun(100, func() {
-				sinkCenter = cell.Center()
-			})
 
-			assert.Equal(t, allocs, 0.0, name+": ")
+			assert.Allocates(t, func() {
+				sinkCenter = cell.Center()
+			}, 0, name+": ")
 		}
 	})
 }
@@ -143,11 +142,10 @@ func TestCell_Bounds(t *testing.T) {
 	})
 	t.Run("allocates nothing", func(t *testing.T) {
 		cell := awkward["flat-top"].Cell(geom.Pt(2, 3))
-		allocs := testing.AllocsPerRun(100, func() {
-			sinkBox = cell.Bounds()
-		})
 
-		assert.Equal(t, allocs, 0.0)
+		assert.Allocates(t, func() {
+			sinkBox = cell.Bounds()
+		}, 0)
 	})
 }
 
@@ -194,11 +192,10 @@ func TestCell_Polygon(t *testing.T) {
 	t.Run("allocates nothing", func(t *testing.T) {
 		for name, g := range grids {
 			cell := g.Cell(geom.Pt(4, 3))
-			allocs := testing.AllocsPerRun(100, func() {
-				sinkPolygon = cell.Polygon()
-			})
 
-			assert.Equal(t, allocs, 0.0, name+": ")
+			assert.Allocates(t, func() {
+				sinkPolygon = cell.Polygon()
+			}, 0, name+": ")
 		}
 	})
 }
@@ -237,11 +234,10 @@ func TestCell_Matrix(t *testing.T) {
 	t.Run("allocates nothing", func(t *testing.T) {
 		for name, g := range grids {
 			cell := g.Cell(geom.Pt(4, 3))
-			allocs := testing.AllocsPerRun(100, func() {
-				sinkMatrix = cell.Matrix()
-			})
 
-			assert.Equal(t, allocs, 0.0, name+": ")
+			assert.Allocates(t, func() {
+				sinkMatrix = cell.Matrix()
+			}, 0, name+": ")
 		}
 	})
 }
@@ -426,9 +422,9 @@ func TestCell_String(t *testing.T) {
 	t.Run("allocates once", func(t *testing.T) {
 		cell := g.Cell(geom.Pt(1, 3))
 
-		assert.Equal(t, testing.AllocsPerRun(10, func() {
+		assert.Allocates(t, func() {
 			sinkString = cell.String()
-		}), 1.0)
+		}, 1)
 	})
 }
 
